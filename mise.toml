@@ -1,7 +1,5 @@
 redactions = ["*_TOKEN", "*_SECRET", "*_KEY", "*_PASSWORD"]
 
-[plugins]
-fnox-env = "https://github.com/jdx/mise-env-fnox"
 
 [settings]
 experimental = true
@@ -37,7 +35,7 @@ yamllint = "latest"
 # nsh-core/nsh-base crates the app crate depends on (mise.lock holds both).
 [env]
 _.file = ".env"
-_.fnox-env = { tools = true }
+# _.fnox-env = { tools = true }
 # _.path = ["{{ config_root }}/.cache/native/cargo/bin"]
 CARGO_TERM_COLOR = "always"
 REMARK_OSC52="1"
