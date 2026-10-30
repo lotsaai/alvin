@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+#MISE description="Assemble the Heyday Windows package into target/dist/windows via nsh package"
+#MISE sources=["Cargo.toml", "Cargo.lock", "crates/**/*.rs", "crates/**/Cargo.toml", "crates/heyday-app/nsh.json"]
+#MISE outputs=["target/dist/windows/Heyday"]
+#MISE depends=["nsh:prep"]
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+set -euo pipefail
+
+# Run on a windows host (or CI runner) with the MSVC toolchain.
+nsh package crates/heyday-app --target windows --out target/dist/windows "$@"

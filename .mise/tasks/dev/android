@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+#MISE description="Run the Heyday app on an Android device or emulator"
+#MISE depends=["nsh:prep"]
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+set -euo pipefail
+
+exec nsh run crates/heyday-app --target android "$@"

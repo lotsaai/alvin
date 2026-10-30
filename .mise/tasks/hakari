@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+#MISE description="Regenerate the cargo-hakari workspace-hack crate and sync member deps"
+#MISE sources=[".config/hakari.toml", "Cargo.toml", "crates/*/Cargo.toml"]
+#MISE outputs=["crates/heyday-workspace-hack/Cargo.toml"]
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+set -euo pipefail
+
+# `generate` fills the `### BEGIN/END HAKARI SECTION` block in the hack crate's
+# `Cargo.toml`; `manage-deps -y` keeps the hack dependency on every member.
+#
+# `cargo sort` runs last and is not optional: hakari emits its tables grouped by
+# platform, cargo-sort wants them grouped by dependency kind, so whichever runs
+# last decides the committed layout. Sorting last leaves the tree `mise check`
+# clean. Re-runnable; a clean run produces no diff.
+cargo hakari generate
+cargo hakari manage-deps -y
+cargo sort --workspace --grouped .

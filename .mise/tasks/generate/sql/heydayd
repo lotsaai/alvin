@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+#MISE description="Generate code for SQL in heydayd"
+#MISE sources=["crates/heydayd/postgres/queries/**/*.sql", "crates/heydayd/postgres/migrations/**", "crates/heydayd/sqlite/queries/**/*.sql", "crates/heydayd/sqlite/migrations/**", "sqlc.json"]
+#MISE outputs=["crates/heydayd/src/services/pgdb/**/*.rs", "crates/heydayd/src/services/sqdb/**/*.rs"]
+
+set -euo pipefail
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir"
+
+sqlc generate

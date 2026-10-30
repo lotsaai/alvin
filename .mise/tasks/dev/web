@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+#MISE description="Run the Heyday app in the browser"
+#MISE depends=["nsh:prep"]
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+set -euo pipefail
+
+exec nsh run crates/heyday-app --target web "$@"

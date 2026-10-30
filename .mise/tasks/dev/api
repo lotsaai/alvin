@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+#MISE description="Run the heydayd API server (debug), serving the built web UI"
+#MISE depends=["dist:web"]
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+set -euo pipefail
+
+export HEYDAY_WEB_DIST="${HEYDAY_WEB_DIST:-target/dist/web/Heyday}"
+exec cargo run --quiet -p heydayd "$@"

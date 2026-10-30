@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+#MISE description="Keep nsh's working directory out of the source tree: crates/heyday-app/.nsh is a symlink into target/nsh"
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+set -euo pipefail
+
+link=crates/heyday-app/.nsh
+dest=target/nsh
+
+if [ -L "$link" ]; then
+	exit 0
+fi
+if [ -d "$link" ]; then
+	rm -rf "$dest"
+	mv "$link" "$dest"
+fi
+mkdir -p "$dest"
+ln -s "../../target/nsh" "$link"

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# shellcheck source=/dev/null
+
+#MISE description="Run the app's NSH tests on the first Android device adb lists (needs a device or emulator)"
+#MISE depends=["nsh:prep", "build:debug"]
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+set -euo pipefail
+
+source "$(dirname "$0")/server.sh"
+server_start
+
+# The phone and tablet tests only: the desktop-dock tests can't run on a
+# phone-sized device, so they stay on the desktop, web and headless legs.
+nsh test crates/heyday-app --target android --filter phone "$@"

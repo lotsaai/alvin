@@ -1,0 +1,82 @@
+amends "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Builtins.pkl"
+
+local linters = new Mapping<String, Step> {
+  ["cargo-check"] = (Builtins.cargo_check) {
+    check = "cargo check --quiet --workspace --all-targets"
+    fix = "cargo check --quiet --workspace --all-targets"
+    depends = "rustfmt"
+    check_first = true
+  }
+  ["cargo-clippy"] = new Step {
+    glob = List("**/*.rs")
+    stage = List("**/*.rs")
+    // NSH generates its runners, describe crate and dev hosts under `.nsh/`.
+    exclude = "**/.nsh/**"
+    check = "cargo clippy --quiet --workspace --all-targets -- -D warnings"
+    fix = "cargo clippy --quiet --workspace --all-targets --fix --allow-dirty --allow-staged -- -D warnings"
+    check_first = true
+    depends = "cargo-check"
+  }
+  ["rustfmt"] = new Step {
+    glob = List("**/*.rs")
+    stage = List("**/*.rs")
+    exclude = "**/.nsh/**"
+    check = "rustfmt --quiet --edition 2024 --check {{files}}"
+    fix = "rustfmt --quiet --edition 2024 {{files}}"
+    depends = "cargo-sort"
+  }
+  ["cargo-sort"] = new Step {
+    glob = List("**/Cargo.toml")
+    stage = List("**/Cargo.toml")
+    exclude = "**/.nsh/**"
+    check = "cargo sort --workspace --grouped --check ."
+    fix = "cargo sort --workspace --grouped ."
+    check_first = true
+  }
+  // ["biome"] = Builtins.biome
+  // ["typescript"] {
+  //   // Per-package: each package tsconfig owns its path aliases (dashboard `~/*`). A single
+  //   // root `tsc` loads the root tsconfig only and cannot resolve package-local paths.
+  //   check = "for d in packages/*/; do [ -f \"${d}tsconfig.json\" ] || continue; (cd \"$d\" && bun x tsc --noEmit); done"
+  // }
+  ["shellcheck"] = (Builtins.shellcheck) {
+    exclude = "**/.agents/skills/**"
+  }
+  ["shfmt"] = (Builtins.shfmt) {
+    exclude = "**/.agents/skills/**"
+  }
+  ["yamllint"] = (Builtins.yamllint) {
+    exclude = "**/.agents/skills/**"
+  }
+  ["taplo"] {
+    glob = "*.toml"
+    exclude = "**/.nsh/**"
+    check = "taplo check {{files}}"
+  }
+  ["pkl"] {
+    glob = "*.pkl"
+    // pkl default cache (~/.pkl) is read-only in this env; use project-local cache
+    check = "pkl eval --cache-dir .cache/native/pkl {{files}} >/dev/null"
+  }
+}
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps {
+      ...linters
+    }
+  }
+  ["pre-push"] {
+    steps = linters
+  }
+  ["fix"] {
+    fix = true
+    steps = linters
+  }
+  ["check"] {
+    steps = linters
+  }
+}

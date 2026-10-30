@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+#MISE description="Assemble the Heyday Linux packages into target/dist/linux via nsh package"
+#MISE sources=["Cargo.toml", "Cargo.lock", "crates/**/*.rs", "crates/**/Cargo.toml", "crates/heyday-app/nsh.json"]
+#MISE outputs=["target/dist/linux/Heyday"]
+#MISE depends=["nsh:prep"]
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+set -euo pipefail
+
+# Run on a linux host (or CI runner): the runner links against that host's
+# GTK 4.14+.
+nsh package crates/heyday-app --target linux --out target/dist/linux "$@"
