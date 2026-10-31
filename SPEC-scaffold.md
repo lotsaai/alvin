@@ -23,7 +23,7 @@ Out: all other crates. Each module spec creates its own crate, its row in `AGENT
 
 - Root `Cargo.toml`: `[workspace]`, `resolver = "3"`, `members = ["crates/*"]`, `[workspace.package]` edition 2024, `[workspace.dependencies]` for shared crates.
 - Only member at this stage: `alvin-workspace-hack`. Hakari at two or more crates; the first real crate (`alvin-protocol`) makes it required. Create the hack crate now so the task is proven.
-- `.config/hakari.toml`: `hakari-package = "alvin-workspace-hack"`, `dep-format-version = "4"`, `resolver = "2"`, platforms: aarch64-apple-darwin, x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu. `wasm32-unknown-unknown` is a platform too, because `alvin-protocol` and `alvin-client` build for it.
+- `.config/hakari.toml`: `hakari-package = "alvin-workspace-hack"`, `dep-format-version = "4"`, `resolver = "2"`, platforms: aarch64-apple-darwin, x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu. `alvin-protocol` and `alvin-client` are the wasm32 boundary: they are `[traversal-excludes] workspace-members`, so they never depend on the hack crate. Unifying the gateway's native features (tokio `net` pulls in `mio`, jsonrpsee `server`) into them would break their `wasm32-unknown-unknown` build. No `wasm32` hakari platform.
 - `rustfmt.toml` unchanged (2 spaces, 140 columns).
 
 ## Task Set
