@@ -1,0 +1,51 @@
+{
+  "messages": [
+    {
+      "attribution": "user",
+      "content": [
+        {
+          "text": "Write the numbers from 1 to 400, one per line, nothing else.",
+          "type": "text"
+        }
+      ],
+      "role": "user",
+      "timestamp": 1793432218431.0
+    },
+    {
+      "api": "openai-completions",
+      "completedAt": 1793432221724.0,
+      "content": [
+        {
+          "summary": false,
+          "thinking": "Output",
+          "thinkingSignature": "reasoning_content",
+          "type": "thinking"
+        }
+      ],
+      "credentialId": 1,
+      "errorId": 67112960.0,
+      "errorMessage": "Interrupted by user",
+      "model": "glm-5.3-flash",
+      "provider": "zai",
+      "responseId": "20261031153700586228aabc6f4cb5",
+      "role": "assistant",
+      "stopReason": "aborted",
+      "timestamp": 1793432220679.0,
+      "usage": {
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": {
+          "cacheRead": 0.0,
+          "cacheWrite": 0.0,
+          "input": 0.0,
+          "output": 0.0,
+          "total": 0.0
+        },
+        "input": 0,
+        "output": 0,
+        "totalTokens": 0
+      }
+    }
+  ],
+  "totalMessages": 2
+}

@@ -1,0 +1,218 @@
+//! Records conversation fixtures from real omp through the gateway, for `alvin-conversation`'s tests:
+//! `mise run generate:conversation-fixtures`. Each scenario writes `<name>.events.json` (every event of the live session
+//! up to its settle) and `<name>.messages.json` (the session's `live/messages` afterwards).
+
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::Duration;
+
+use alvin_client::{ChannelPair, Client, Endpoint};
+use alvin_gateway::{Gateway, GatewayConfig};
+use alvin_omp_host::HostConfig;
+use alvin_protocol::{
+  Event, EventBody, EventId, LiveApiClient, MessagesRequest, OpenRequest, OpenTarget, ProjectsApiClient, PromptRequest, RpcAgentEvent,
+  SubscribeRequest,
+};
+use eyre::{Result, eyre};
+
+const MODEL: &str = "zai/glm-5.3-flash";
+const PATIENCE: Duration = Duration::from_secs(180);
+/// The records of one real omp run, used only so the temporary repository is a listed project.
+const SEED_RECORDS: &str = include_str!("../fixtures/session-records.jsonl");
+const SEED_CWD: &str = "/tmp/alvin-probe.hnBA/proj";
+
+struct Scenario {
+  name: &'static str,
+  /// Extra omp flags after the common ones.
+  flags: &'static [&'static str],
+  prompt: &'static str,
+  /// Abort the turn once the assistant starts streaming.
+  abort: bool,
+}
+
+const SCENARIOS: [Scenario; 3] = [
+  Scenario {
+    name: "plain_turn",
+    flags: &["--no-tools"],
+    prompt: "Reply with the single word ok.",
+    abort: false,
+  },
+  Scenario {
+    name: "tool_turn",
+    flags: &["--approval-mode", "yolo"],
+    prompt: "Use your bash tool to run `echo alvin-tool-ok`, then reply with the single word done.",
+    abort: false,
+  },
+  Scenario {
+    name: "aborted_turn",
+    flags: &["--no-tools"],
+    prompt: "Write the numbers from 1 to 400, one per line, nothing else.",
+    abort: true,
+  },
+];
+
+#[tokio::main]
+async fn main() -> Result<()> {
+  let out = PathBuf::from(
+    std::env::args()
+      .nth(1)
+      .ok_or_else(|| eyre!("usage: record_conversation <output dir>"))?,
+  );
+  std::fs::create_dir_all(&out)?;
+  for scenario in &SCENARIOS {
+    record(scenario, &out).await?;
+    println!("recorded {}", scenario.name);
+  }
+  Ok(())
+}
+
+async fn record(scenario: &Scenario, out: &Path) -> Result<()> {
+  let base = std::env::temp_dir().join(format!("alvin-record-{}", EventId::new().as_uuid()));
+  let result = run(scenario, out, &base).await;
+  std::fs::remove_dir_all(&base)?;
+  result
+}
+
+async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
+  let base = {
+    std::fs::create_dir_all(base)?;
+    base.canonicalize()?
+  };
+  let repo = base.join("repo");
+  let sessions = base.join("sessions");
+  let home = base.join("home");
+  let session_dir = sessions.join("-repo");
+  for dir in [&repo, &session_dir, &home] {
+    std::fs::create_dir_all(dir)?;
+  }
+  let git = Command::new("git").args(["init", "--quiet"]).current_dir(&repo).output()?;
+  eyre::ensure!(git.status.success(), "git init failed");
+  let seed = SEED_RECORDS.replace(SEED_CWD, &repo.display().to_string());
+  std::fs::write(session_dir.join("2026-01-01T00-00-00-000Z_seed.jsonl"), seed)?;
+
+  let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
+    .map(PathBuf::from)
+    .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".omp/agent")))
+    .ok_or_else(|| eyre!("cannot find omp's agent directory"))?;
+  let mut args: Vec<OsString> = [
+    "--no-skills",
+    "--no-rules",
+    "--no-extensions",
+    "--no-context-files",
+    "--session-dir",
+  ]
+  .map(OsString::from)
+  .into();
+  args.push(session_dir.into_os_string());
+  args.extend(scenario.flags.iter().map(OsString::from));
+  let omp = HostConfig::builder()
+    .omp(PathBuf::from("omp"))
+    .extra_args(args)
+    .env(vec![
+      (OsString::from("HOME"), home.into_os_string()),
+      (OsString::from("PI_CODING_AGENT_DIR"), agent_dir.into_os_string()),
+    ])
+    .build();
+  let gateway = Gateway::new(
+    GatewayConfig::builder()
+      .sessions_dir(sessions)
+      .omp(omp)
+      .default_model(Some(MODEL.to_owned()))
+      .build(),
+  );
+  let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(16)?))).await?;
+
+  let projects = ProjectsApiClient::list(&client).await?;
+  let project = projects.first().ok_or_else(|| eyre!("no project listed"))?;
+  let checkout = project.checkouts.first().ok_or_else(|| eyre!("project has no checkout"))?;
+  let opened = LiveApiClient::open(
+    &client,
+    OpenRequest {
+      target: OpenTarget::New {
+        project: project.id.clone(),
+        checkout: checkout.id.clone(),
+      },
+      model: None,
+    },
+  )
+  .await?;
+  let mut stream = client
+    .events(SubscribeRequest {
+      live: opened.live,
+      after: None,
+    })
+    .await?;
+  LiveApiClient::prompt(
+    &client,
+    PromptRequest {
+      live: opened.live,
+      message: scenario.prompt.to_owned(),
+    },
+  )
+  .await?;
+
+  let mut events: Vec<Event> = Vec::new();
+  let mut aborted = false;
+  loop {
+    let event = tokio::time::timeout(PATIENCE, stream.next())
+      .await?
+      .ok_or_else(|| eyre!("the event stream ended"))??;
+    let settled = match &event.body {
+      EventBody::SessionSettled(_) => true,
+      EventBody::PromptResult(result) => result.session_settled,
+      _ => false,
+    };
+    let streaming = matches!(&event.body, EventBody::Agent(RpcAgentEvent::MessageUpdate(_)));
+    events.push(event);
+    if scenario.abort && streaming && !aborted {
+      aborted = true;
+      LiveApiClient::abort(&client, opened.live).await?;
+    }
+    if settled {
+      break;
+    }
+  }
+
+  let mut messages = Vec::new();
+  let mut cursor = None;
+  let total = loop {
+    let page = LiveApiClient::messages(
+      &client,
+      MessagesRequest {
+        live: opened.live,
+        cursor,
+        limit: None,
+      },
+    )
+    .await?;
+    messages.extend(page.messages);
+    match page.next_cursor {
+      Some(next) => cursor = Some(next),
+      None => break page.total_messages,
+    }
+  };
+  eyre::ensure!(
+    usize::try_from(total)? == messages.len(),
+    "live/messages ended before its advertised total"
+  );
+
+  std::fs::write(
+    out.join(format!("{}.events.json", scenario.name)),
+    serde_json::to_string_pretty(&events)?,
+  )?;
+  let page = alvin_protocol::MessagesPage {
+    messages,
+    total_messages: total,
+    next_cursor: None,
+  };
+  std::fs::write(
+    out.join(format!("{}.messages.json", scenario.name)),
+    serde_json::to_string_pretty(&page)?,
+  )?;
+
+  drop(stream);
+  LiveApiClient::close(&client, opened.live).await?;
+  gateway.shutdown().await?;
+  Ok(())
+}

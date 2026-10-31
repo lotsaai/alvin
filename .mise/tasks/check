@@ -22,6 +22,9 @@ if cargo tree --quiet -p alvin-client --target all --edges normal | grep -E 'alv
 	exit 1
 fi
 
+# alvin-conversation is pure state and builds for wasm32 too.
+cargo build --quiet --target wasm32-unknown-unknown -p alvin-conversation
+
 mise run generate:omp-wire -- --check
 
 # The omp-rpc git tag in alvin-omp-host must name the same release as the pinned omp package.

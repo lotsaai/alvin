@@ -25,10 +25,10 @@ Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mis
 - [ ] Task 10: Windows Job Object teardown (verified on the Windows VM via `tasks/briefs/task-10-windows.md`; may stay blocked while later tasks continue)
 
 ### Checkpoint 2b: CLI end to end
-- [ ] Full turn via `alvind` over ws with reconnect; human review before UI
+- [x] Full turn via `alvind` over ws with reconnect (automated; human review waived: build auto run to the final checkpoint)
 
 ## Phase 4: UI walking skeleton
-- [ ] Task 11: Conversation fold core plus recorded fixtures
+- [x] Task 11: Conversation fold core plus recorded fixtures
 - [ ] Task 12: UI browse and chat: sidebar, open, transcript, composer
 - [ ] Task 13: `alvin-app` face: config, embedded/remote, quit
 

@@ -1,0 +1,10 @@
+[package]
+name = "alvin-conversation"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "Pure UI state folded from protocol events"
+
+[dependencies]
+alvin-protocol = { version = "0.1.0", path = "../alvin-protocol" }
+serde_json = "1.0.154"

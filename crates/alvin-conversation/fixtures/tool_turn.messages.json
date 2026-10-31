@@ -1,0 +1,121 @@
+{
+  "messages": [
+    {
+      "attribution": "user",
+      "content": [
+        {
+          "text": "Use your bash tool to run `echo alvin-tool-ok`, then reply with the single word done.",
+          "type": "text"
+        }
+      ],
+      "role": "user",
+      "timestamp": 1793432210734.0
+    },
+    {
+      "api": "openai-completions",
+      "completedAt": 1793432216161.0,
+      "content": [
+        {
+          "arguments": {
+            "command": "echo alvin-tool-ok",
+            "i": "Running echo check"
+          },
+          "id": "call_61df0b10614742a5afa32a5f",
+          "intent": "Running echo check",
+          "name": "bash",
+          "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
+          "streamIndex": 0,
+          "type": "toolCall"
+        }
+      ],
+      "contextSnapshot": {
+        "compactionEpoch": 0,
+        "nonMessageTokens": 8323,
+        "promptTokens": 9663,
+        "toolSchemaTokens": 5154
+      },
+      "credentialId": 1,
+      "duration": 4751.247584000001,
+      "model": "glm-5.3-flash",
+      "provider": "zai",
+      "responseId": "202610311536516dd2ccb4c4e64ae2",
+      "role": "assistant",
+      "stopReason": "toolUse",
+      "timestamp": 1793432211406.0,
+      "ttft": 4748.818792,
+      "usage": {
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": {
+          "cacheRead": 0.0,
+          "cacheWrite": 0.0,
+          "input": 0.00144945,
+          "output": 0.0000115,
+          "total": 0.00146095
+        },
+        "input": 9663,
+        "output": 23,
+        "totalTokens": 9686
+      }
+    },
+    {
+      "content": [
+        {
+          "text": "alvin-tool-ok\n",
+          "type": "text"
+        }
+      ],
+      "details": {
+        "timeoutSeconds": 300,
+        "wallTimeMs": 25.781458999999813,
+        "wallTimeNoticeEmitted": false
+      },
+      "isError": false,
+      "role": "toolResult",
+      "timestamp": 1793432216196.0,
+      "toolCallId": "call_61df0b10614742a5afa32a5f",
+      "toolName": "bash"
+    },
+    {
+      "api": "openai-completions",
+      "completedAt": 1793432217335.0,
+      "content": [
+        {
+          "text": "done",
+          "type": "text"
+        }
+      ],
+      "contextSnapshot": {
+        "compactionEpoch": 0,
+        "nonMessageTokens": 8323,
+        "promptTokens": 9695,
+        "toolSchemaTokens": 5154
+      },
+      "credentialId": 1,
+      "duration": 1135.5029999999997,
+      "errorId": 0.0,
+      "model": "glm-5.3-flash",
+      "provider": "zai",
+      "responseId": "20261031153656d5826e3fd59a437c",
+      "role": "assistant",
+      "stopReason": "stop",
+      "timestamp": 1793432216199.0,
+      "ttft": 1127.106334,
+      "usage": {
+        "cacheRead": 9600,
+        "cacheWrite": 0,
+        "cost": {
+          "cacheRead": 0.00028799999999999995,
+          "cacheWrite": 0.0,
+          "input": 0.00001425,
+          "output": 1.5e-6,
+          "total": 0.00030374999999999993
+        },
+        "input": 95,
+        "output": 3,
+        "totalTokens": 9698
+      }
+    }
+  ],
+  "totalMessages": 4
+}

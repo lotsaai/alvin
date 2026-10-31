@@ -31,7 +31,7 @@ Shapes follow omp's wire types (generated into `alvin-protocol`, read from omp-r
   - `title`: from the session list and `session_info_update`.
   - `exited`: set by the process-exited event.
   - `tree`: the history tree (`HistoryTree`: roots, children, labels, leaf) from `live/tree`, kept current from `live/entries { since }`. The leaf marks the active branch; the transcript is that branch. omp sends no tree-change event, so `turn_end`, `agent_end`, compaction end, and the replies to `live/navigateTree` and `live/label` set `tree_stale`; the UI then fetches entries since `tree_cursor`. `live/branch` and `live/fork` move the session onto a new file (`docs/rpc.md:235-247`), so after either the UI fetches the whole tree and the first transcript page again.
-- `ConnectionView`: the client's connection state (`Connecting`, `Connected`, `Reconnecting`, `Lost`), set by the UI from `Client::state()`.
+- `Connection`: the client's connection state (`Connected`, `Reconnecting { attempt }`, `Lost`), set by the UI from `Client::connection_state()`. Its own enum: this crate does not depend on `alvin-client`.
 
 ## Operations
 
@@ -39,7 +39,7 @@ All are plain methods on owned state; none fail except on decoding, and decoding
 
 - `apply(&mut self, &Event)`: the fold. Events arrive in `EventId` order with no duplicates (the client guarantees it); this crate does not re-check order.
 - `load_page(live, MessagesPage)`, `set_state(live, LiveState)`, `set_projects(..)`, `set_sessions(checkout, page)`.
-- `resync(live, reason)`: drops `transcript`, `streaming`, `tools`, and `tree` for that session and marks it reload-needed.
+- `resync(live)`: drops `transcript`, `streaming`, `tools`, and `tree` for that session and marks it reload-needed.
 - `set_tree(live, HistoryTree)`: replaces the tree; used on open, after a fork, and when `live/entries` answers omp's `unknown_since`.
 - `apply_entries(live, SessionEntries)`: inserts entries newer than the tree's newest under their `parentId` (a missing parent makes a root, as omp does), applies `label` entries to their `targetId` (empty label clears), and sets `leaf`. Same rules as omp's `tree()` and label index (`session-manager.ts:590-591,694-723`). New entries are newest, so appending keeps children in omp's timestamp order.
 - `tree_cursor(live)`: the newest entry id, the `since` for the next `live/entries`.
@@ -49,7 +49,7 @@ Commands the user issues (prompt, abort, queue edits, model change, dialog answe
 
 ## Dependencies
 
-`alvin-protocol`, `alvin-workspace-hack`. Nothing else (`AGENTS.md` table).
+`alvin-protocol` and `serde_json` (tool arguments and results stay `serde_json::Value`). Nothing else (`AGENTS.md` table). The crate is outside the hakari graph so it builds for wasm32 like `alvin-protocol`.
 
 ## Project Structure
 
@@ -70,10 +70,10 @@ Gupi splits the same concerns into `crates/gupi-conversation/src/conversation/{m
 ## Testing Strategy
 
 - Plain `#[test]` in `#[cfg(test)] mod tests` inside each module; no `tests/` (`AGENTS.md`, Testing).
-- Fixtures: event sequences and `live/messages` pages recorded from real omp runs (`--mode rpc-ui`, `zai/glm-5.3-flash`) through the gateway, stored as JSON. Recorded real data, not hand-written frames. A mise task re-records them; tests never start omp.
+- Fixtures: event sequences and `live/messages` pages recorded from real omp runs (`--mode rpc-ui`, `zai/glm-5.3-flash`) through the gateway, stored as JSON. Recorded real data, not hand-written frames. `mise run generate:conversation-fixtures` re-records them (`crates/alvin-gateway/examples/record_conversation.rs`); tests never start omp. Each scenario writes `<name>.events.json` and `<name>.messages.json`: plain turn, a turn with a tool call, an aborted turn. A feature task that needs a new scenario adds it to the recorder.
 - Fold tests: a plain turn, a turn with tool calls, abort, queue steering and promotion, compaction, an extension dialog answered and one cancelled, process exit.
 - Tree tests over recorded `get_tree` and `get_entries` output: applying entries since the last known id to the tree from before gives the same tree a fresh `live/tree` returns afterwards (labels and leaf included); after a branch, a navigate with summary, a label set and cleared, and a fork.
-- Equivalence: folding a recorded run's events gives the transcript the same session's `live/messages` returned after the run.
+- Equivalence: folding a recorded run's events gives the transcript the same session's `live/messages` returned after the run. omp adds two fields to an assistant message when it persists it, after `message_end` has gone out (`errorId` and `extra.contextSnapshot`); the comparison ignores those and nothing else.
 - Resync clears the live parts and keeps the session listed.
 
 ## Boundaries

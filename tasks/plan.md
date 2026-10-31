@@ -170,11 +170,11 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 #### Task 11: Conversation fold core plus recorded fixtures
 **Description:** Add the `generate:conversation-fixtures` task (it records events and `live/messages` from real omp through the gateway). Create `alvin-conversation`: `workspace.rs` (projects and session pages), `live.rs` (fold: run state, title, exited, notices), `streaming.rs` (assembly keyed by `message_id`), `tools.rs`, and `resync`.
 **Acceptance criteria:**
-- [ ] Folding a recorded run's events produces the transcript that `live/messages` returned for that session.
-- [ ] Fold tests cover a plain turn, a turn with tool calls, an abort, and a process exit. Resync clears the live parts and keeps the session listed.
-- [ ] Builds for wasm32.
+- [x] Folding a recorded run's events produces the transcript that `live/messages` returned for that session. (Compared modulo two fields omp adds when it persists a message after `message_end`: `errorId` and `contextSnapshot`.)
+- [x] Fold tests cover a plain turn, a turn with tool calls, an abort, and a process exit. Resync clears the live parts and keeps the session listed. (Queue, dialog and model folds are implemented; their tests arrive with their own recorded fixtures in Tasks 14 to 16.)
+- [x] Builds for wasm32.
 **Verification:** `mise format`; `mise run --force test`; `mise check`.
-**Dependencies:** 8. **Files:** `.mise/tasks/generate/conversation-fixtures`, `crates/alvin-conversation/{Cargo.toml,src/{lib,workspace,live,streaming,tools}.rs,fixtures/*}`. **Scope:** M.
+**Dependencies:** 8. **Files:** `.mise/tasks/generate/conversation-fixtures`, `crates/alvin-gateway/examples/record_conversation.rs` (the recorder), `crates/alvin-conversation/{Cargo.toml,src/{lib,conversation,workspace,live,streaming,tools,queue,dialogs}.rs,fixtures/*}`. **Scope:** M.
 
 #### Task 12: UI browse and chat: sidebar, open, transcript, composer
 **Description:** `alvin-conversation-ui`: `model.rs` (`Entity<Model>`), `workspace.rs` (tabs), `sidebar.rs` (projects → checkouts → sessions, paged), `session.rs`, `transcript.rs` (`MessageScroller`, older pages on scroll), a generic JSON `tool_card.rs`, `composer.rs` (Enter → `live/prompt`, `!` → `live/bash`, Escape → abort/abortBash), `actions.rs` + `init`, and an event task per tab. Read each gpui-kit component page before using it.

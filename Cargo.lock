@@ -29,6 +29,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "alvin-conversation"
+version = "0.1.0"
+dependencies = [
+ "alvin-protocol",
+ "serde_json",
+]
+
+[[package]]
 name = "alvin-gateway"
 version = "0.1.0"
 dependencies = [
@@ -47,6 +55,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-appender-tracing",
  "opentelemetry_sdk",
+ "serde_json",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
