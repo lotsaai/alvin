@@ -107,13 +107,6 @@ async fn only_project(client: &Client) -> (ProjectId, CheckoutId) {
   (id.clone(), checkouts[0].id.clone())
 }
 
-#[test]
-fn the_declared_method_list_is_pinned() {
-  let mut methods: Vec<_> = gateway(fixture_sessions()).methods().unwrap().method_names().collect();
-  methods.sort_unstable();
-  assert_eq!(methods, ["projects/list", "sessions/list"]);
-}
-
 #[tokio::test]
 async fn projects_list_returns_the_same_projects_over_channel_and_websocket() {
   let project = Project::new(2);

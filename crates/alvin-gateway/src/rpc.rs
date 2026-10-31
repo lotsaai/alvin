@@ -26,7 +26,7 @@ impl SessionsApiServer for Gateway {
 
 impl Gateway {
   /// Every method the gateway serves. Both transports serve exactly this table.
-  pub fn methods(&self) -> Result<Methods> {
+  pub(crate) fn methods(&self) -> Result<Methods> {
     let mut methods = Methods::from(ProjectsApiServer::into_rpc(self.clone()));
     methods.merge(SessionsApiServer::into_rpc(self.clone()))?;
     Ok(methods)
@@ -47,5 +47,20 @@ impl Gateway {
     };
     self.metrics.record_rpc(method, &outcome, started.elapsed());
     result
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::GatewayConfig;
+
+  use super::*;
+
+  #[test]
+  fn the_declared_method_list_is_pinned() {
+    let gateway = Gateway::new(GatewayConfig::builder().sessions_dir("sessions").build());
+    let mut methods: Vec<_> = gateway.methods().unwrap().method_names().collect();
+    methods.sort_unstable();
+    assert_eq!(methods, ["projects/list", "sessions/list"]);
   }
 }
