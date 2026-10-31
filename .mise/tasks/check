@@ -12,5 +12,7 @@ hk check --all
 # alvin-protocol is the wasm-compatible leaf: the default (client) half must build without `server`.
 cargo build --quiet -p alvin-protocol
 cargo build --quiet --target wasm32-unknown-unknown -p alvin-protocol
+cargo build --quiet -p alvin-protocol --features server
+cargo clippy --quiet -p alvin-protocol --all-targets --features server -- -D warnings
 
 mise run generate:omp-wire -- --check

@@ -8,4 +8,5 @@ cd "$proj_dir" || exit 1
 
 set -euo pipefail
 
-cargo nextest run --cargo-quiet --show-progress=bar --status-level=slow "$@"
+# alvin-protocol's `server` half is part of the contract, so its tests run with it enabled.
+cargo nextest run --cargo-quiet --show-progress=bar --status-level=slow --features alvin-protocol/server "$@"
