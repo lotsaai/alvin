@@ -78,6 +78,9 @@ impl Workspace {
       }
       // The session's own view puts the text in its composer.
       ModelEvent::ComposerText { .. } => {}
+      ModelEvent::Exported { path, .. } => {
+        window.push_notification(Notification::success(SharedString::from(format!("Exported to {path}"))), cx);
+      }
       ModelEvent::Notice { notice, .. } => {
         let message = SharedString::from(notice.text.clone());
         let notification = match notice.level {
@@ -145,7 +148,13 @@ impl Render for Workspace {
 }
 
 impl Workspace {
-  fn tab_title(&self, live: LiveSessionId, cx: &Context<Self>) -> String {
+  /// The title a tab shows, for tests.
+  #[cfg(test)]
+  pub(crate) fn tab_title_for_test(&self, live: LiveSessionId, cx: &gpui_kit::App) -> String {
+    self.tab_title(live, cx)
+  }
+
+  fn tab_title(&self, live: LiveSessionId, cx: &gpui_kit::App) -> String {
     self
       .model
       .read(cx)
@@ -787,6 +796,167 @@ mod tests {
     let forked = entries(&client, live).await.entries.len();
     until(cx, "the panel to list the forked history", |cx| {
       history_rows(cx, &workspace).len() == forked
+    });
+    fixture.finish().await;
+  }
+
+  fn with_active_session(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    workspace: &Entity<Workspace>,
+    act: impl FnOnce(&crate::session::SessionView, &mut gpui_kit::Window, &mut gpui_kit::Context<crate::session::SessionView>),
+  ) {
+    cx.update_window(window, |_, window, cx| {
+      let live = workspace.read(cx).active().expect("a session is open");
+      let view = workspace
+        .read(cx)
+        .tabs
+        .iter()
+        .find(|(tab, _)| *tab == live)
+        .map(|(_, view)| view.clone())
+        .expect("its tab");
+      view.update(cx, |session, cx| act(session, window, cx));
+      window.render_frame(cx);
+    })
+    .unwrap();
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn a_slash_lists_the_sessions_commands_and_choosing_one_only_types_it(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    until(cx, "omp to announce its commands", |cx| {
+      with_active(cx, &workspace, |view| !view.commands.is_empty()).unwrap_or(false)
+    });
+    let name = with_active(cx, &workspace, |view| view.commands[0].name.clone()).expect("a session");
+    let id = gpui_kit::SharedString::from(format!("command-{name}"));
+
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      let composer = window
+        .find_by_label("Message")
+        .path()
+        .last()
+        .cloned()
+        .expect("the composer has an element id");
+      window.click(composer, cx);
+      window.input("/", cx);
+      window.render_frame(cx);
+      window.render_frame(cx);
+      assert!(window.find(id.clone()).visible());
+      window.click(id, cx);
+    })
+    .unwrap();
+
+    until(cx, "the command name in the composer", |cx| {
+      composer_text(cx, window) == format!("/{name} ")
+    });
+    // Nothing ran it: the transcript is still empty.
+    assert_eq!(with_active(cx, &workspace, |view| view.transcript.len()), Some(0));
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn renaming_a_session_updates_its_tab_and_the_sidebar(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let client = fixture.client().await;
+    let (window, workspace) = open_window(cx, client.clone());
+    open_new_session(cx, window, &workspace);
+    let live = active(cx, &workspace).expect("a session is open");
+    // A session is listed once it has a turn.
+    type_and_send(cx, window, "Reply with the single word ok.");
+    until(cx, "the turn to settle", |cx| {
+      with_active(cx, &workspace, |view| view.run == Run::Settled && view.transcript.len() == 2).unwrap_or(false)
+    });
+
+    click(cx, window, "session-menu-toggle");
+    with_active_session(cx, window, &workspace, |session, window, cx| {
+      session.type_session_name("A new name", window, cx)
+    });
+    click(cx, window, "session-rename");
+
+    until(cx, "the tab to carry the new name", |cx| {
+      workspace.read_with(cx, |workspace, cx| workspace.tab_title_for_test(live, cx)) == "A new name"
+    });
+    until(cx, "the sidebar to list the new name", |cx| {
+      cx.read(|cx| {
+        let workspace = workspace.read(cx);
+        let conversation = workspace.model().read(cx).conversation();
+        conversation.workspace().projects().iter().any(|project| {
+          project.checkouts.iter().any(|checkout| {
+            let key = alvin_conversation::SessionsKey {
+              project: project.id.clone(),
+              checkout: Some(checkout.id.clone()),
+            };
+            conversation
+              .workspace()
+              .sessions(&key)
+              .is_some_and(|list| list.sessions.iter().any(|session| session.title.as_deref() == Some("A new name")))
+          })
+        })
+      })
+    });
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn the_session_menu_shows_the_counts_omp_gives(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    type_and_send(cx, window, "Reply with the single word ok.");
+    until(cx, "the turn to settle", |cx| {
+      with_active(cx, &workspace, |view| view.run == Run::Settled && view.transcript.len() == 2).unwrap_or(false)
+    });
+
+    click(cx, window, "session-menu-toggle");
+    let live = active(cx, &workspace).expect("a session is open");
+    until(cx, "the counts to arrive", |cx| {
+      cx.read(|cx| {
+        workspace
+          .read(cx)
+          .model()
+          .read(cx)
+          .stats(live)
+          .is_some_and(|stats| stats.total_messages == 2)
+      })
+    });
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn compacting_a_long_session_replaces_its_transcript_with_a_summary_row(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    fixture.write_session();
+    fixture.grow_session(20, 20_000);
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    let session = loop_until_listed(cx, &workspace);
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      window.click(format!("session-{}", session.as_str()), cx);
+    })
+    .unwrap();
+    until(cx, "the long transcript", |cx| {
+      with_active(cx, &workspace, |view| view.transcript.len() > 20).unwrap_or(false)
+    });
+
+    click(cx, window, "session-menu-toggle");
+    click(cx, window, "session-compact");
+
+    until(cx, "the transcript to start with the compaction summary", |cx| {
+      with_active(cx, &workspace, |view| {
+        matches!(view.transcript.first(), Some(AgentMessage::CompactionSummary(_))) && view.compaction.is_none()
+      })
+      .unwrap_or(false)
     });
     fixture.finish().await;
   }

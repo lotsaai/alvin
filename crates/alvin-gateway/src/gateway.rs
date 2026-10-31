@@ -6,11 +6,12 @@ use std::time::Instant;
 
 use alvin_omp_host::{Host, StartRequest};
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashRequest, BashResult, BranchMessage, BranchResult, CancellationResult, EntriesRequest, EntryRequest,
-  ForkRequest, HistoryEntries, LabelRequest, ListSessions, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
-  ModelCycleResult, ModelInfo, NavigateRequest, NavigateTreeResult, OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult,
-  PromoteQueuedRequest, PromptRequest, RemoveQueuedMessageResult, RemoveQueuedRequest, RespondRequest, SessionPage, SessionState,
-  SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
+  AbortAndRestoreQueueResult, AvailableSlashCommand, BashRequest, BashResult, BranchMessage, BranchResult, CancellationResult,
+  CompactRequest, CompactionResult, EntriesRequest, EntryRequest, ExportRequest, ForkRequest, HistoryEntries, LabelRequest, ListSessions,
+  LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest, ModelCycleResult, ModelInfo, NavigateRequest, NavigateTreeResult,
+  OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, RemoveQueuedMessageResult,
+  RemoveQueuedRequest, RenameRequest, RespondRequest, SessionPage, SessionState, SessionStats, SetModelRequest, SetThinkingRequest,
+  SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use tokio::sync::broadcast;
 
@@ -230,6 +231,31 @@ impl Gateway {
   pub(crate) async fn entries(&self, request: EntriesRequest) -> Result<HistoryEntries> {
     let live = self.live.get(request.live)?;
     self.timed("get_entries", live.session.entries(request.since)).await
+  }
+
+  pub(crate) async fn rename(&self, request: RenameRequest) -> Result<()> {
+    let live = self.live.get(request.live)?;
+    self.timed("set_session_name", live.session.rename(request.name)).await
+  }
+
+  pub(crate) async fn compact(&self, request: CompactRequest) -> Result<CompactionResult> {
+    let live = self.live.get(request.live)?;
+    self.timed("compact", live.session.compact(request.custom_instructions)).await
+  }
+
+  pub(crate) async fn stats(&self, id: LiveSessionId) -> Result<SessionStats> {
+    let live = self.live.get(id)?;
+    self.timed("get_session_stats", live.session.stats()).await
+  }
+
+  pub(crate) async fn export_html(&self, request: ExportRequest) -> Result<String> {
+    let live = self.live.get(request.live)?;
+    self.timed("export_html", live.session.export_html(request.output_path)).await
+  }
+
+  pub(crate) async fn commands(&self, id: LiveSessionId) -> Result<Vec<AvailableSlashCommand>> {
+    let live = self.live.get(id)?;
+    self.timed("get_available_commands", live.session.commands()).await
   }
 
   pub(crate) async fn branch_messages(&self, id: LiveSessionId) -> Result<Vec<BranchMessage>> {

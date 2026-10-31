@@ -3,12 +3,13 @@
 use std::time::Instant;
 
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashRequest, BashResult, BranchMessage, BranchResult, CancellationResult, DialogApiServer, EntriesRequest,
-  EntryRequest, EventsApiServer, ForkRequest, HistoryEntries, LabelRequest, ListSessions, LiveApiServer, LiveSessionId, LiveSessionSummary,
-  MessagesPage, MessagesRequest, ModelApiServer, ModelCycleResult, ModelInfo, NavigateRequest, NavigateTreeResult, OpenRequest,
-  ProjectSummary, ProjectsApiServer, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer,
-  RemoveQueuedMessageResult, RemoveQueuedRequest, RespondRequest, SessionPage, SessionState, SessionsApiServer, SetModelRequest,
-  SetThinkingRequest, SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
+  AbortAndRestoreQueueResult, AvailableSlashCommand, BashRequest, BashResult, BranchMessage, BranchResult, CancellationResult,
+  CompactRequest, CompactionResult, DialogApiServer, EntriesRequest, EntryRequest, EventsApiServer, ExportRequest, ForkRequest,
+  HistoryEntries, LabelRequest, ListSessions, LiveApiServer, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
+  ModelApiServer, ModelCycleResult, ModelInfo, NavigateRequest, NavigateTreeResult, OpenRequest, ProjectSummary, ProjectsApiServer,
+  PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer, RemoveQueuedMessageResult, RemoveQueuedRequest,
+  RenameRequest, RespondRequest, SessionPage, SessionState, SessionStats, SessionsApiServer, SetModelRequest, SetThinkingRequest,
+  SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
 use jsonrpsee::server::{Methods, PendingSubscriptionSink, SubscriptionMessage};
@@ -110,6 +111,26 @@ impl LiveApiServer for Gateway {
 
   async fn label(&self, request: LabelRequest) -> RpcResult<()> {
     self.traced("live/label", Gateway::label(self, request)).await
+  }
+
+  async fn rename(&self, request: RenameRequest) -> RpcResult<()> {
+    self.traced("live/rename", Gateway::rename(self, request)).await
+  }
+
+  async fn compact(&self, request: CompactRequest) -> RpcResult<CompactionResult> {
+    self.traced("live/compact", Gateway::compact(self, request)).await
+  }
+
+  async fn stats(&self, live: LiveSessionId) -> RpcResult<SessionStats> {
+    self.traced("live/stats", Gateway::stats(self, live)).await
+  }
+
+  async fn export_html(&self, request: ExportRequest) -> RpcResult<String> {
+    self.traced("live/exportHtml", Gateway::export_html(self, request)).await
+  }
+
+  async fn commands(&self, live: LiveSessionId) -> RpcResult<Vec<AvailableSlashCommand>> {
+    self.traced("live/commands", Gateway::commands(self, live)).await
   }
 }
 
@@ -265,7 +286,10 @@ mod tests {
         "live/branch",
         "live/branchMessages",
         "live/close",
+        "live/commands",
+        "live/compact",
         "live/entries",
+        "live/exportHtml",
         "live/followUp",
         "live/fork",
         "live/label",
@@ -274,7 +298,9 @@ mod tests {
         "live/navigateTree",
         "live/open",
         "live/prompt",
+        "live/rename",
         "live/state",
+        "live/stats",
         "live/steer",
         "model/cycle",
         "model/list",

@@ -6,11 +6,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use alvin_client::{Client, ConnectionState, Error, ResyncReason};
 use alvin_conversation::{Connection, Conversation, Notice, Run, SessionsKey};
 use alvin_protocol::{
-  BashRequest, CheckoutId, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode, ErrorData, ExtensionUiResponse, ForkRequest,
-  LabelRequest, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest, ModelApiClient, ModelInfo,
-  NavigateRequest, OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient,
-  QueuedMessageQueue, RemoveQueuedRequest, RespondRequest, SessionCursor, SessionId, SessionsApiClient, SetModelRequest,
-  SetThinkingRequest, SubscribeRequest, ThinkingLevel,
+  BashRequest, CheckoutId, CompactRequest, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode, ErrorData, ExportRequest,
+  ExtensionUiResponse, ForkRequest, LabelRequest, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesPage,
+  MessagesRequest, ModelApiClient, ModelInfo, NavigateRequest, OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest,
+  PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RenameRequest, RespondRequest, SessionCursor, SessionId,
+  SessionStats, SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
 };
 use gpui_kit::{AsyncApp, Context, EventEmitter, SharedString, Task, WeakEntity};
 
@@ -39,6 +39,13 @@ pub enum ModelEvent {
     /// The text.
     text: String,
   },
+  /// A session was written as an HTML page.
+  Exported {
+    /// The live session.
+    live: LiveSessionId,
+    /// Where omp wrote it.
+    path: String,
+  },
   /// An extension or omp has something to tell the user.
   Notice {
     /// The live session.
@@ -66,6 +73,8 @@ pub struct Model {
   branch_candidates: BTreeMap<LiveSessionId, BTreeSet<EntryId>>,
   /// Sessions whose navigation is generating a branch summary, which can be cancelled.
   summarizing: BTreeSet<LiveSessionId>,
+  /// The counts omp last gave for each session.
+  stats: BTreeMap<LiveSessionId, SessionStats>,
   conversation: Conversation,
   client: Client,
   /// Live sessions with a `!` command running, so Escape aborts that and not the turn.
@@ -104,6 +113,7 @@ impl Model {
       tree_reads: BTreeMap::new(),
       branch_candidates: BTreeMap::new(),
       summarizing: BTreeSet::new(),
+      stats: BTreeMap::new(),
       conversation: Conversation::default(),
       client,
       bash_running: BTreeSet::new(),
@@ -128,6 +138,11 @@ impl Model {
       .branch_candidates
       .get(&live)
       .is_some_and(|candidates| candidates.contains(entry))
+  }
+
+  /// The counts of a session, once read.
+  pub fn stats(&self, live: LiveSessionId) -> Option<&SessionStats> {
+    self.stats.get(&live)
   }
 
   /// Whether a navigation is generating a branch summary.
@@ -338,8 +353,6 @@ impl Model {
         };
         drop(this.update(cx, |model, cx| {
           model.bash_running.remove(&live);
-          model.branch_candidates.remove(&live);
-          model.summarizing.remove(&live);
           match (result, reloaded) {
             (Err(error), _) => model.fail(&error, cx),
             (Ok(_), Some(Ok((_, page)))) => model.conversation.load_page(live, page),
@@ -622,6 +635,75 @@ impl Model {
     .detach();
   }
 
+  /// Names the session. The tab and the sidebar follow once omp has the name.
+  pub fn rename(&mut self, live: LiveSessionId, name: String, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      let result = LiveApiClient::rename(&client, RenameRequest { live, name })
+        .await
+        .map_err(Error::from);
+      drop(this.update(cx, |model, cx| match result {
+        Ok(()) => {
+          model.refresh_state(live, cx);
+          model.refresh_projects(cx);
+        }
+        Err(error) => model.fail(&error, cx),
+      }));
+    })
+    .detach();
+  }
+
+  /// Compacts the conversation. Progress arrives as events; the transcript is read again once it is done.
+  pub fn compact(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      let result = LiveApiClient::compact(
+        &client,
+        CompactRequest {
+          live,
+          custom_instructions: None,
+        },
+      )
+      .await
+      .map_err(Error::from);
+      drop(this.update(cx, |model, cx| match result {
+        Ok(_) => model.reload(live, false, cx),
+        Err(error) => model.fail(&error, cx),
+      }));
+    })
+    .detach();
+  }
+
+  /// Reads the counts of the session.
+  pub fn refresh_stats(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(
+      async move |this, cx| match LiveApiClient::stats(&client, live).await.map_err(Error::from) {
+        Ok(stats) => drop(this.update(cx, |model, cx| {
+          model.stats.insert(live, stats);
+          cx.notify();
+        })),
+        Err(error) => fail(&this, cx, &error),
+      },
+    )
+    .detach();
+  }
+
+  /// Writes the session as an HTML page, where omp chooses.
+  pub fn export_html(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      let result = LiveApiClient::export_html(&client, ExportRequest { live, output_path: None })
+        .await
+        .map_err(Error::from);
+      drop(this.update(cx, |model, cx| match result {
+        Ok(path) => cx.emit(ModelEvent::Exported { live, path }),
+        Err(error) => model.fail(&error, cx),
+      }));
+    })
+    .detach();
+  }
+
   /// Tells the views what arrived for the user since `seen` notices: the new notices, and text an extension put in the
   /// composer.
   fn announce(&mut self, live: LiveSessionId, seen: usize, cx: &mut Context<Self>) {
@@ -768,6 +850,11 @@ impl Model {
         Ok(()) => drop(this.update(cx, |model, cx| {
           model.sessions.remove(&live);
           model.bash_running.remove(&live);
+          model.branch_candidates.remove(&live);
+          model.summarizing.remove(&live);
+          model.stats.remove(&live);
+          model.catalogs.remove(&live);
+          model.tree_reads.remove(&live);
           model.conversation.close(live);
           cx.emit(ModelEvent::Closed(live));
           cx.notify();

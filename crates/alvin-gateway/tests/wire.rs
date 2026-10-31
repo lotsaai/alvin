@@ -11,12 +11,12 @@ use alvin_client::{ChannelPair, Client, ConnectionState, Endpoint, Error, EventS
 use alvin_gateway::{Gateway, GatewayConfig, WsServer};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
-  AnswersUiResponse, AskAnswer, BashRequest, CheckoutId, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode, ErrorData,
-  Event, EventBody, EventId, ExtensionUiRequest, ExtensionUiResponse, ForkRequest, LabelRequest, ListSessions, LiveApiClient,
-  LiveSessionId, LiveSessionSummary, MessagesRequest, ModelApiClient, NavigateRequest, OpenRequest, OpenTarget, ProjectId, ProjectSummary,
-  ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RespondRequest,
-  RpcAgentEvent, SessionCursor, SessionId, SessionPage, SessionStatus, SessionsApiClient, SetModelRequest, SetThinkingRequest,
-  SubscribeRequest, ThinkingLevel,
+  AnswersUiResponse, AskAnswer, BashRequest, CheckoutId, CompactRequest, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode,
+  ErrorData, Event, EventBody, EventId, ExportRequest, ExtensionUiRequest, ExtensionUiResponse, ForkRequest, LabelRequest, ListSessions,
+  LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesRequest, ModelApiClient, NavigateRequest, OpenRequest, OpenTarget, ProjectId,
+  ProjectSummary, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest,
+  RenameRequest, RespondRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage, SessionStatus, SessionsApiClient, SetModelRequest,
+  SetThinkingRequest, SubscribeRequest, ThinkingLevel,
 };
 
 /// Session files written by real omp (the first two records of one run).
@@ -1458,4 +1458,165 @@ async fn the_history_tree_is_navigated_labelled_branched_and_forked_over_both_tr
   drop((stream, channel, ws));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
+}
+
+/// Appends `pairs` user and assistant messages of `bytes` of text each to a session file real omp wrote, enough for omp to
+/// compact: it refuses a session that is too small to be worth summarizing.
+fn grow_session(file: &Path, pairs: usize, bytes: usize) {
+  let text = std::fs::read_to_string(file).unwrap();
+  let mut records: Vec<String> = text.lines().map(str::to_owned).collect();
+  let entries: Vec<serde_json::Value> = records
+    .iter()
+    .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+    .filter(|value| value.get("parentId").is_some())
+    .collect();
+  let role = |wanted: &str| {
+    entries
+      .iter()
+      .find(|entry| entry["message"]["role"].as_str() == Some(wanted))
+      .unwrap_or_else(|| panic!("the turn wrote a {wanted} message"))
+      .clone()
+  };
+  let (user, assistant) = (role("user"), role("assistant"));
+  let mut parent = entries.last().and_then(|entry| entry["id"].as_str()).expect("entries").to_owned();
+  let filler = "lorem ipsum dolor sit amet ".repeat(bytes / 27 + 1);
+  for pair in 0..pairs {
+    for (template, turn) in [(&user, 0), (&assistant, 1)] {
+      let mut entry = template.clone();
+      let id = format!("grown{:04}", pair * 2 + turn);
+      entry["id"] = serde_json::Value::String(id.clone());
+      entry["parentId"] = serde_json::Value::String(parent.clone());
+      entry["message"]["content"] = serde_json::json!([{ "type": "text", "text": filler }]);
+      records.push(entry.to_string());
+      parent = id;
+    }
+  }
+  records.push(String::new());
+  std::fs::write(file, records.join("\n")).unwrap();
+}
+
+#[tokio::test]
+async fn session_operations_work_over_both_transports() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let ([channel, ws], server) = both_transports(&gateway).await;
+  let opened = open_new(&channel).await;
+  let mut stream = subscribe(&channel, opened.live, None).await.unwrap();
+  turn(&channel, &mut stream, opened.live, "Reply with the single word one.").await;
+
+  // The name is omp's: `live/state` reports it and so does the session index.
+  LiveApiClient::rename(
+    &ws,
+    RenameRequest {
+      live: opened.live,
+      name: "A new name".to_owned(),
+    },
+  )
+  .await
+  .unwrap();
+  let state = LiveApiClient::state(&channel, opened.live).await.unwrap();
+  assert_eq!(state.session_name.as_deref(), Some("A new name"));
+
+  // Counts of what the session holds.
+  let stats = LiveApiClient::stats(&channel, opened.live).await.unwrap();
+  assert_eq!((stats.user_messages, stats.assistant_messages, stats.total_messages), (1, 1, 2));
+  assert_eq!(stats, LiveApiClient::stats(&ws, opened.live).await.unwrap());
+
+  // The slash commands omp offers.
+  let commands = LiveApiClient::commands(&ws, opened.live).await.unwrap();
+  assert!(!commands.is_empty());
+  assert_eq!(commands, LiveApiClient::commands(&channel, opened.live).await.unwrap());
+
+  // The page lands where asked.
+  let target = project.root.join("export.html");
+  let written = LiveApiClient::export_html(
+    &channel,
+    ExportRequest {
+      live: opened.live,
+      output_path: Some(target.clone()),
+    },
+  )
+  .await
+  .unwrap();
+  assert!(Path::new(&written).ends_with("export.html"), "{written}");
+  assert!(target.is_file());
+
+  // A session too small to compact is omp's command error, reaching the client with omp's message intact.
+  let small = LiveApiClient::compact(
+    &ws,
+    CompactRequest {
+      live: opened.live,
+      custom_instructions: None,
+    },
+  )
+  .await
+  .unwrap_err();
+  assert!(matches!(
+    Error::from(small),
+    Error::Gateway {
+      code: ErrorCode::OmpCommandFailed,
+      ..
+    }
+  ));
+
+  // A long session compacts: progress arrives as events, and the transcript then starts with the summary.
+  drop(stream);
+  LiveApiClient::close(&channel, opened.live).await.unwrap();
+  grow_session(&opened.file, 20, 20_000);
+  let (project_id, _checkout) = only_project(&channel).await;
+  let page = SessionsApiClient::list(&channel, request(project_id, None, 10)).await.unwrap();
+  let listed = page
+    .sessions
+    .iter()
+    .find(|session| session.path == opened.file)
+    .expect("the session file is listed");
+  let long = open_session(&channel, listed.id.as_str()).await;
+  let mut stream = subscribe(&channel, long.live, None).await.unwrap();
+  let compacted = LiveApiClient::compact(
+    &channel,
+    CompactRequest {
+      live: long.live,
+      custom_instructions: None,
+    },
+  )
+  .await
+  .unwrap();
+  assert!(!compacted.summary.is_empty());
+  let mut kinds = Vec::new();
+  while let Ok(event) = tokio::time::timeout(Duration::from_secs(2), next_event_opt(&mut stream)).await {
+    let Some(event) = event else { break };
+    kinds.push(event.body);
+  }
+  assert!(
+    kinds
+      .iter()
+      .any(|body| matches!(body, EventBody::Agent(RpcAgentEvent::ManualCompactionStart(_))))
+  );
+  assert!(
+    kinds
+      .iter()
+      .any(|body| matches!(body, EventBody::Agent(RpcAgentEvent::ManualCompactionEnd(_))))
+  );
+  let transcript = LiveApiClient::messages(
+    &ws,
+    MessagesRequest {
+      live: long.live,
+      cursor: None,
+      limit: None,
+    },
+  )
+  .await
+  .unwrap();
+  assert!(matches!(
+    transcript.messages.first(),
+    Some(alvin_protocol::AgentMessage::CompactionSummary(_))
+  ));
+
+  drop((stream, channel, ws));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+async fn next_event_opt(stream: &mut EventStream) -> Option<Event> {
+  stream.next().await.and_then(Result::ok)
 }

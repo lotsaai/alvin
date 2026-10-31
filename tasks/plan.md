@@ -226,7 +226,7 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 
 #### Task 19: Session operations and command catalog
 **Description:** Methods: `live/rename`, `compact`, `stats`, `exportHtml`, `commands`. Fold the compaction and retry events, `session_info_update`, and `available_commands_update`. Add the session menu and the `/` completion in the composer (it inserts text and never runs the command).
-**Acceptance criteria:** [ ] rename updates the tab and sidebar title; [ ] compact shows progress and a compaction summary row; [ ] `/` lists the session's commands.
+**Acceptance criteria:** [x] rename updates the tab and sidebar title; [x] compact shows progress and a compaction summary row; [x] `/` lists the session's commands.
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 13. **Files:** protocol `live.rs`, host session, gateway rpc + tests, conversation `live.rs`, UI `session.rs`/`composer.rs`. **Scope:** M.
 
 #### Task 20: Failure states in the UI

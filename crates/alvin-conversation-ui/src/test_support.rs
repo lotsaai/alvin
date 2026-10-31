@@ -125,6 +125,50 @@ impl Fixture {
     assert!(output.status.success(), "omp failed: {}", String::from_utf8_lossy(&output.stderr));
   }
 
+  /// Appends `pairs` user and assistant messages of `bytes` of text each to the session `write_session` made, enough for omp to
+  /// compact it: omp refuses a session too small to be worth summarizing.
+  pub(crate) fn grow_session(&self, pairs: usize, bytes: usize) {
+    let dir = self.sessions.join("-repo");
+    let file = std::fs::read_dir(&dir)
+      .unwrap()
+      .map(|entry| entry.unwrap().path())
+      .find(|path| {
+        path.extension().is_some_and(|extension| extension == "jsonl")
+          && path.file_name().is_some_and(|name| !name.to_string_lossy().contains("seed"))
+      })
+      .expect("write_session wrote a session file");
+    let text = std::fs::read_to_string(&file).unwrap();
+    let mut records: Vec<String> = text.lines().map(str::to_owned).collect();
+    let entries: Vec<serde_json::Value> = records
+      .iter()
+      .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+      .filter(|value| value.get("parentId").is_some())
+      .collect();
+    let role = |wanted: &str| {
+      entries
+        .iter()
+        .find(|entry| entry["message"]["role"].as_str() == Some(wanted))
+        .unwrap_or_else(|| panic!("the turn wrote a {wanted} message"))
+        .clone()
+    };
+    let (user, assistant) = (role("user"), role("assistant"));
+    let mut parent = entries.last().and_then(|entry| entry["id"].as_str()).expect("entries").to_owned();
+    let filler = "lorem ipsum dolor sit amet ".repeat(bytes / 27 + 1);
+    for pair in 0..pairs {
+      for (template, turn) in [(&user, 0), (&assistant, 1)] {
+        let mut entry = template.clone();
+        let id = format!("grown{:04}", pair * 2 + turn);
+        entry["id"] = serde_json::Value::String(id.clone());
+        entry["parentId"] = serde_json::Value::String(parent.clone());
+        entry["message"]["content"] = serde_json::json!([{ "type": "text", "text": filler }]);
+        records.push(entry.to_string());
+        parent = id;
+      }
+    }
+    records.push(String::new());
+    std::fs::write(&file, records.join("\n")).unwrap();
+  }
+
   /// Closes every live session and removes the temporary directory.
   pub(crate) async fn finish(self) {
     self.gateway.shutdown().await.unwrap();

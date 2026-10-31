@@ -8,7 +8,10 @@ use serde::{Deserialize, Serialize};
 use crate::events::Event;
 use crate::history::{EntriesRequest, HistoryEntries};
 use crate::ids::{CheckoutId, EntryId, EventId, LiveSessionId, ProjectId, SessionId};
-use crate::omp_wire::{BashResult, BranchMessage, BranchResult, CancellationResult, MessagesPage, NavigateTreeResult, SessionState};
+use crate::omp_wire::{
+  AvailableSlashCommand, BashResult, BranchMessage, BranchResult, CancellationResult, CompactionResult, MessagesPage, NavigateTreeResult,
+  SessionState, SessionStats,
+};
 
 /// What `live/open` starts omp on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,6 +126,36 @@ pub struct LabelRequest {
   pub label: Option<String>,
 }
 
+/// `live/rename`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameRequest {
+  /// The live session.
+  pub live: LiveSessionId,
+  /// The session's new name.
+  pub name: String,
+}
+
+/// `live/compact`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompactRequest {
+  /// The live session.
+  pub live: LiveSessionId,
+  /// What the summary should focus on.
+  pub custom_instructions: Option<String>,
+}
+
+/// `live/exportHtml`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportRequest {
+  /// The live session.
+  pub live: LiveSessionId,
+  /// Where to write the page. Absent: omp picks a file name in the session's working directory.
+  pub output_path: Option<PathBuf>,
+}
+
 /// `live/bash`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -224,6 +257,28 @@ pub trait LiveApi {
   /// Sets or clears an entry's label.
   #[method(name = "label")]
   async fn label(&self, request: LabelRequest) -> jsonrpsee::core::RpcResult<()>;
+
+  /// Names the session. omp answers with a session info update.
+  #[method(name = "rename")]
+  async fn rename(&self, request: RenameRequest) -> jsonrpsee::core::RpcResult<()>;
+
+  /// Compacts the conversation and returns the summary. Progress arrives as compaction events; a session too small to
+  /// compact is the command error omp gives.
+  #[method(name = "compact")]
+  async fn compact(&self, request: CompactRequest) -> jsonrpsee::core::RpcResult<CompactionResult>;
+
+  /// Message, tool and token counts of the session.
+  #[method(name = "stats")]
+  async fn stats(&self, live: LiveSessionId) -> jsonrpsee::core::RpcResult<SessionStats>;
+
+  /// Writes the session as an HTML page and returns where, as omp reports it (relative to the working directory when omp
+  /// chose the name).
+  #[method(name = "exportHtml")]
+  async fn export_html(&self, request: ExportRequest) -> jsonrpsee::core::RpcResult<String>;
+
+  /// The slash commands the session offers. They also arrive as `availableCommandsUpdate` events.
+  #[method(name = "commands")]
+  async fn commands(&self, live: LiveSessionId) -> jsonrpsee::core::RpcResult<Vec<AvailableSlashCommand>>;
 }
 
 /// Live-session events.

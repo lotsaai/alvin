@@ -2,7 +2,7 @@
 
 use alvin_protocol::{LiveSessionId, WidgetPlacement};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{InputEvent, TextareaState};
+use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
@@ -29,17 +29,112 @@ pub(crate) struct SessionView {
   /// The history panel, and whether it is open.
   history: Entity<HistoryTreeView>,
   history_open: bool,
+  /// The session menu, and the name being typed into it.
+  menu_open: bool,
+  name: Entity<TextareaState>,
   rows: usize,
   _subscriptions: Vec<Subscription>,
 }
 
 impl SessionView {
+  /// The session menu: rename, compact, export, and the counts omp gives.
+  fn session_menu(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+    let live = self.live;
+    let model = self.model.clone();
+    let stats = model.read(cx).stats(live).map(|stats| {
+      format!(
+        "{} messages, {} tool calls, {} tokens",
+        stats.total_messages, stats.tool_calls, stats.tokens.total
+      )
+    });
+    let act = |name: &'static str, label: &'static str| Button::new(ElementId::from(name)).small().ghost().label(label);
+    let rename = {
+      let (model, name) = (model.clone(), self.name.clone());
+      move |_: &_, _: &mut Window, cx: &mut gpui_kit::App| {
+        let name = name.read(cx).value().trim().to_owned();
+        if !name.is_empty() {
+          model.update(cx, |model, cx| model.rename(live, name, cx));
+        }
+      }
+    };
+    let (compact_model, export_model, stats_model) = (model.clone(), model.clone(), model);
+    v_flex()
+      .id("session-menu")
+      .px_4()
+      .py_1()
+      .gap_1()
+      .child(
+        h_flex()
+          .gap_1()
+          .child(
+            div().flex_1().child(
+              Textarea::new(&self.name)
+                .accessibility_id("session-name")
+                .aria_label("Session name"),
+            ),
+          )
+          .child(act("session-rename", "Rename").on_click(rename)),
+      )
+      .child(
+        h_flex()
+          .gap_1()
+          .child(act("session-compact", "Compact").on_click(move |_, _, cx| compact_model.update(cx, |model, cx| model.compact(live, cx))))
+          .child(
+            act("session-export", "Export HTML").on_click(move |_, _, cx| export_model.update(cx, |model, cx| model.export_html(live, cx))),
+          )
+          .child(
+            act("session-stats", "Refresh counts")
+              .on_click(move |_, _, cx| stats_model.update(cx, |model, cx| model.refresh_stats(live, cx))),
+          ),
+      )
+      .children(stats.map(|text| div().id("session-stats-text").text_sm().child(SharedString::from(text))))
+      .into_any_element()
+  }
+
+  /// While the composer holds a `/` and a name being typed, the session's commands that start with it. Choosing one puts
+  /// its name in the composer; nothing runs it.
+  fn command_completion(&self, cx: &mut Context<Self>) -> Option<gpui_kit::AnyElement> {
+    let typed = self.composer.read(cx).value().to_string();
+    let prefix = typed.strip_prefix('/')?;
+    if prefix.contains(char::is_whitespace) {
+      return None;
+    }
+    let names: Vec<String> = self
+      .model
+      .read(cx)
+      .conversation()
+      .live(self.live)?
+      .commands
+      .iter()
+      .filter(|command| command.name.starts_with(prefix))
+      .take(8)
+      .map(|command| command.name.clone())
+      .collect();
+    if names.is_empty() {
+      return None;
+    }
+    let mut row = h_flex().id("command-completion").px_4().gap_1().flex_wrap();
+    for name in names {
+      let composer = self.composer.clone();
+      let text = format!("/{name} ");
+      row = row.child(
+        Button::new(ElementId::from(SharedString::from(format!("command-{name}"))))
+          .small()
+          .ghost()
+          .label(SharedString::from(format!("/{name}")))
+          .on_click(move |_, window, cx| composer.update(cx, |composer, cx| composer.set_value(text.clone(), window, cx))),
+      );
+    }
+    Some(row.into_any_element())
+  }
+
   pub(crate) fn new(model: Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut Context<Self>) -> Self {
     let composer = composer::state(window, cx);
     let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
     let pickers = Pickers::new(&model, live, window, cx);
     let dialogs = DialogHost::new(window, cx);
     let history = cx.new(|cx| HistoryTreeView::new(model.clone(), live, window, cx));
+    let name = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 1).placeholder("Session name"));
     let subscriptions = vec![
       cx.observe(&scroller, |_, _, cx| cx.notify()),
       cx.observe_in(&model, window, |this, model, window, cx| {
@@ -58,6 +153,9 @@ impl SessionView {
         }
       }),
       cx.subscribe_in(&composer, window, |this, state, event: &InputEvent, window, cx| {
+        if matches!(event, InputEvent::Change) {
+          cx.notify();
+        }
         if let Some(submission) = composer::submitted(event, state, cx) {
           this
             .model
@@ -75,6 +173,8 @@ impl SessionView {
       dialogs,
       history,
       history_open: false,
+      menu_open: false,
+      name,
       rows: 0,
       _subscriptions: subscriptions,
     };
@@ -111,6 +211,11 @@ impl Render for SessionView {
       Some(view) if view.exited => "omp exited".into(),
       Some(view) if view.reload_needed => "reload needed".into(),
       Some(_) if model.bash_running(self.live) => "running a command".into(),
+      Some(view) if view.compaction.is_some() => "compacting".into(),
+      Some(view) if view.retry.is_some() => view.retry.as_ref().map_or_else(
+        || "retrying".into(),
+        |retry| format!("retrying, attempt {} of {}", retry.attempt, retry.max_attempts).into(),
+      ),
       Some(view) => match view.run {
         alvin_conversation::Run::Running => "working".into(),
         alvin_conversation::Run::Idle => "idle".into(),
@@ -152,6 +257,26 @@ impl Render for SessionView {
               .child(line),
           )
           .child(
+            Button::new(ElementId::from("session-menu-toggle"))
+              .small()
+              .ghost()
+              .selected(self.menu_open)
+              .label("Session")
+              .on_click({
+                let menu_view = cx.entity();
+                move |_, _, cx| {
+                  menu_view.update(cx, |view, cx| {
+                    view.menu_open = !view.menu_open;
+                    if view.menu_open {
+                      let live = view.live;
+                      view.model.update(cx, |model, cx| model.refresh_stats(live, cx));
+                    }
+                    cx.notify();
+                  });
+                }
+              }),
+          )
+          .child(
             Button::new(ElementId::from("history-toggle"))
               .small()
               .ghost()
@@ -165,6 +290,8 @@ impl Render for SessionView {
               }),
           ),
       )
+      .children(self.menu_open.then(|| self.session_menu(cx)))
+      .children(self.command_completion(cx))
       .child(self.pickers.view(&self.model, live))
       .children(
         self
@@ -195,6 +322,12 @@ impl Render for SessionView {
 }
 
 impl SessionView {
+  /// Types into the session menu's name field.
+  #[cfg(test)]
+  pub(crate) fn type_session_name(&self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+    self.name.update(cx, |name, cx| name.set_value(text.to_owned(), window, cx));
+  }
+
   /// Types into the history panel's label field.
   #[cfg(test)]
   pub(crate) fn type_history_label(&self, text: &str, window: &mut Window, cx: &mut Context<Self>) {

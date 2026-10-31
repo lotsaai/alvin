@@ -6,16 +6,17 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashResult, BranchMessage, BranchResult, CancellationResult, EntryId, ExtensionUiResponse, HistoryEntries,
-  MessagesPage, ModelCycleResult, ModelInfo, NavigateTreeResult, PromoteQueuedMessageResult, PromptAck, QueuedMessageQueue,
-  RemoveQueuedMessageResult, SessionState, ThinkingLevel, ThinkingLevelCycleResult,
+  AbortAndRestoreQueueResult, AvailableSlashCommand, BashResult, BranchMessage, BranchResult, CancellationResult, CompactionResult,
+  EntryId, ExtensionUiResponse, HistoryEntries, MessagesPage, ModelCycleResult, ModelInfo, NavigateTreeResult, PromoteQueuedMessageResult,
+  PromptAck, QueuedMessageQueue, RemoveQueuedMessageResult, SessionState, SessionStats, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use omp_rpc::{
   AbortAndPromptCommand, AbortAndRestoreQueueCommand, AbortBashCommand, AbortBranchSummaryCommand, AbortCommand, BashCommand,
-  BranchCommand, Client, Command, CycleModelCommand, CycleThinkingLevelCommand, FollowUpCommand, ForkCommand, GetAvailableModelsCommand,
-  GetAvailableThinkingLevelsCommand, GetBranchMessagesCommand, GetEntriesCommand, GetMessagesPageCommand, GetStateCommand,
-  NavigateTreeCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, RpcInbound, SetLabelCommand,
-  SetModelCommand, SetThinkingLevelCommand, SteerCommand,
+  BranchCommand, Client, Command, CompactCommand, CycleModelCommand, CycleThinkingLevelCommand, ExportHtmlCommand, FollowUpCommand,
+  ForkCommand, GetAvailableCommandsCommand, GetAvailableModelsCommand, GetAvailableThinkingLevelsCommand, GetBranchMessagesCommand,
+  GetEntriesCommand, GetMessagesPageCommand, GetSessionStatsCommand, GetStateCommand, NavigateTreeCommand, PromoteQueuedMessageCommand,
+  PromptCommand, RemoveQueuedMessageCommand, RpcInbound, SetLabelCommand, SetModelCommand, SetSessionNameCommand, SetThinkingLevelCommand,
+  SteerCommand,
 };
 
 use crate::translate::convert;
@@ -133,6 +134,37 @@ impl Session {
       })
       .await?;
     crate::history::entries(raw)
+  }
+
+  /// Names the session.
+  pub async fn rename(&self, name: String) -> Result<()> {
+    self.call(SetSessionNameCommand { name }).await
+  }
+
+  /// Compacts the conversation.
+  pub async fn compact(&self, custom_instructions: Option<String>) -> Result<CompactionResult> {
+    let result = self.call(CompactCommand { custom_instructions }).await?;
+    convert("compaction result", &result)
+  }
+
+  /// Message, tool and token counts.
+  pub async fn stats(&self) -> Result<SessionStats> {
+    let stats = self.call(GetSessionStatsCommand::default()).await?;
+    convert("session stats", &stats)
+  }
+
+  /// Writes the session as an HTML page and returns where omp wrote it.
+  pub async fn export_html(&self, output_path: Option<PathBuf>) -> Result<String> {
+    let output_path = output_path
+      .map(|path| path.to_str().map(str::to_owned).ok_or(Error::PathNotUtf8 { path }))
+      .transpose()?;
+    self.call(ExportHtmlCommand { output_path }).await
+  }
+
+  /// The slash commands the session offers.
+  pub async fn commands(&self) -> Result<Vec<AvailableSlashCommand>> {
+    let commands = self.call(GetAvailableCommandsCommand::default()).await?;
+    convert("slash commands", &commands)
   }
 
   /// The user messages a branch can start from.
