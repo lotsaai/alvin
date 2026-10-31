@@ -6,14 +6,15 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashResult, EntryId, ExtensionUiResponse, HistoryEntries, MessagesPage, ModelCycleResult, ModelInfo,
-  PromoteQueuedMessageResult, PromptAck, QueuedMessageQueue, RemoveQueuedMessageResult, SessionState, ThinkingLevel,
-  ThinkingLevelCycleResult,
+  AbortAndRestoreQueueResult, BashResult, BranchMessage, BranchResult, CancellationResult, EntryId, ExtensionUiResponse, HistoryEntries,
+  MessagesPage, ModelCycleResult, ModelInfo, NavigateTreeResult, PromoteQueuedMessageResult, PromptAck, QueuedMessageQueue,
+  RemoveQueuedMessageResult, SessionState, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use omp_rpc::{
-  AbortAndPromptCommand, AbortAndRestoreQueueCommand, AbortBashCommand, AbortCommand, BashCommand, Client, Command, CycleModelCommand,
-  CycleThinkingLevelCommand, FollowUpCommand, GetAvailableModelsCommand, GetAvailableThinkingLevelsCommand, GetEntriesCommand,
-  GetMessagesPageCommand, GetStateCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, RpcInbound,
+  AbortAndPromptCommand, AbortAndRestoreQueueCommand, AbortBashCommand, AbortBranchSummaryCommand, AbortCommand, BashCommand,
+  BranchCommand, Client, Command, CycleModelCommand, CycleThinkingLevelCommand, FollowUpCommand, ForkCommand, GetAvailableModelsCommand,
+  GetAvailableThinkingLevelsCommand, GetBranchMessagesCommand, GetEntriesCommand, GetMessagesPageCommand, GetStateCommand,
+  NavigateTreeCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, RpcInbound, SetLabelCommand,
   SetModelCommand, SetThinkingLevelCommand, SteerCommand,
 };
 
@@ -132,6 +133,64 @@ impl Session {
       })
       .await?;
     crate::history::entries(raw)
+  }
+
+  /// The user messages a branch can start from.
+  pub async fn branch_messages(&self) -> Result<Vec<BranchMessage>> {
+    let messages = self.call(GetBranchMessagesCommand::default()).await?;
+    convert("branch messages", &messages)
+  }
+
+  /// Moves the active branch to an entry of the same file, optionally summarizing the branch it leaves.
+  pub async fn navigate_tree(
+    &self,
+    entry: EntryId,
+    summarize: Option<bool>,
+    custom_instructions: Option<String>,
+  ) -> Result<NavigateTreeResult> {
+    let result = self
+      .call(NavigateTreeCommand {
+        entry_id: entry.as_str().to_owned(),
+        summarize,
+        custom_instructions,
+      })
+      .await?;
+    convert("navigation result", &result)
+  }
+
+  /// Stops the branch summary a navigation is generating.
+  pub async fn abort_branch_summary(&self) -> Result<()> {
+    self.call(AbortBranchSummaryCommand::default()).await
+  }
+
+  /// Branches the session at a user message.
+  pub async fn branch(&self, entry: EntryId) -> Result<BranchResult> {
+    let result = self
+      .call(BranchCommand {
+        entry_id: entry.as_str().to_owned(),
+      })
+      .await?;
+    convert("branch result", &result)
+  }
+
+  /// Forks the session into a new file, through an entry or whole.
+  pub async fn fork(&self, entry: Option<EntryId>) -> Result<CancellationResult> {
+    let result = self
+      .call(ForkCommand {
+        entry_id: entry.map(|entry| entry.as_str().to_owned()),
+      })
+      .await?;
+    convert("fork result", &result)
+  }
+
+  /// Sets or clears an entry's label.
+  pub async fn set_label(&self, entry: EntryId, label: Option<String>) -> Result<()> {
+    self
+      .call(SetLabelCommand {
+        entry_id: entry.as_str().to_owned(),
+        label,
+      })
+      .await
   }
 
   /// The models omp can use.

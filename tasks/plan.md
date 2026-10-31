@@ -221,7 +221,7 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 
 #### Task 18: History tree actions
 **Description:** Methods: `live/navigateTree`, `branch`, `branchMessages`, `fork`, `label`, `abortBranchSummary`. The gateway re-keys the session file after a branch or fork. The UI tab follows the new file and reloads the tree and the first transcript page.
-**Acceptance criteria:** [ ] branch from a user message, navigate back, and set and clear a label, all reflected in the tree; [ ] fork moves the tab to the new file; [ ] round-trips over both transports.
+**Acceptance criteria:** [x] branch from a user message, navigate back, and set and clear a label, all reflected in the tree; [x] fork moves the tab to the new file; [x] round-trips over both transports.
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 17. **Files:** host session, gateway `live.rs` + rpc + tests, conversation, `history_tree.rs`, `workspace.rs`. **Scope:** M.
 
 #### Task 19: Session operations and command catalog

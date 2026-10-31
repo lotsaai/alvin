@@ -40,7 +40,7 @@ Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mis
 - [x] Task 15: Model and thinking pickers
 - [x] Task 16: Extension dialogs
 - [x] Task 17: History tree: read and render
-- [ ] Task 18: History tree actions
+- [x] Task 18: History tree actions
 - [ ] Task 19: Session operations and command catalog
 - [ ] Task 20: Failure states in the UI
 - [ ] Task 21: Built-in tool renderers

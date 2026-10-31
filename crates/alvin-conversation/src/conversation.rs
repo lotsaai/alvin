@@ -123,6 +123,15 @@ impl Conversation {
     }
   }
 
+  /// Forgets a session's tree, so the next read of entries (with no `since`) builds it anew. A fork or branch moves the
+  /// session onto another file, whose entries are not an extension of the old tree's.
+  pub fn forget_tree(&mut self, live: LiveSessionId) {
+    if let Some(view) = self.live.get_mut(&live) {
+      view.tree = None;
+      view.tree_stale = true;
+    }
+  }
+
   /// The `since` of the next read of entries: the newest entry the tree has. `None` when there is no tree yet.
   pub fn tree_cursor(&self, live: LiveSessionId) -> Option<&EntryId> {
     self.live.get(&live)?.tree.as_ref()?.cursor()

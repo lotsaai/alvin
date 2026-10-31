@@ -9,10 +9,12 @@ use std::rc::Rc;
 
 use alvin_conversation::Tree;
 use alvin_protocol::{Entry, EntryId, LiveSessionId};
-use gpui_kit::component::{ActiveTheme as _, VirtualListScrollHandle, h_flex, v_flex, v_virtual_list};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::{Textarea, TextareaState};
+use gpui_kit::component::{ActiveTheme as _, Disableable as _, Sizable as _, VirtualListScrollHandle, h_flex, v_flex, v_virtual_list};
 use gpui_kit::{
-  AnyElement, Context, ElementId, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Pixels, Render, SharedString, Size,
-  Styled as _, Subscription, Window, div, px, size,
+  AnyElement, AppContext as _, Context, ElementId, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Pixels, Render,
+  SharedString, Size, StatefulInteractiveElement as _, Styled as _, Subscription, Window, div, px, size,
 };
 use serde_json::Value;
 
@@ -31,6 +33,8 @@ pub(crate) struct Row {
   pub(crate) active: bool,
   pub(crate) label: Option<String>,
   pub(crate) text: String,
+  /// Whether the entry is a message: only those can be forked at.
+  pub(crate) message: bool,
 }
 
 /// What an entry says, in a line: the message of a `message`, else its kind.
@@ -70,6 +74,7 @@ pub(crate) fn rows(tree: &Tree) -> Vec<Row> {
       active: active.contains(&id),
       label: tree.label(&id).map(str::to_owned),
       text: summary(&node.entry),
+      message: node.entry.kind.as_str() == "message",
       depth,
       id,
     });
@@ -91,11 +96,18 @@ pub(crate) struct HistoryTreeView {
   sizes: Rc<Vec<Size<Pixels>>>,
   built_from: Option<Fingerprint>,
   scroll: VirtualListScrollHandle,
+  /// The row the actions apply to.
+  selected: Option<EntryId>,
+  /// What the user types for a label, and for the instructions of a branch summary.
+  label: Entity<TextareaState>,
+  instructions: Entity<TextareaState>,
   _subscription: Subscription,
 }
 
 impl HistoryTreeView {
-  pub(crate) fn new(model: Entity<Model>, live: LiveSessionId, cx: &mut Context<Self>) -> Self {
+  pub(crate) fn new(model: Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    let label = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 2).placeholder("Label"));
+    let instructions = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 3).placeholder("Summary instructions"));
     let subscription = cx.observe(&model, |this, _, cx| {
       this.sync(cx);
       cx.notify();
@@ -107,6 +119,9 @@ impl HistoryTreeView {
       sizes: Rc::new(Vec::new()),
       built_from: None,
       scroll: VirtualListScrollHandle::new(),
+      selected: None,
+      label,
+      instructions,
       _subscription: subscription,
     };
     view.sync(cx);
@@ -133,6 +148,20 @@ impl HistoryTreeView {
     self.built_from = Some(fingerprint);
   }
 
+  /// Selects a row as a click on it does. Rows of a virtual list are not reachable through the test window's element
+  /// registry, so tests select through here; the buttons below the list are clicked as usual.
+  #[cfg(test)]
+  pub(crate) fn select(&mut self, id: EntryId, cx: &mut Context<Self>) {
+    self.selected = Some(id);
+    cx.notify();
+  }
+
+  /// Types into the label field, as the user would.
+  #[cfg(test)]
+  pub(crate) fn type_label(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+    self.label.update(cx, |label, cx| label.set_value(text.to_owned(), window, cx));
+  }
+
   /// The rows, for tests.
   #[cfg(test)]
   pub(crate) fn rows(&self) -> &[Row] {
@@ -152,19 +181,103 @@ impl Render for HistoryTreeView {
     if self.rows.is_empty() {
       return panel.child(div().px_3().text_color(cx.theme().muted_foreground).child("No entries yet"));
     }
-    panel.child(
-      v_virtual_list(cx.entity(), "history-tree-rows", self.sizes.clone(), |this, range, _, cx| {
-        range
-          .filter_map(|index| this.rows.get(index).map(|row| row_element(row, cx)))
-          .collect::<Vec<_>>()
-      })
-      .track_scroll(&self.scroll)
-      .flex_1(),
+    panel
+      .child(
+        v_virtual_list(cx.entity(), "history-tree-rows", self.sizes.clone(), |this, range, _, cx| {
+          let selected = this.selected.clone();
+          range
+            .filter_map(|index| {
+              this
+                .rows
+                .get(index)
+                .map(|row| row_element(row, selected.as_ref() == Some(&row.id), cx))
+            })
+            .collect::<Vec<_>>()
+        })
+        .track_scroll(&self.scroll)
+        .flex_1(),
+      )
+      .children(self.actions(cx))
+  }
+}
+
+impl HistoryTreeView {
+  /// The actions for the selected row: navigate, branch, fork and label.
+  fn actions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    let entry = self.selected.clone()?;
+    let row = self.rows.iter().find(|row| row.id == entry)?;
+    let live = self.live;
+    let model = self.model.clone();
+    let (can_branch, summarizing) = {
+      let model = model.read(cx);
+      (model.can_branch_from(live, &entry), model.summarizing(live))
+    };
+    let act = |name: &'static str, label: &'static str| Button::new(ElementId::from(name)).small().ghost().label(label);
+    let navigate = |summarize: bool| {
+      let (model, entry, instructions) = (model.clone(), entry.clone(), self.instructions.clone());
+      move |_: &_, _: &mut Window, cx: &mut gpui_kit::App| {
+        let instructions = instructions.read(cx).value().to_string();
+        model.update(cx, |model, cx| {
+          model.navigate_tree(live, entry.clone(), summarize, instructions, cx)
+        });
+      }
+    };
+    let set_label = |clear: bool| {
+      let (model, entry, label) = (model.clone(), entry.clone(), self.label.clone());
+      move |_: &_, _: &mut Window, cx: &mut gpui_kit::App| {
+        let text = label.read(cx).value().trim().to_owned();
+        let value = (!clear && !text.is_empty()).then_some(text);
+        model.update(cx, |model, cx| model.label(live, entry.clone(), value, cx));
+      }
+    };
+    let (branch_model, branch_entry) = (model.clone(), entry.clone());
+    let (fork_model, fork_entry) = (model.clone(), entry.clone());
+    let cancel_model = model.clone();
+    Some(
+      v_flex()
+        .id("history-actions")
+        .p_2()
+        .gap_1()
+        .border_t_1()
+        .border_color(cx.theme().border)
+        .child(div().text_sm().truncate().child(SharedString::from(row.text.clone())))
+        .child(
+          h_flex()
+            .gap_1()
+            .flex_wrap()
+            .child(act("history-navigate", "Go here").on_click(navigate(false)))
+            .child(act("history-navigate-summary", "Go here, summarize").on_click(navigate(true)))
+            .child(act("history-branch", "Branch").disabled(!can_branch).on_click(move |_, _, cx| {
+              branch_model.update(cx, |model, cx| model.branch(live, branch_entry.clone(), cx));
+            }))
+            .child(act("history-fork", "Fork").disabled(!row.message).on_click(move |_, _, cx| {
+              fork_model.update(cx, |model, cx| model.fork(live, Some(fork_entry.clone()), cx));
+            }))
+            .children(summarizing.then(|| {
+              act("history-cancel-summary", "Cancel summary").on_click(move |_, _, cx| {
+                cancel_model.update(cx, |model, cx| model.abort_branch_summary(live, cx));
+              })
+            })),
+        )
+        .child(
+          Textarea::new(&self.instructions)
+            .accessibility_id("history-instructions")
+            .aria_label("Summary instructions"),
+        )
+        .child(Textarea::new(&self.label).accessibility_id("history-label").aria_label("Label"))
+        .child(
+          h_flex()
+            .gap_1()
+            .child(act("history-label-set", "Set label").on_click(set_label(false)))
+            .child(act("history-label-clear", "Clear label").on_click(set_label(true))),
+        )
+        .into_any_element(),
     )
   }
 }
 
-fn row_element(row: &Row, cx: &mut Context<HistoryTreeView>) -> AnyElement {
+fn row_element(row: &Row, selected: bool, cx: &mut Context<HistoryTreeView>) -> AnyElement {
+  let id = row.id.clone();
   let theme = cx.theme();
   let mut line = h_flex()
     .id(ElementId::from(SharedString::from(format!("tree-row-{}", row.id.as_str()))))
@@ -180,6 +293,9 @@ fn row_element(row: &Row, cx: &mut Context<HistoryTreeView>) -> AnyElement {
   } else {
     line = line.text_color(theme.muted_foreground);
   }
+  if selected {
+    line = line.border_1().border_color(theme.ring);
+  }
   if let Some(label) = &row.label {
     line = line.child(
       div()
@@ -190,7 +306,12 @@ fn row_element(row: &Row, cx: &mut Context<HistoryTreeView>) -> AnyElement {
         .child(SharedString::from(label.clone())),
     );
   }
-  line.into_any_element()
+  line
+    .on_click(cx.listener(move |this, _, _, cx| {
+      this.selected = Some(id.clone());
+      cx.notify();
+    }))
+    .into_any_element()
 }
 
 #[cfg(test)]

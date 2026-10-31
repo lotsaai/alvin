@@ -7,7 +7,7 @@
           "type": "text"
         }
       ],
-      "timestamp": 1793438041240.0,
+      "timestamp": 1793439162163.0,
       "attribution": "user",
       "role": "user"
     },
@@ -16,54 +16,58 @@
       "content": [
         {
           "type": "toolCall",
-          "id": "call_1a112c79d0aa45df94704043",
+          "id": "call_0303fae3fb5347e786e75b84",
           "name": "ask",
           "arguments": {
-            "i": "Confirming your preferred colour",
+            "i": "Asking preferred colour",
             "questions": [
               {
                 "header": "Colour",
                 "id": "colour",
                 "options": [
                   {
-                    "label": "Red"
+                    "description": "The colour red",
+                    "label": "red"
                   },
                   {
-                    "label": "Blue"
+                    "description": "The colour blue",
+                    "label": "blue"
                   }
                 ],
                 "question": "Which colour do you prefer?"
               }
             ]
           },
-          "intent": "Confirming your preferred colour"
+          "intent": "Asking preferred colour",
+          "partialArgs": "{\"i\":\"Asking preferred colour\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"The colour red\", \"label\": \"red\"}, {\"description\": \"The colour blue\", \"label\": \"blue\"}], \"question\": \"Which colour do you prefer?\"}]}",
+          "streamIndex": 0
         }
       ],
       "api": "openai-completions",
       "provider": "zai",
       "model": "glm-5.3-flash",
       "usage": {
-        "input": 130,
-        "output": 60,
-        "cacheRead": 3904,
+        "input": 4032,
+        "output": 75,
+        "cacheRead": 0,
         "cacheWrite": 0,
-        "totalTokens": 4094,
+        "totalTokens": 4107,
         "cost": {
-          "input": 0.0000195,
-          "output": 0.000029999999999999997,
-          "cacheRead": 0.00011712,
+          "input": 0.0006048,
+          "output": 0.0000375,
+          "cacheRead": 0.0,
           "cacheWrite": 0.0,
-          "total": 0.00016661999999999997
+          "total": 0.0006422999999999999
         }
       },
       "stopReason": "toolUse",
-      "timestamp": 1793438042041.0,
-      "responseId": "20261031171402fc6251b8b02243ed",
-      "duration": 2344.6942499999996,
-      "ttft": 2343.5825830000003,
-      "completedAt": 1793438044394.0,
+      "timestamp": 1793439163048.0,
+      "responseId": "2026103117324348ff004a9b3a4036",
+      "duration": 19937.668166,
+      "ttft": 19880.476916,
+      "completedAt": 1793439182989.0,
       "contextSnapshot": {
-        "promptTokens": 4034,
+        "promptTokens": 4032,
         "nonMessageTokens": 3460,
         "toolSchemaTokens": 1193,
         "compactionEpoch": 0
@@ -72,25 +76,25 @@
     },
     {
       "role": "toolResult",
-      "toolCallId": "call_1a112c79d0aa45df94704043",
+      "toolCallId": "call_0303fae3fb5347e786e75b84",
       "toolName": "ask",
       "content": [
         {
-          "text": "User selected: Red",
+          "text": "User selected: red",
           "type": "text"
         }
       ],
       "isError": false,
-      "timestamp": 1793438044411.0,
+      "timestamp": 1793439183000.0,
       "details": {
         "question": "Which colour do you prefer?",
         "options": [
-          "Red",
-          "Blue"
+          "red",
+          "blue"
         ],
         "multi": false,
         "selectedOptions": [
-          "Red"
+          "red"
         ]
       }
     },
@@ -98,7 +102,7 @@
       "role": "assistant",
       "content": [
         {
-          "text": "Red",
+          "text": "red",
           "type": "text"
         }
       ],
@@ -106,29 +110,29 @@
       "provider": "zai",
       "model": "glm-5.3-flash",
       "usage": {
-        "input": 70,
+        "input": 211,
         "output": 3,
-        "cacheRead": 4032,
+        "cacheRead": 3904,
         "cacheWrite": 0,
-        "totalTokens": 4105,
+        "totalTokens": 4118,
         "cost": {
-          "input": 0.0000105,
+          "input": 0.00003165,
           "output": 1.5e-6,
-          "cacheRead": 0.00012096,
+          "cacheRead": 0.00011712,
           "cacheWrite": 0.0,
-          "total": 0.00013296
+          "total": 0.00015026999999999998
         }
       },
       "stopReason": "stop",
-      "timestamp": 1793438044414.0,
-      "responseId": "2026103117140465e3555322824ac3",
+      "timestamp": 1793439183010.0,
+      "responseId": "202610311733039b4c7404eabc48aa",
       "errorId": 0.0,
-      "duration": 9028.743917,
-      "ttft": 9027.387792,
-      "completedAt": 1793438053444.0,
+      "duration": 3877.949625000001,
+      "ttft": 3876.5390000000007,
+      "completedAt": 1793439186889.0,
       "credentialId": 1,
       "contextSnapshot": {
-        "promptTokens": 4102,
+        "promptTokens": 4115,
         "nonMessageTokens": 3460,
         "toolSchemaTokens": 1193,
         "compactionEpoch": 0

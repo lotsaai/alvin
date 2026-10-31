@@ -25,17 +25,33 @@ const IDLE_GRACE: Duration = Duration::from_secs(5);
 pub(crate) struct Live {
   pub(crate) id: LiveSessionId,
   pub(crate) cwd: PathBuf,
-  pub(crate) file: PathBuf,
+  /// The session file omp writes. A fork or branch moves the session onto another file, so it is behind a lock.
+  file: Mutex<PathBuf>,
   pub(crate) session: Session,
   pub(crate) log: Arc<EventLog>,
 }
 
 impl Live {
+  pub(crate) fn new(id: LiveSessionId, cwd: PathBuf, file: PathBuf, session: Session, log: Arc<EventLog>) -> Self {
+    Self {
+      id,
+      cwd,
+      file: Mutex::new(file),
+      session,
+      log,
+    }
+  }
+
+  /// The session file omp writes now.
+  pub(crate) fn file(&self) -> PathBuf {
+    self.file.lock().unwrap_or_else(PoisonError::into_inner).clone()
+  }
+
   pub(crate) fn summary(&self) -> LiveSessionSummary {
     LiveSessionSummary {
       live: self.id,
       cwd: self.cwd.clone(),
-      file: self.file.clone(),
+      file: self.file(),
       exited: self.log.exited.load(Ordering::SeqCst),
     }
   }
@@ -83,15 +99,24 @@ impl LiveSessions {
 
   pub(crate) fn insert(&self, live: Arc<Live>) {
     let mut registry = self.registry();
-    registry.by_file.insert(live.file.clone(), live.id);
+    registry.by_file.insert(live.file(), live.id);
     registry.by_id.insert(live.id, live);
   }
 
   pub(crate) fn remove(&self, id: LiveSessionId) -> Result<Arc<Live>> {
     let mut registry = self.registry();
     let live = registry.by_id.remove(&id).ok_or(Error::UnknownLiveSession { live: id })?;
-    registry.by_file.remove(&live.file);
+    registry.by_file.remove(&live.file());
     Ok(live)
+  }
+
+  /// Moves a live session to another session file, as a fork or branch does. Opening the file it left starts a new process.
+  pub(crate) fn rekey(&self, live: &Live, file: PathBuf) {
+    let mut registry = self.registry();
+    let mut current = live.file.lock().unwrap_or_else(PoisonError::into_inner);
+    registry.by_file.remove(&*current);
+    registry.by_file.insert(file.clone(), live.id);
+    *current = file;
   }
 
   pub(crate) fn drain(&self) -> Vec<Arc<Live>> {

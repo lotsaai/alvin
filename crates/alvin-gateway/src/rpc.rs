@@ -3,9 +3,10 @@
 use std::time::Instant;
 
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashRequest, BashResult, DialogApiServer, EntriesRequest, EventsApiServer, HistoryEntries, ListSessions,
-  LiveApiServer, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest, ModelApiServer, ModelCycleResult, ModelInfo,
-  OpenRequest, ProjectSummary, ProjectsApiServer, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer,
+  AbortAndRestoreQueueResult, BashRequest, BashResult, BranchMessage, BranchResult, CancellationResult, DialogApiServer, EntriesRequest,
+  EntryRequest, EventsApiServer, ForkRequest, HistoryEntries, LabelRequest, ListSessions, LiveApiServer, LiveSessionId, LiveSessionSummary,
+  MessagesPage, MessagesRequest, ModelApiServer, ModelCycleResult, ModelInfo, NavigateRequest, NavigateTreeResult, OpenRequest,
+  ProjectSummary, ProjectsApiServer, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer,
   RemoveQueuedMessageResult, RemoveQueuedRequest, RespondRequest, SessionPage, SessionState, SessionsApiServer, SetModelRequest,
   SetThinkingRequest, SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
 };
@@ -83,6 +84,32 @@ impl LiveApiServer for Gateway {
 
   async fn entries(&self, request: EntriesRequest) -> RpcResult<HistoryEntries> {
     self.traced("live/entries", Gateway::entries(self, request)).await
+  }
+
+  async fn branch_messages(&self, live: LiveSessionId) -> RpcResult<Vec<BranchMessage>> {
+    self.traced("live/branchMessages", Gateway::branch_messages(self, live)).await
+  }
+
+  async fn navigate_tree(&self, request: NavigateRequest) -> RpcResult<NavigateTreeResult> {
+    self.traced("live/navigateTree", Gateway::navigate_tree(self, request)).await
+  }
+
+  async fn abort_branch_summary(&self, live: LiveSessionId) -> RpcResult<()> {
+    self
+      .traced("live/abortBranchSummary", Gateway::abort_branch_summary(self, live))
+      .await
+  }
+
+  async fn branch(&self, request: EntryRequest) -> RpcResult<BranchResult> {
+    self.traced("live/branch", Gateway::branch(self, request)).await
+  }
+
+  async fn fork(&self, request: ForkRequest) -> RpcResult<CancellationResult> {
+    self.traced("live/fork", Gateway::fork(self, request)).await
+  }
+
+  async fn label(&self, request: LabelRequest) -> RpcResult<()> {
+    self.traced("live/label", Gateway::label(self, request)).await
   }
 }
 
@@ -233,12 +260,18 @@ mod tests {
         "live/abort",
         "live/abortAndPrompt",
         "live/abortBash",
+        "live/abortBranchSummary",
         "live/bash",
+        "live/branch",
+        "live/branchMessages",
         "live/close",
         "live/entries",
         "live/followUp",
+        "live/fork",
+        "live/label",
         "live/list",
         "live/messages",
+        "live/navigateTree",
         "live/open",
         "live/prompt",
         "live/state",

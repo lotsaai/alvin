@@ -7,7 +7,7 @@
           "type": "text"
         }
       ],
-      "timestamp": 1793438035173.0,
+      "timestamp": 1793439156126.0,
       "attribution": "user",
       "role": "user"
     },
@@ -37,11 +37,11 @@
         }
       },
       "stopReason": "stop",
-      "timestamp": 1793438035815.0,
-      "responseId": "20261031171356e1c6900a0da042c9",
-      "duration": 2366.951,
-      "ttft": 1131.841458,
-      "completedAt": 1793438038184.0,
+      "timestamp": 1793439156809.0,
+      "responseId": "20261031173236c2c5e5f5ab2d4fe6",
+      "duration": 2045.823292,
+      "ttft": 1009.877083,
+      "completedAt": 1793439158857.0,
       "contextSnapshot": {
         "promptTokens": 3558,
         "nonMessageTokens": 3112,
@@ -57,7 +57,7 @@
           "type": "text"
         }
       ],
-      "timestamp": 1793438036957.0,
+      "timestamp": 1793439157825.0,
       "attribution": "user",
       "role": "user"
     },
@@ -87,12 +87,12 @@
         }
       },
       "stopReason": "stop",
-      "timestamp": 1793438038192.0,
-      "responseId": "2026103117135856395388706549aa",
+      "timestamp": 1793439158864.0,
+      "responseId": "20261031173238af13a96c163a4f7a",
       "errorId": 0.0,
-      "duration": 929.370167,
-      "ttft": 925.803833,
-      "completedAt": 1793438039123.0,
+      "duration": 1175.531834,
+      "ttft": 1168.5936669999996,
+      "completedAt": 1793439160040.0,
       "credentialId": 1,
       "contextSnapshot": {
         "promptTokens": 3649,

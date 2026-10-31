@@ -669,4 +669,125 @@ mod tests {
     });
     fixture.finish().await;
   }
+
+  /// Runs a turn and waits until the panel lists everything omp appended for it.
+  async fn turn_and_history(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    workspace: &Entity<Workspace>,
+    client: &Client,
+    live: LiveSessionId,
+    text: &str,
+    transcript_len: usize,
+  ) {
+    type_and_send(cx, window, text);
+    // The run is already settled from the turn before, so the reply being in the transcript is what says this one ended.
+    until(cx, "the turn to settle", |cx| {
+      with_active(cx, workspace, |view| {
+        view.transcript.len() == transcript_len && view.run == Run::Settled && !view.tree_stale
+      })
+      .unwrap_or(false)
+    });
+    let appended = entries(client, live).await.entries.len();
+    until(cx, "the panel to list the turn", |cx| history_rows(cx, workspace).len() == appended);
+  }
+
+  fn click(cx: &mut TestAppContext, window: AnyWindowHandle, id: &'static str) {
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      window.click(id, cx);
+    })
+    .unwrap();
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn rows_navigate_label_and_fork_the_session(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let client = fixture.client().await;
+    let (window, workspace) = open_window(cx, client.clone());
+    open_new_session(cx, window, &workspace);
+    let live = active(cx, &workspace).expect("a session is open");
+    click(cx, window, "history-toggle");
+    turn_and_history(cx, window, &workspace, &client, live, "Reply with the single word one.", 2).await;
+    turn_and_history(cx, window, &workspace, &client, live, "Reply with the single word two.", 4).await;
+    let users: Vec<_> = history_rows(cx, &workspace)
+      .into_iter()
+      .filter(|row| row.text.starts_with("user: "))
+      .collect();
+    assert_eq!(users.len(), 2);
+    let (first, second) = (users[0].clone(), users[1].clone());
+    let select = |cx: &mut TestAppContext, id: &alvin_protocol::EntryId| {
+      cx.update(|cx| {
+        let workspace = workspace.read(cx);
+        let live = workspace.active().expect("a session is open");
+        let view = workspace
+          .tabs
+          .iter()
+          .find(|(tab, _)| *tab == live)
+          .map(|(_, view)| view.clone())
+          .expect("its tab");
+        view.update(cx, |session, cx| session.select_history_row(id.clone(), cx));
+      });
+      cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
+    };
+
+    // A label set on a row shows on it.
+    select(cx, &first.id);
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      let live = workspace.read(cx).active().expect("a session is open");
+      let view = workspace
+        .read(cx)
+        .tabs
+        .iter()
+        .find(|(tab, _)| *tab == live)
+        .map(|(_, view)| view.clone())
+        .expect("its tab");
+      view.update(cx, |session, cx| session.type_history_label("start", window, cx));
+      window.render_frame(cx);
+    })
+    .unwrap();
+    click(cx, window, "history-label-set");
+    until(cx, "the label to show on its row", |cx| {
+      history_rows(cx, &workspace)
+        .iter()
+        .any(|row| row.id == first.id && row.label.as_deref() == Some("start"))
+    });
+
+    // Going to a user message rewinds past it: its text returns to the composer and the transcript is the shorter branch.
+    select(cx, &second.id);
+    click(cx, window, "history-navigate");
+    until(cx, "the text to return to the composer", |cx| {
+      composer_text(cx, window) == "Reply with the single word two."
+    });
+    until(cx, "the transcript to become the shorter branch", |cx| {
+      with_active(cx, &workspace, |view| view.transcript.len()) == Some(2)
+    });
+    let leaf = entries(&client, live).await.leaf;
+    until(cx, "the panel to show the new active branch", |cx| {
+      let rows = history_rows(cx, &workspace);
+      rows.iter().find(|row| Some(&row.id) == leaf.as_ref()).is_some_and(|row| row.active)
+        && rows.iter().all(|row| row.id != second.id || !row.active)
+    });
+
+    // A fork moves the session onto a new file and the panel lists that file's history.
+    let before = LiveApiClient::list(&client).await.unwrap();
+    select(cx, &first.id);
+    click(cx, window, "history-fork");
+    // The new file holds the history through the first message only, so the panel shrinks when it reloads.
+    let listed = history_rows(cx, &workspace).len();
+    click(cx, window, "history-fork");
+    until(cx, "the panel to list the forked history", |cx| {
+      history_rows(cx, &workspace).len() < listed
+    });
+    let after = LiveApiClient::list(&client).await.unwrap();
+    assert_ne!(after[0].file, before[0].file, "the fork moved the session to another file");
+    let forked = entries(&client, live).await.entries.len();
+    until(cx, "the panel to list the forked history", |cx| {
+      history_rows(cx, &workspace).len() == forked
+    });
+    fixture.finish().await;
+  }
 }

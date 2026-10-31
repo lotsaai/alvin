@@ -22,8 +22,8 @@ pub use events::{Event, EventBody};
 pub use history::{EntriesRequest, Entry, EntryKind, HistoryEntries};
 pub use ids::{CheckoutId, EntryId, EventId, LiveSessionId, ProjectId, SessionId};
 pub use live::{
-  BashRequest, EventsApiClient, LiveApiClient, LiveSessionSummary, MessagesRequest, OpenRequest, OpenTarget, PromptRequest,
-  SubscribeRequest,
+  BashRequest, EntryRequest, EventsApiClient, ForkRequest, LabelRequest, LiveApiClient, LiveSessionSummary, MessagesRequest,
+  NavigateRequest, OpenRequest, OpenTarget, PromptRequest, SubscribeRequest,
 };
 #[cfg(feature = "server")]
 pub use live::{EventsApiServer, LiveApiServer};

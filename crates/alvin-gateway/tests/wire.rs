@@ -11,11 +11,12 @@ use alvin_client::{ChannelPair, Client, ConnectionState, Endpoint, Error, EventS
 use alvin_gateway::{Gateway, GatewayConfig, WsServer};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
-  AnswersUiResponse, AskAnswer, BashRequest, CheckoutId, DialogApiClient, EntriesRequest, EntryId, ErrorCode, ErrorData, Event, EventBody,
-  EventId, ExtensionUiRequest, ExtensionUiResponse, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesRequest,
-  ModelApiClient, OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromoteQueuedRequest, PromptRequest,
-  QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RespondRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage,
-  SessionStatus, SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
+  AnswersUiResponse, AskAnswer, BashRequest, CheckoutId, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode, ErrorData,
+  Event, EventBody, EventId, ExtensionUiRequest, ExtensionUiResponse, ForkRequest, LabelRequest, ListSessions, LiveApiClient,
+  LiveSessionId, LiveSessionSummary, MessagesRequest, ModelApiClient, NavigateRequest, OpenRequest, OpenTarget, ProjectId, ProjectSummary,
+  ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RespondRequest,
+  RpcAgentEvent, SessionCursor, SessionId, SessionPage, SessionStatus, SessionsApiClient, SetModelRequest, SetThinkingRequest,
+  SubscribeRequest, ThinkingLevel,
 };
 
 /// Session files written by real omp (the first two records of one run).
@@ -1274,6 +1275,187 @@ async fn a_long_session_history_crosses_the_wire() {
   assert_eq!(over_ws.leaf, Some(EntryId::from(last)));
 
   drop((channel, ws));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+/// Runs one turn to its end: its prompt result says the session settled. The session event that follows belongs to this
+/// turn too; waiting for it would end the next turn early, so it is ignored.
+async fn turn(client: &Client, stream: &mut EventStream, live: LiveSessionId, message: &str) {
+  prompt(client, live, message).await;
+  loop {
+    if let EventBody::PromptResult(result) = next_event(stream).await.body
+      && result.session_settled
+    {
+      return;
+    }
+  }
+}
+
+fn user_text(entry: &alvin_protocol::Entry) -> Option<String> {
+  let message = entry.data.get("message")?;
+  (message.get("role")?.as_str() == Some("user")).then_some(())?;
+  message
+    .get("content")?
+    .as_array()?
+    .iter()
+    .find_map(|block| block.get("text")?.as_str().map(str::to_owned))
+}
+
+#[tokio::test]
+async fn the_history_tree_is_navigated_labelled_branched_and_forked_over_both_transports() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let ([channel, ws], server) = both_transports(&gateway).await;
+  let opened = open_new(&channel).await;
+  let mut stream = subscribe(&channel, opened.live, None).await.unwrap();
+  turn(&channel, &mut stream, opened.live, "Reply with the single word one.").await;
+  turn(&channel, &mut stream, opened.live, "Reply with the single word two.").await;
+  let all = |client: &Client| {
+    let client = client.clone();
+    async move {
+      LiveApiClient::entries(
+        &client,
+        EntriesRequest {
+          live: opened.live,
+          since: None,
+        },
+      )
+      .await
+      .unwrap()
+    }
+  };
+
+  // The branch candidates are the user messages, with the entry ids the tree lists.
+  let candidates = LiveApiClient::branch_messages(&channel, opened.live).await.unwrap();
+  assert_eq!(candidates.len(), 2);
+  let entries = all(&ws).await;
+  for candidate in &candidates {
+    let entry = entries
+      .entries
+      .iter()
+      .find(|entry| entry.id.as_str() == candidate.entry_id)
+      .expect("a candidate is an entry");
+    assert_eq!(user_text(entry).as_deref(), Some(candidate.text.as_str()));
+  }
+  let first = EntryId::from(candidates[0].entry_id.clone());
+  let second = EntryId::from(candidates[1].entry_id.clone());
+
+  // A label is an entry that targets another; clearing it is one more.
+  LiveApiClient::label(
+    &ws,
+    LabelRequest {
+      live: opened.live,
+      entry: first.clone(),
+      label: Some("start".to_owned()),
+    },
+  )
+  .await
+  .unwrap();
+  let after_label = all(&channel).await;
+  let label = after_label.entries.last().expect("entries");
+  assert_eq!(label.kind.as_str(), "label");
+  assert_eq!(label.data.get("targetId").and_then(|target| target.as_str()), Some(first.as_str()));
+  assert_eq!(label.data.get("label").and_then(|label| label.as_str()), Some("start"));
+  LiveApiClient::label(
+    &channel,
+    LabelRequest {
+      live: opened.live,
+      entry: first.clone(),
+      label: None,
+    },
+  )
+  .await
+  .unwrap();
+  let after_clear = all(&ws).await;
+  assert_eq!(after_clear.entries.len(), after_label.entries.len() + 1);
+
+  // Navigating to a user message rewinds past it: the leaf moves to its parent and its text comes back for the composer.
+  let second_entry = entries
+    .entries
+    .iter()
+    .find(|entry| entry.id == second)
+    .expect("the second prompt")
+    .clone();
+  let navigated = LiveApiClient::navigate_tree(
+    &channel,
+    NavigateRequest {
+      live: opened.live,
+      entry: second.clone(),
+      summarize: None,
+      custom_instructions: None,
+    },
+  )
+  .await
+  .unwrap();
+  assert!(!navigated.cancelled);
+  assert_eq!(navigated.editor_text, user_text(&second_entry));
+  let moved = all(&ws).await;
+  assert_eq!(moved.leaf, second_entry.parent_id);
+  let transcript = LiveApiClient::messages(
+    &channel,
+    MessagesRequest {
+      live: opened.live,
+      cursor: None,
+      limit: None,
+    },
+  )
+  .await
+  .unwrap();
+  assert_eq!(transcript.total_messages, 2);
+
+  // An entry omp does not know is its command error with omp's code.
+  let unknown = LiveApiClient::navigate_tree(
+    &ws,
+    NavigateRequest {
+      live: opened.live,
+      entry: EntryId::from("nope".to_owned()),
+      summarize: None,
+      custom_instructions: None,
+    },
+  )
+  .await
+  .unwrap_err();
+  assert!(matches!(
+    Error::from(unknown),
+    Error::Gateway { data: Some(ErrorData::OmpCommandFailed { code: Some(code) }), .. } if code == "entry_not_found"
+  ));
+
+  // A fork moves the live session onto a new file, and the gateway files it under that one.
+  let before = LiveApiClient::list(&channel).await.unwrap();
+  let forked = LiveApiClient::fork(
+    &ws,
+    ForkRequest {
+      live: opened.live,
+      entry: None,
+    },
+  )
+  .await
+  .unwrap();
+  assert!(!forked.cancelled);
+  let after = LiveApiClient::list(&channel).await.unwrap();
+  assert_eq!(after.len(), 1);
+  assert_ne!(after[0].file, before[0].file);
+  assert_eq!(after[0].live, opened.live);
+  let state = LiveApiClient::state(&channel, opened.live).await.unwrap();
+  assert_eq!(state.session_file.map(PathBuf::from), Some(after[0].file.clone()));
+
+  // A branch at a user message moves it again or not, and the summary agrees with omp either way.
+  let branched = LiveApiClient::branch(
+    &channel,
+    EntryRequest {
+      live: opened.live,
+      entry: first,
+    },
+  )
+  .await
+  .unwrap_or_else(|error| panic!("branching at a user message failed: {error:?}"));
+  assert!(!branched.cancelled);
+  let listed = LiveApiClient::list(&ws).await.unwrap();
+  let state = LiveApiClient::state(&ws, opened.live).await.unwrap();
+  assert_eq!(state.session_file.map(PathBuf::from), Some(listed[0].file.clone()));
+
+  drop((stream, channel, ws));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
 }

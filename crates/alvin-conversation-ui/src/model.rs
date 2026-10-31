@@ -6,10 +6,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use alvin_client::{Client, ConnectionState, Error, ResyncReason};
 use alvin_conversation::{Connection, Conversation, Notice, Run, SessionsKey};
 use alvin_protocol::{
-  BashRequest, CheckoutId, DialogApiClient, EntriesRequest, ErrorCode, ErrorData, ExtensionUiResponse, ListSessions, LiveApiClient,
-  LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest, ModelApiClient, ModelInfo, OpenRequest, OpenTarget, ProjectId,
-  ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RespondRequest,
-  SessionCursor, SessionId, SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
+  BashRequest, CheckoutId, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode, ErrorData, ExtensionUiResponse, ForkRequest,
+  LabelRequest, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest, ModelApiClient, ModelInfo,
+  NavigateRequest, OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient,
+  QueuedMessageQueue, RemoveQueuedRequest, RespondRequest, SessionCursor, SessionId, SessionsApiClient, SetModelRequest,
+  SetThinkingRequest, SubscribeRequest, ThinkingLevel,
 };
 use gpui_kit::{AsyncApp, Context, EventEmitter, SharedString, Task, WeakEntity};
 
@@ -61,6 +62,10 @@ pub struct Model {
   catalogs: BTreeMap<LiveSessionId, Catalog>,
   /// Sessions whose history is being read, and those asked to be read again meanwhile. Triggers coalesce into one request.
   tree_reads: BTreeMap<LiveSessionId, bool>,
+  /// The user messages each session can branch from, as omp lists them, by entry id.
+  branch_candidates: BTreeMap<LiveSessionId, BTreeSet<EntryId>>,
+  /// Sessions whose navigation is generating a branch summary, which can be cancelled.
+  summarizing: BTreeSet<LiveSessionId>,
   conversation: Conversation,
   client: Client,
   /// Live sessions with a `!` command running, so Escape aborts that and not the turn.
@@ -97,6 +102,8 @@ impl Model {
     Self {
       catalogs: BTreeMap::new(),
       tree_reads: BTreeMap::new(),
+      branch_candidates: BTreeMap::new(),
+      summarizing: BTreeSet::new(),
       conversation: Conversation::default(),
       client,
       bash_running: BTreeSet::new(),
@@ -113,6 +120,19 @@ impl Model {
   /// The models and thinking levels of a session, once loaded.
   pub fn catalog(&self, live: LiveSessionId) -> Option<&Catalog> {
     self.catalogs.get(&live)
+  }
+
+  /// Whether an entry is a user message omp can branch from.
+  pub fn can_branch_from(&self, live: LiveSessionId, entry: &EntryId) -> bool {
+    self
+      .branch_candidates
+      .get(&live)
+      .is_some_and(|candidates| candidates.contains(entry))
+  }
+
+  /// Whether a navigation is generating a branch summary.
+  pub fn summarizing(&self, live: LiveSessionId) -> bool {
+    self.summarizing.contains(&live)
   }
 
   /// Whether a `!` command is running in the session.
@@ -318,6 +338,8 @@ impl Model {
         };
         drop(this.update(cx, |model, cx| {
           model.bash_running.remove(&live);
+          model.branch_candidates.remove(&live);
+          model.summarizing.remove(&live);
           match (result, reloaded) {
             (Err(error), _) => model.fail(&error, cx),
             (Ok(_), Some(Ok((_, page)))) => model.conversation.load_page(live, page),
@@ -457,6 +479,7 @@ impl Model {
               return false;
             }
           }
+          model.load_branch_candidates(live, cx);
           cx.notify();
           let again = model.tree_reads.insert(live, false).unwrap_or(false);
           if !again {
@@ -469,6 +492,132 @@ impl Model {
           _ => return,
         }
       }
+    })
+    .detach();
+  }
+
+  fn load_branch_candidates(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(
+      async move |this, cx| match LiveApiClient::branch_messages(&client, live).await.map_err(Error::from) {
+        Ok(messages) => drop(this.update(cx, |model, cx| {
+          let ids = messages.into_iter().map(|message| EntryId::from(message.entry_id)).collect();
+          model.branch_candidates.insert(live, ids);
+          cx.notify();
+        })),
+        Err(error) => fail(&this, cx, &error),
+      },
+    )
+    .detach();
+  }
+
+  /// Reads the session's state and transcript again, and its history: the active branch changed under the views. With
+  /// `new_file` the session moved onto another file, so the tree starts over.
+  fn reload(&mut self, live: LiveSessionId, new_file: bool, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| match load(&client, live).await {
+      Ok((state, page)) => drop(this.update(cx, |model, cx| {
+        model.conversation.set_state(live, &state);
+        model.conversation.load_page(live, page);
+        if new_file {
+          model.conversation.forget_tree(live);
+        }
+        model.refresh_tree(live, cx);
+        cx.notify();
+      })),
+      Err(error) => fail(&this, cx, &error),
+    })
+    .detach();
+  }
+
+  /// Moves the active branch to an entry. A user message rewinds past itself and its text goes to the composer.
+  pub fn navigate_tree(&mut self, live: LiveSessionId, entry: EntryId, summarize: bool, instructions: String, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    if summarize {
+      self.summarizing.insert(live);
+      cx.notify();
+    }
+    cx.spawn(async move |this, cx| {
+      let request = NavigateRequest {
+        live,
+        entry,
+        summarize: summarize.then_some(true),
+        custom_instructions: (!instructions.trim().is_empty()).then_some(instructions),
+      };
+      let result = LiveApiClient::navigate_tree(&client, request).await.map_err(Error::from);
+      drop(this.update(cx, |model, cx| {
+        model.summarizing.remove(&live);
+        match result {
+          Ok(result) if !result.cancelled => {
+            if let Some(text) = result.editor_text {
+              cx.emit(ModelEvent::ComposerText { live, text });
+            }
+            model.reload(live, false, cx);
+          }
+          Ok(_) => {}
+          Err(error) => model.fail(&error, cx),
+        }
+        cx.notify();
+      }));
+    })
+    .detach();
+  }
+
+  /// Stops the branch summary a navigation is generating.
+  pub fn abort_branch_summary(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      if let Err(error) = LiveApiClient::abort_branch_summary(&client, live).await.map_err(Error::from) {
+        fail(&this, cx, &error);
+      }
+    })
+    .detach();
+  }
+
+  /// Branches at a user message; its text goes to the composer.
+  pub fn branch(&mut self, live: LiveSessionId, entry: EntryId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      let result = LiveApiClient::branch(&client, EntryRequest { live, entry })
+        .await
+        .map_err(Error::from);
+      drop(this.update(cx, |model, cx| match result {
+        Ok(result) if !result.cancelled => {
+          cx.emit(ModelEvent::ComposerText { live, text: result.text });
+          model.reload(live, true, cx);
+        }
+        Ok(_) => {}
+        Err(error) => model.fail(&error, cx),
+      }));
+    })
+    .detach();
+  }
+
+  /// Forks the session into a new file, through an entry.
+  pub fn fork(&mut self, live: LiveSessionId, entry: Option<EntryId>, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      let result = LiveApiClient::fork(&client, ForkRequest { live, entry }).await.map_err(Error::from);
+      drop(this.update(cx, |model, cx| match result {
+        Ok(result) if !result.cancelled => model.reload(live, true, cx),
+        Ok(_) => {}
+        Err(error) => model.fail(&error, cx),
+      }));
+    })
+    .detach();
+  }
+
+  /// Sets an entry's label, or clears it.
+  pub fn label(&mut self, live: LiveSessionId, entry: EntryId, label: Option<String>, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      let result = LiveApiClient::label(&client, LabelRequest { live, entry, label })
+        .await
+        .map_err(Error::from);
+      drop(this.update(cx, |model, cx| match result {
+        Ok(()) => model.refresh_tree(live, cx),
+        Err(error) => model.fail(&error, cx),
+      }));
     })
     .detach();
   }

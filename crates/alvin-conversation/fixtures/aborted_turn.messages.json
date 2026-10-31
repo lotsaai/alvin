@@ -7,7 +7,7 @@
           "type": "text"
         }
       ],
-      "timestamp": 1793438029894.0,
+      "timestamp": 1793439152025.0,
       "attribution": "user",
       "role": "user"
     },
@@ -15,8 +15,10 @@
       "role": "assistant",
       "content": [
         {
-          "text": "1",
-          "type": "text"
+          "thinking": "Just",
+          "thinkingSignature": "reasoning_content",
+          "type": "thinking",
+          "summary": false
         }
       ],
       "api": "openai-completions",
@@ -37,11 +39,11 @@
         }
       },
       "stopReason": "aborted",
-      "timestamp": 1793438031138.0,
-      "responseId": "20261031171351c096e698a6c2406e",
+      "timestamp": 1793439152841.0,
+      "responseId": "2026103117323391ba23580de64fa9",
       "errorMessage": "Interrupted by user",
       "errorId": 67112960.0,
-      "completedAt": 1793438033078.0,
+      "completedAt": 1793439153975.0,
       "credentialId": 1
     }
   ],

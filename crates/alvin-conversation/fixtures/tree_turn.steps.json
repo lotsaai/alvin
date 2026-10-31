@@ -1,0 +1,849 @@
+[
+  {
+    "name": "label",
+    "delta": {
+      "entries": [
+        {
+          "id": "e7f93060",
+          "parentId": "df2f776e",
+          "timestamp": "2026-10-31T09:33:14.012Z",
+          "type": "label",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "targetId": "aead2694",
+          "label": "start"
+        }
+      ],
+      "leaf": "e7f93060"
+    },
+    "after": {
+      "entries": [
+        {
+          "id": "a926617a",
+          "parentId": null,
+          "timestamp": "2026-10-31T09:33:08.947Z",
+          "type": "model_change",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "model": "zai/glm-5.3-flash",
+          "resolvedModelIsFallback": false
+        },
+        {
+          "id": "3d7027ee",
+          "parentId": "a926617a",
+          "timestamp": "2026-10-31T09:33:09.787Z",
+          "type": "custom",
+          "customType": "memory_recall",
+          "data": {
+            "version": 1,
+            "scope": "[\"hindsight\",\"http://aristotle:8888\",\"409638ee2bde459\",\"omp-repo\",[],null]",
+            "text": "",
+            "memories": []
+          },
+          "runtime": {
+            "version": "18.14.1"
+          }
+        },
+        {
+          "id": "92e38f07",
+          "parentId": "3d7027ee",
+          "timestamp": "2026-10-31T09:33:10.125Z",
+          "type": "model_usage",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "purpose": "auto-thinking",
+          "role": "typesafe",
+          "api": "openrouter-decisions",
+          "provider": "openrouter",
+          "model": "liquid/d1.1",
+          "usage": {
+            "input": 152,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 152,
+            "cost": {
+              "input": 3.04e-6,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 3.04e-6
+            }
+          },
+          "stopReason": "stop"
+        },
+        {
+          "id": "7322f665",
+          "parentId": "92e38f07",
+          "timestamp": "2026-10-31T09:33:10.125Z",
+          "type": "thinking_level_change",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "thinkingLevel": "low",
+          "configured": "auto"
+        },
+        {
+          "id": "aead2694",
+          "parentId": "7322f665",
+          "timestamp": "2026-10-31T09:33:10.126Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Reply with the single word ok."
+              }
+            ],
+            "attribution": "user",
+            "timestamp": 1793439189000
+          }
+        },
+        {
+          "id": "7677400a",
+          "parentId": "aead2694",
+          "timestamp": "2026-10-31T09:33:11.709Z",
+          "type": "custom",
+          "customType": "system-prompt-digest",
+          "data": "f14c511d49dbe0d4",
+          "runtime": {
+            "version": "18.14.1"
+          }
+        },
+        {
+          "id": "2ceadc25",
+          "parentId": "7677400a",
+          "timestamp": "2026-10-31T09:33:11.709Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 95,
+              "output": 3,
+              "cacheRead": 3456,
+              "cacheWrite": 0,
+              "totalTokens": 3554,
+              "cost": {
+                "input": 0.00001425,
+                "output": 1.5e-6,
+                "cacheRead": 0.00010368,
+                "cacheWrite": 0,
+                "total": 0.00011943
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793439190127,
+            "responseId": "2026103117331039b31f2293d84677",
+            "duration": 1580.5467909999998,
+            "ttft": 1578.280291,
+            "credentialId": 1,
+            "completedAt": 1793439191708,
+            "contextSnapshot": {
+              "promptTokens": 3551,
+              "nonMessageTokens": 3112,
+              "toolSchemaTokens": 850,
+              "compactionEpoch": 0
+            },
+            "errorId": 0
+          }
+        },
+        {
+          "id": "86a3a475",
+          "parentId": "2ceadc25",
+          "timestamp": "2026-10-31T09:33:12.015Z",
+          "type": "model_usage",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "purpose": "auto-thinking",
+          "role": "typesafe",
+          "api": "openrouter-decisions",
+          "provider": "openrouter",
+          "model": "liquid/d1.1",
+          "usage": {
+            "input": 152,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 152,
+            "cost": {
+              "input": 3.04e-6,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 3.04e-6
+            }
+          },
+          "stopReason": "stop"
+        },
+        {
+          "id": "2837b930",
+          "parentId": "86a3a475",
+          "timestamp": "2026-10-31T09:33:12.018Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Reply with the single word again."
+              }
+            ],
+            "attribution": "user",
+            "timestamp": 1793439191715
+          }
+        },
+        {
+          "id": "df2f776e",
+          "parentId": "2837b930",
+          "timestamp": "2026-10-31T09:33:12.991Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "again"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 43,
+              "output": 3,
+              "cacheRead": 3520,
+              "cacheWrite": 0,
+              "totalTokens": 3566,
+              "cost": {
+                "input": 6.45e-6,
+                "output": 1.5e-6,
+                "cacheRead": 0.0001056,
+                "cacheWrite": 0,
+                "total": 0.00011355
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793439192019,
+            "responseId": "202610311733120b502109cbd04e0c",
+            "duration": 971.5008749999996,
+            "ttft": 964.8036249999996,
+            "credentialId": 1,
+            "completedAt": 1793439192991,
+            "contextSnapshot": {
+              "promptTokens": 3563,
+              "nonMessageTokens": 3112,
+              "toolSchemaTokens": 850,
+              "compactionEpoch": 0
+            },
+            "errorId": 0
+          }
+        },
+        {
+          "id": "e7f93060",
+          "parentId": "df2f776e",
+          "timestamp": "2026-10-31T09:33:14.012Z",
+          "type": "label",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "targetId": "aead2694",
+          "label": "start"
+        }
+      ],
+      "leaf": "e7f93060"
+    }
+  },
+  {
+    "name": "clear_label",
+    "delta": {
+      "entries": [
+        {
+          "id": "1227efce",
+          "parentId": "e7f93060",
+          "timestamp": "2026-10-31T09:33:14.018Z",
+          "type": "label",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "targetId": "aead2694"
+        }
+      ],
+      "leaf": "1227efce"
+    },
+    "after": {
+      "entries": [
+        {
+          "id": "a926617a",
+          "parentId": null,
+          "timestamp": "2026-10-31T09:33:08.947Z",
+          "type": "model_change",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "model": "zai/glm-5.3-flash",
+          "resolvedModelIsFallback": false
+        },
+        {
+          "id": "3d7027ee",
+          "parentId": "a926617a",
+          "timestamp": "2026-10-31T09:33:09.787Z",
+          "type": "custom",
+          "customType": "memory_recall",
+          "data": {
+            "version": 1,
+            "scope": "[\"hindsight\",\"http://aristotle:8888\",\"409638ee2bde459\",\"omp-repo\",[],null]",
+            "text": "",
+            "memories": []
+          },
+          "runtime": {
+            "version": "18.14.1"
+          }
+        },
+        {
+          "id": "92e38f07",
+          "parentId": "3d7027ee",
+          "timestamp": "2026-10-31T09:33:10.125Z",
+          "type": "model_usage",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "purpose": "auto-thinking",
+          "role": "typesafe",
+          "api": "openrouter-decisions",
+          "provider": "openrouter",
+          "model": "liquid/d1.1",
+          "usage": {
+            "input": 152,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 152,
+            "cost": {
+              "input": 3.04e-6,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 3.04e-6
+            }
+          },
+          "stopReason": "stop"
+        },
+        {
+          "id": "7322f665",
+          "parentId": "92e38f07",
+          "timestamp": "2026-10-31T09:33:10.125Z",
+          "type": "thinking_level_change",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "thinkingLevel": "low",
+          "configured": "auto"
+        },
+        {
+          "id": "aead2694",
+          "parentId": "7322f665",
+          "timestamp": "2026-10-31T09:33:10.126Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Reply with the single word ok."
+              }
+            ],
+            "attribution": "user",
+            "timestamp": 1793439189000
+          }
+        },
+        {
+          "id": "7677400a",
+          "parentId": "aead2694",
+          "timestamp": "2026-10-31T09:33:11.709Z",
+          "type": "custom",
+          "customType": "system-prompt-digest",
+          "data": "f14c511d49dbe0d4",
+          "runtime": {
+            "version": "18.14.1"
+          }
+        },
+        {
+          "id": "2ceadc25",
+          "parentId": "7677400a",
+          "timestamp": "2026-10-31T09:33:11.709Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 95,
+              "output": 3,
+              "cacheRead": 3456,
+              "cacheWrite": 0,
+              "totalTokens": 3554,
+              "cost": {
+                "input": 0.00001425,
+                "output": 1.5e-6,
+                "cacheRead": 0.00010368,
+                "cacheWrite": 0,
+                "total": 0.00011943
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793439190127,
+            "responseId": "2026103117331039b31f2293d84677",
+            "duration": 1580.5467909999998,
+            "ttft": 1578.280291,
+            "credentialId": 1,
+            "completedAt": 1793439191708,
+            "contextSnapshot": {
+              "promptTokens": 3551,
+              "nonMessageTokens": 3112,
+              "toolSchemaTokens": 850,
+              "compactionEpoch": 0
+            },
+            "errorId": 0
+          }
+        },
+        {
+          "id": "86a3a475",
+          "parentId": "2ceadc25",
+          "timestamp": "2026-10-31T09:33:12.015Z",
+          "type": "model_usage",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "purpose": "auto-thinking",
+          "role": "typesafe",
+          "api": "openrouter-decisions",
+          "provider": "openrouter",
+          "model": "liquid/d1.1",
+          "usage": {
+            "input": 152,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 152,
+            "cost": {
+              "input": 3.04e-6,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 3.04e-6
+            }
+          },
+          "stopReason": "stop"
+        },
+        {
+          "id": "2837b930",
+          "parentId": "86a3a475",
+          "timestamp": "2026-10-31T09:33:12.018Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Reply with the single word again."
+              }
+            ],
+            "attribution": "user",
+            "timestamp": 1793439191715
+          }
+        },
+        {
+          "id": "df2f776e",
+          "parentId": "2837b930",
+          "timestamp": "2026-10-31T09:33:12.991Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "again"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 43,
+              "output": 3,
+              "cacheRead": 3520,
+              "cacheWrite": 0,
+              "totalTokens": 3566,
+              "cost": {
+                "input": 6.45e-6,
+                "output": 1.5e-6,
+                "cacheRead": 0.0001056,
+                "cacheWrite": 0,
+                "total": 0.00011355
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793439192019,
+            "responseId": "202610311733120b502109cbd04e0c",
+            "duration": 971.5008749999996,
+            "ttft": 964.8036249999996,
+            "credentialId": 1,
+            "completedAt": 1793439192991,
+            "contextSnapshot": {
+              "promptTokens": 3563,
+              "nonMessageTokens": 3112,
+              "toolSchemaTokens": 850,
+              "compactionEpoch": 0
+            },
+            "errorId": 0
+          }
+        },
+        {
+          "id": "e7f93060",
+          "parentId": "df2f776e",
+          "timestamp": "2026-10-31T09:33:14.012Z",
+          "type": "label",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "targetId": "aead2694",
+          "label": "start"
+        },
+        {
+          "id": "1227efce",
+          "parentId": "e7f93060",
+          "timestamp": "2026-10-31T09:33:14.018Z",
+          "type": "label",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "targetId": "aead2694"
+        }
+      ],
+      "leaf": "1227efce"
+    }
+  },
+  {
+    "name": "navigate",
+    "delta": {
+      "entries": [],
+      "leaf": "86a3a475"
+    },
+    "after": {
+      "entries": [
+        {
+          "id": "a926617a",
+          "parentId": null,
+          "timestamp": "2026-10-31T09:33:08.947Z",
+          "type": "model_change",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "model": "zai/glm-5.3-flash",
+          "resolvedModelIsFallback": false
+        },
+        {
+          "id": "3d7027ee",
+          "parentId": "a926617a",
+          "timestamp": "2026-10-31T09:33:09.787Z",
+          "type": "custom",
+          "customType": "memory_recall",
+          "data": {
+            "version": 1,
+            "scope": "[\"hindsight\",\"http://aristotle:8888\",\"409638ee2bde459\",\"omp-repo\",[],null]",
+            "text": "",
+            "memories": []
+          },
+          "runtime": {
+            "version": "18.14.1"
+          }
+        },
+        {
+          "id": "92e38f07",
+          "parentId": "3d7027ee",
+          "timestamp": "2026-10-31T09:33:10.125Z",
+          "type": "model_usage",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "purpose": "auto-thinking",
+          "role": "typesafe",
+          "api": "openrouter-decisions",
+          "provider": "openrouter",
+          "model": "liquid/d1.1",
+          "usage": {
+            "input": 152,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 152,
+            "cost": {
+              "input": 3.04e-6,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 3.04e-6
+            }
+          },
+          "stopReason": "stop"
+        },
+        {
+          "id": "7322f665",
+          "parentId": "92e38f07",
+          "timestamp": "2026-10-31T09:33:10.125Z",
+          "type": "thinking_level_change",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "thinkingLevel": "low",
+          "configured": "auto"
+        },
+        {
+          "id": "aead2694",
+          "parentId": "7322f665",
+          "timestamp": "2026-10-31T09:33:10.126Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Reply with the single word ok."
+              }
+            ],
+            "attribution": "user",
+            "timestamp": 1793439189000
+          }
+        },
+        {
+          "id": "7677400a",
+          "parentId": "aead2694",
+          "timestamp": "2026-10-31T09:33:11.709Z",
+          "type": "custom",
+          "customType": "system-prompt-digest",
+          "data": "f14c511d49dbe0d4",
+          "runtime": {
+            "version": "18.14.1"
+          }
+        },
+        {
+          "id": "2ceadc25",
+          "parentId": "7677400a",
+          "timestamp": "2026-10-31T09:33:11.709Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 95,
+              "output": 3,
+              "cacheRead": 3456,
+              "cacheWrite": 0,
+              "totalTokens": 3554,
+              "cost": {
+                "input": 0.00001425,
+                "output": 1.5e-6,
+                "cacheRead": 0.00010368,
+                "cacheWrite": 0,
+                "total": 0.00011943
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793439190127,
+            "responseId": "2026103117331039b31f2293d84677",
+            "duration": 1580.5467909999998,
+            "ttft": 1578.280291,
+            "credentialId": 1,
+            "completedAt": 1793439191708,
+            "contextSnapshot": {
+              "promptTokens": 3551,
+              "nonMessageTokens": 3112,
+              "toolSchemaTokens": 850,
+              "compactionEpoch": 0
+            },
+            "errorId": 0
+          }
+        },
+        {
+          "id": "86a3a475",
+          "parentId": "2ceadc25",
+          "timestamp": "2026-10-31T09:33:12.015Z",
+          "type": "model_usage",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "purpose": "auto-thinking",
+          "role": "typesafe",
+          "api": "openrouter-decisions",
+          "provider": "openrouter",
+          "model": "liquid/d1.1",
+          "usage": {
+            "input": 152,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 152,
+            "cost": {
+              "input": 3.04e-6,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 3.04e-6
+            }
+          },
+          "stopReason": "stop"
+        },
+        {
+          "id": "2837b930",
+          "parentId": "86a3a475",
+          "timestamp": "2026-10-31T09:33:12.018Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Reply with the single word again."
+              }
+            ],
+            "attribution": "user",
+            "timestamp": 1793439191715
+          }
+        },
+        {
+          "id": "df2f776e",
+          "parentId": "2837b930",
+          "timestamp": "2026-10-31T09:33:12.991Z",
+          "type": "message",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "again"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 43,
+              "output": 3,
+              "cacheRead": 3520,
+              "cacheWrite": 0,
+              "totalTokens": 3566,
+              "cost": {
+                "input": 6.45e-6,
+                "output": 1.5e-6,
+                "cacheRead": 0.0001056,
+                "cacheWrite": 0,
+                "total": 0.00011355
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793439192019,
+            "responseId": "202610311733120b502109cbd04e0c",
+            "duration": 971.5008749999996,
+            "ttft": 964.8036249999996,
+            "credentialId": 1,
+            "completedAt": 1793439192991,
+            "contextSnapshot": {
+              "promptTokens": 3563,
+              "nonMessageTokens": 3112,
+              "toolSchemaTokens": 850,
+              "compactionEpoch": 0
+            },
+            "errorId": 0
+          }
+        },
+        {
+          "id": "e7f93060",
+          "parentId": "df2f776e",
+          "timestamp": "2026-10-31T09:33:14.012Z",
+          "type": "label",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "targetId": "aead2694",
+          "label": "start"
+        },
+        {
+          "id": "1227efce",
+          "parentId": "e7f93060",
+          "timestamp": "2026-10-31T09:33:14.018Z",
+          "type": "label",
+          "runtime": {
+            "version": "18.14.1"
+          },
+          "targetId": "aead2694"
+        }
+      ],
+      "leaf": "86a3a475"
+    }
+  }
+]

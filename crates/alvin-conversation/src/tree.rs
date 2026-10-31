@@ -274,4 +274,66 @@ mod tests {
 
     assert_eq!(tree.roots(), [orphan.id]);
   }
+
+  /// One action on the history of the recorded session and what omp had after it.
+  struct Step {
+    name: String,
+    delta: HistoryEntries,
+    after: HistoryEntries,
+  }
+
+  fn steps() -> Vec<Step> {
+    let steps: Vec<serde_json::Value> = serde_json::from_str(include_str!("../fixtures/tree_turn.steps.json")).unwrap();
+    steps
+      .into_iter()
+      .map(|step| Step {
+        name: step["name"].as_str().unwrap().to_owned(),
+        delta: serde_json::from_value(step["delta"].clone()).unwrap(),
+        after: serde_json::from_value(step["after"].clone()).unwrap(),
+      })
+      .collect()
+  }
+
+  #[test]
+  fn labelling_clearing_and_navigating_give_what_a_fresh_read_gives() {
+    let mut grown = Tree::from_entries(recorded().after);
+    let steps = steps();
+    assert_eq!(
+      steps.iter().map(|step| step.name.as_str()).collect::<Vec<_>>(),
+      ["label", "clear_label", "navigate"]
+    );
+
+    for step in steps {
+      grown.apply(step.delta);
+      assert_eq!(grown, Tree::from_entries(step.after), "after {}", step.name);
+    }
+  }
+
+  #[test]
+  fn a_real_label_shows_on_its_target_until_it_is_cleared_and_navigating_moves_only_the_leaf() {
+    let mut grown = Tree::from_entries(recorded().after);
+    let mut steps = steps().into_iter();
+    let label = steps.next().expect("the label step");
+    let target = label
+      .delta
+      .entries
+      .iter()
+      .find(|entry| entry.kind.as_str() == "label")
+      .and_then(|entry| entry.data.get("targetId")?.as_str().map(|id| EntryId::from(id.to_owned())))
+      .expect("omp wrote a label entry");
+
+    grown.apply(label.delta);
+    assert_eq!(grown.label(&target), Some("start"));
+
+    let clear = steps.next().expect("the clear step");
+    grown.apply(clear.delta);
+    assert_eq!(grown.label(&target), None);
+
+    let navigate = steps.next().expect("the navigate step");
+    let len = grown.len();
+    let leaf = grown.leaf().cloned();
+    grown.apply(navigate.delta);
+    assert_eq!(grown.len(), len, "navigating appends no entry");
+    assert_ne!(grown.leaf().cloned(), leaf);
+  }
 }

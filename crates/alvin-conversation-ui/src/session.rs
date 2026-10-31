@@ -39,7 +39,7 @@ impl SessionView {
     let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
     let pickers = Pickers::new(&model, live, window, cx);
     let dialogs = DialogHost::new(window, cx);
-    let history = cx.new(|cx| HistoryTreeView::new(model.clone(), live, cx));
+    let history = cx.new(|cx| HistoryTreeView::new(model.clone(), live, window, cx));
     let subscriptions = vec![
       cx.observe(&scroller, |_, _, cx| cx.notify()),
       cx.observe_in(&model, window, |this, model, window, cx| {
@@ -195,6 +195,18 @@ impl Render for SessionView {
 }
 
 impl SessionView {
+  /// Types into the history panel's label field.
+  #[cfg(test)]
+  pub(crate) fn type_history_label(&self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+    self.history.update(cx, |history, cx| history.type_label(text, window, cx));
+  }
+
+  /// Selects a history row, as a click on it does.
+  #[cfg(test)]
+  pub(crate) fn select_history_row(&self, id: alvin_protocol::EntryId, cx: &mut Context<Self>) {
+    self.history.update(cx, |history, cx| history.select(id, cx));
+  }
+
   /// The rows the history panel lists, whether or not it is open.
   #[cfg(test)]
   pub(crate) fn history_row_list(&self, cx: &gpui_kit::App) -> Vec<crate::history_tree::Row> {

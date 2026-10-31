@@ -6,8 +6,9 @@ use std::time::Instant;
 
 use alvin_omp_host::{Host, StartRequest};
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashRequest, BashResult, EntriesRequest, HistoryEntries, ListSessions, LiveSessionId, LiveSessionSummary,
-  MessagesPage, MessagesRequest, ModelCycleResult, ModelInfo, OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult,
+  AbortAndRestoreQueueResult, BashRequest, BashResult, BranchMessage, BranchResult, CancellationResult, EntriesRequest, EntryRequest,
+  ForkRequest, HistoryEntries, LabelRequest, ListSessions, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
+  ModelCycleResult, ModelInfo, NavigateRequest, NavigateTreeResult, OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult,
   PromoteQueuedRequest, PromptRequest, RemoveQueuedMessageResult, RemoveQueuedRequest, RespondRequest, SessionPage, SessionState,
   SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
 };
@@ -113,13 +114,7 @@ impl Gateway {
     let id = LiveSessionId::new();
     let log = EventLog::new(id, self.metrics.clone());
     tokio::spawn(live::pump(Arc::clone(&log), events));
-    let live = Arc::new(Live {
-      id,
-      cwd,
-      file,
-      session,
-      log,
-    });
+    let live = Arc::new(Live::new(id, cwd, file, session, log));
     let summary = live.summary();
     self.live.insert(live);
     self.metrics.live_sessions(1);
@@ -235,6 +230,66 @@ impl Gateway {
   pub(crate) async fn entries(&self, request: EntriesRequest) -> Result<HistoryEntries> {
     let live = self.live.get(request.live)?;
     self.timed("get_entries", live.session.entries(request.since)).await
+  }
+
+  pub(crate) async fn branch_messages(&self, id: LiveSessionId) -> Result<Vec<BranchMessage>> {
+    let live = self.live.get(id)?;
+    self.timed("get_branch_messages", live.session.branch_messages()).await
+  }
+
+  pub(crate) async fn navigate_tree(&self, request: NavigateRequest) -> Result<NavigateTreeResult> {
+    let live = self.live.get(request.live)?;
+    self
+      .timed(
+        "navigate_tree",
+        live
+          .session
+          .navigate_tree(request.entry, request.summarize, request.custom_instructions),
+      )
+      .await
+  }
+
+  pub(crate) async fn abort_branch_summary(&self, id: LiveSessionId) -> Result<()> {
+    let live = self.live.get(id)?;
+    self.timed("abort_branch_summary", live.session.abort_branch_summary()).await
+  }
+
+  pub(crate) async fn branch(&self, request: EntryRequest) -> Result<BranchResult> {
+    let live = self.live.get(request.live)?;
+    let result = self.timed("branch", live.session.branch(request.entry)).await?;
+    if !result.cancelled {
+      self.follow_session_file(&live).await?;
+    }
+    Ok(result)
+  }
+
+  pub(crate) async fn fork(&self, request: ForkRequest) -> Result<CancellationResult> {
+    let live = self.live.get(request.live)?;
+    let result = self.timed("fork", live.session.fork(request.entry)).await?;
+    if !result.cancelled {
+      self.follow_session_file(&live).await?;
+    }
+    Ok(result)
+  }
+
+  pub(crate) async fn label(&self, request: LabelRequest) -> Result<()> {
+    let live = self.live.get(request.live)?;
+    self.timed("set_label", live.session.set_label(request.entry, request.label)).await
+  }
+
+  /// A fork or branch can move omp onto another session file. Reads which one and files the live session under it, so an
+  /// open of either file finds the right process.
+  async fn follow_session_file(&self, live: &Live) -> Result<()> {
+    let state = self.timed("get_state", live.session.state()).await?;
+    let file = state
+      .session_file
+      .map(PathBuf::from)
+      .ok_or_else(|| Error::NoSessionFile { cwd: live.cwd.clone() })?;
+    let file = live::canonical_file(&file)?;
+    if file != live.file() {
+      self.live.rekey(live, file);
+    }
+    Ok(())
   }
 
   pub(crate) async fn models(&self, id: LiveSessionId) -> Result<Vec<ModelInfo>> {

@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::events::Event;
 use crate::history::{EntriesRequest, HistoryEntries};
-use crate::ids::{CheckoutId, EventId, LiveSessionId, ProjectId, SessionId};
-use crate::omp_wire::{BashResult, MessagesPage, SessionState};
+use crate::ids::{CheckoutId, EntryId, EventId, LiveSessionId, ProjectId, SessionId};
+use crate::omp_wire::{BashResult, BranchMessage, BranchResult, CancellationResult, MessagesPage, NavigateTreeResult, SessionState};
 
 /// What `live/open` starts omp on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,6 +75,52 @@ pub struct PromptRequest {
   pub live: LiveSessionId,
   /// What to send.
   pub message: String,
+}
+
+/// `live/navigateTree`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NavigateRequest {
+  /// The live session.
+  pub live: LiveSessionId,
+  /// The entry to move the active branch to. A user message rewinds past itself.
+  pub entry: EntryId,
+  /// Summarize the branch being left, at the target.
+  pub summarize: Option<bool>,
+  /// Instructions for the summary.
+  pub custom_instructions: Option<String>,
+}
+
+/// `live/branch`: a request about one entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryRequest {
+  /// The live session.
+  pub live: LiveSessionId,
+  /// The entry.
+  pub entry: EntryId,
+}
+
+/// `live/fork`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkRequest {
+  /// The live session.
+  pub live: LiveSessionId,
+  /// Keep the history through this message entry. Absent: copy the whole session.
+  pub entry: Option<EntryId>,
+}
+
+/// `live/label`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LabelRequest {
+  /// The live session.
+  pub live: LiveSessionId,
+  /// The entry to label.
+  pub entry: EntryId,
+  /// The label. Absent: clear the entry's label.
+  pub label: Option<String>,
 }
 
 /// `live/bash`.
@@ -154,6 +200,30 @@ pub trait LiveApi {
   /// sends no event when history grows: read this after a turn.
   #[method(name = "entries")]
   async fn entries(&self, request: EntriesRequest) -> jsonrpsee::core::RpcResult<HistoryEntries>;
+
+  /// The user messages a branch can start from.
+  #[method(name = "branchMessages")]
+  async fn branch_messages(&self, live: LiveSessionId) -> jsonrpsee::core::RpcResult<Vec<BranchMessage>>;
+
+  /// Moves the active branch to an entry in the same session file. The transcript is the new branch: read it again.
+  #[method(name = "navigateTree")]
+  async fn navigate_tree(&self, request: NavigateRequest) -> jsonrpsee::core::RpcResult<NavigateTreeResult>;
+
+  /// Stops a branch summary that `live/navigateTree` is generating; that call then answers cancelled and nothing moves.
+  #[method(name = "abortBranchSummary")]
+  async fn abort_branch_summary(&self, live: LiveSessionId) -> jsonrpsee::core::RpcResult<()>;
+
+  /// Branches the session at a user message. The session may move to another file, which `live/list` then reports.
+  #[method(name = "branch")]
+  async fn branch(&self, request: EntryRequest) -> jsonrpsee::core::RpcResult<BranchResult>;
+
+  /// Forks the session into a new file, through an entry or whole. The live session moves onto the new file.
+  #[method(name = "fork")]
+  async fn fork(&self, request: ForkRequest) -> jsonrpsee::core::RpcResult<CancellationResult>;
+
+  /// Sets or clears an entry's label.
+  #[method(name = "label")]
+  async fn label(&self, request: LabelRequest) -> jsonrpsee::core::RpcResult<()>;
 }
 
 /// Live-session events.

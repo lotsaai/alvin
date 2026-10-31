@@ -7,7 +7,7 @@
           "type": "text"
         }
       ],
-      "timestamp": 1793438016869.0,
+      "timestamp": 1793439128876.0,
       "attribution": "user",
       "role": "user"
     },
@@ -37,12 +37,12 @@
         }
       },
       "stopReason": "stop",
-      "timestamp": 1793438018172.0,
-      "responseId": "202610311713383a53039c15cf4b2f",
+      "timestamp": 1793439129788.0,
+      "responseId": "202610311732101f6ed8339c9c4e31",
       "errorId": 0.0,
-      "duration": 1052.8260409999998,
-      "ttft": 1049.9795410000002,
-      "completedAt": 1793438019226.0,
+      "duration": 1266.127833,
+      "ttft": 1260.709667,
+      "completedAt": 1793439131056.0,
       "credentialId": 1,
       "contextSnapshot": {
         "promptTokens": 3549,

@@ -36,6 +36,8 @@ struct Scenario {
   answer_asks: bool,
   /// A second prompt, sent once the first turn settles. The entries are recorded before it, after it, and as the delta between.
   second_prompt: Option<&'static str>,
+  /// After the turns, label an entry, clear the label and navigate to a user message, recording the entries after each.
+  tree_actions: bool,
 }
 
 const SCENARIOS: [Scenario; 6] = [
@@ -47,6 +49,7 @@ const SCENARIOS: [Scenario; 6] = [
     follow_up: None,
     answer_asks: false,
     second_prompt: None,
+    tree_actions: false,
   },
   Scenario {
     name: "tool_turn",
@@ -56,6 +59,7 @@ const SCENARIOS: [Scenario; 6] = [
     follow_up: None,
     answer_asks: false,
     second_prompt: None,
+    tree_actions: false,
   },
   Scenario {
     name: "aborted_turn",
@@ -65,6 +69,7 @@ const SCENARIOS: [Scenario; 6] = [
     follow_up: None,
     answer_asks: false,
     second_prompt: None,
+    tree_actions: false,
   },
   Scenario {
     name: "queue_turn",
@@ -74,6 +79,7 @@ const SCENARIOS: [Scenario; 6] = [
     follow_up: Some("Now reply with the single word done."),
     answer_asks: false,
     second_prompt: None,
+    tree_actions: false,
   },
   Scenario {
     name: "ask_turn",
@@ -83,6 +89,7 @@ const SCENARIOS: [Scenario; 6] = [
     follow_up: None,
     answer_asks: true,
     second_prompt: None,
+    tree_actions: false,
   },
   Scenario {
     name: "tree_turn",
@@ -92,6 +99,7 @@ const SCENARIOS: [Scenario; 6] = [
     follow_up: None,
     answer_asks: false,
     second_prompt: Some("Reply with the single word again."),
+    tree_actions: true,
   },
 ];
 
@@ -117,6 +125,65 @@ async fn record(scenario: &Scenario, out: &Path) -> Result<()> {
   // A failed recording says why before a failed cleanup does.
   result?;
   Ok(removed?)
+}
+
+/// Labels the first user message, clears the label, then navigates to the second user message. Each step is the action's
+/// name, the entries appended since the step before it (`delta`), and every entry after it (`after`).
+async fn record_tree_actions(
+  client: &Client,
+  live: alvin_protocol::LiveSessionId,
+  mut previous: alvin_protocol::HistoryEntries,
+) -> Result<Vec<serde_json::Value>> {
+  let candidates = LiveApiClient::branch_messages(client, live).await?;
+  let first = candidates.first().ok_or_else(|| eyre!("no user message to label"))?;
+  let second = candidates.get(1).ok_or_else(|| eyre!("no second user message"))?;
+  let first = alvin_protocol::EntryId::from(first.entry_id.clone());
+  let second = alvin_protocol::EntryId::from(second.entry_id.clone());
+  let mut steps = Vec::new();
+  for name in ["label", "clear_label", "navigate"] {
+    match name {
+      "label" => {
+        LiveApiClient::label(
+          client,
+          alvin_protocol::LabelRequest {
+            live,
+            entry: first.clone(),
+            label: Some("start".to_owned()),
+          },
+        )
+        .await?;
+      }
+      "clear_label" => {
+        LiveApiClient::label(
+          client,
+          alvin_protocol::LabelRequest {
+            live,
+            entry: first.clone(),
+            label: None,
+          },
+        )
+        .await?;
+      }
+      _ => {
+        LiveApiClient::navigate_tree(
+          client,
+          alvin_protocol::NavigateRequest {
+            live,
+            entry: second.clone(),
+            summarize: None,
+            custom_instructions: None,
+          },
+        )
+        .await?;
+      }
+    }
+    let since = previous.entries.last().map(|entry| entry.id.clone());
+    let delta = LiveApiClient::entries(client, EntriesRequest { live, since }).await?;
+    let after = LiveApiClient::entries(client, EntriesRequest { live, since: None }).await?;
+    previous = after.clone();
+    steps.push(serde_json::json!({ "name": name, "delta": delta, "after": after }));
+  }
+  Ok(steps)
 }
 
 async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
@@ -336,6 +403,13 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
     )
     .await?;
     let delta = LiveApiClient::entries(&client, EntriesRequest { live: opened.live, since }).await?;
+    if scenario.tree_actions {
+      let steps = record_tree_actions(&client, opened.live, after.clone()).await?;
+      std::fs::write(
+        out.join(format!("{}.steps.json", scenario.name)),
+        serde_json::to_string_pretty(&steps)?,
+      )?;
+    }
     for (name, entries) in [("before", &before), ("after", &after), ("delta", &delta)] {
       std::fs::write(
         out.join(format!("{}.entries_{name}.json", scenario.name)),
