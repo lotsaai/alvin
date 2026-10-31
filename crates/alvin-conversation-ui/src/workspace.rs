@@ -1,46 +1,56 @@
-//! The window's root view: the sidebar, the open sessions as tabs, and the active session.
+//! The window's root view: the project tree, the open sessions as tabs, and the active session.
 
-use alvin_client::Client;
 use alvin_conversation::{Connection, Level};
 use alvin_protocol::{ErrorCode, LiveSessionId};
+use gpui_kit::base::TestSupportExt as _;
+use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::resizable::{h_resizable, resizable_panel};
+use gpui_kit::component::status_bar::StatusBar;
+use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::component::{ActiveTheme as _, IconName, Sizable as _, WindowExt as _, v_flex};
 use gpui_kit::{
-  AppContext as _, Context, ElementId, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
+  AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _, Render, Role, SharedString,
   StatefulInteractiveElement as _, Styled as _, Subscription, Window, div, prelude::FluentBuilder as _,
 };
 
 use crate::actions::{ToggleSidebar, WORKSPACE_CONTEXT};
 use crate::model::{Model, ModelEvent};
 use crate::session::SessionView;
-use crate::sidebar::sidebar;
+use crate::sidebar::ProjectTree;
 
 /// The root view of a window: one per window, placed directly under gpui-kit's `Root`.
 pub struct Workspace {
   model: Entity<Model>,
+  projects: Entity<ProjectTree>,
   tabs: Vec<(LiveSessionId, Entity<SessionView>)>,
   active: Option<LiveSessionId>,
   sidebar_visible: bool,
+  /// Keeps the window's key bindings in reach when nothing inside it has focus.
+  focus: FocusHandle,
   _subscriptions: Vec<Subscription>,
 }
 
 impl Workspace {
-  /// A workspace over a connected client. Loads the projects.
-  pub fn new(client: Client, window: &mut Window, cx: &mut Context<Self>) -> Self {
-    let model = cx.new(|cx| Model::new(client, cx));
+  /// A workspace over the model it shows.
+  pub fn new(model: Entity<Model>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    let focus = cx.focus_handle();
+    focus.focus(window, cx);
+    let projects = cx.new(|cx| ProjectTree::new(model.clone(), cx));
     let subscriptions = vec![
       cx.observe(&model, |_, _, cx| cx.notify()),
       cx.subscribe_in(&model, window, |this, _, event: &ModelEvent, window, cx| {
-        this.model_event(event, window, cx)
+        this.model_event(event, window, cx);
       }),
     ];
-    model.update(cx, |model, cx| model.refresh_projects(cx));
     Self {
       model,
+      projects,
       tabs: Vec::new(),
       active: None,
       sidebar_visible: true,
+      focus,
       _subscriptions: subscriptions,
     }
   }
@@ -55,16 +65,25 @@ impl Workspace {
     self.active
   }
 
+  fn toggle_sidebar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    self.sidebar_visible = !self.sidebar_visible;
+    // The tree leaves the window with the sidebar, and the key that brings it back has to stay in reach.
+    if !self.sidebar_visible {
+      self.focus.focus(window, cx);
+    }
+    cx.notify();
+  }
+
   fn model_event(&mut self, event: &ModelEvent, window: &mut Window, cx: &mut Context<Self>) {
     match event {
       ModelEvent::Opened(live) => {
-        if !self.tabs.iter().any(|(tab, _)| tab == live) {
+        let live = *live;
+        if !self.tabs.iter().any(|(tab, _)| *tab == live) {
           let model = self.model.clone();
-          let live = *live;
           let view = cx.new(|cx| SessionView::new(model, live, window, cx));
           self.tabs.push((live, view));
         }
-        self.active = Some(*live);
+        self.active = Some(live);
       }
       ModelEvent::Closed(live) => {
         self.tabs.retain(|(tab, _)| tab != live);
@@ -72,7 +91,7 @@ impl Workspace {
           self.active = self.tabs.last().map(|(tab, _)| *tab);
         }
       }
-      // The banners say that omp exited and that the stream must be read again; a notification would say it twice.
+      // The banner already says it: the stream has to be read again, and a notification would say it twice.
       ModelEvent::Failed {
         code: Some(ErrorCode::OmpProcessExited | ErrorCode::StaleCursor),
         ..
@@ -98,1029 +117,272 @@ impl Workspace {
     }
     cx.notify();
   }
-}
 
-/// What the connection banner says, or nothing while the connection works.
-fn connection_text(connection: Connection) -> Option<String> {
-  match connection {
-    Connection::Connected => None,
-    Connection::Reconnecting { attempt } => Some(format!("Connection to the gateway dropped; reconnecting (attempt {attempt})")),
-    Connection::Lost => Some("Connection to the gateway lost".to_owned()),
+  fn tab_title(&self, live: LiveSessionId, cx: &gpui_kit::App) -> SharedString {
+    let title = self.model.read(cx).conversation().live(live).map(|view| {
+      view.title.clone().unwrap_or_else(|| {
+        view
+          .cwd
+          .file_name()
+          .map_or_else(|| "session".to_owned(), |name| name.to_string_lossy().into_owned())
+      })
+    });
+    SharedString::from(title.unwrap_or_else(|| "closed".to_owned()))
+  }
+
+  fn connection_banner(&self, cx: &gpui_kit::App) -> Option<impl IntoElement> {
+    let (alert, text) = match self.model.read(cx).conversation().connection() {
+      Connection::Connected => return None,
+      Connection::Reconnecting { attempt } => {
+        let text = SharedString::from(format!("Connection to the gateway dropped; reconnecting (attempt {attempt})"));
+        (Alert::warning("connection-alert", text.clone()), text)
+      }
+      Connection::Lost => {
+        let text = SharedString::from("Connection to the gateway lost");
+        (Alert::error("connection-alert", text.clone()), text)
+      }
+    };
+    Some(
+      div()
+        .id("connection-banner")
+        .test_support()
+        .role(Role::Status)
+        .aria_label(text)
+        .child(alert.banner()),
+    )
+  }
+
+  fn render_tabs(&self, cx: &mut Context<Self>) -> TabBar {
+    let selected = self
+      .active
+      .and_then(|active| self.tabs.iter().position(|(live, _)| *live == active));
+    TabBar::new("tabs")
+      .selected_index(selected.unwrap_or_default())
+      .on_click(cx.listener(|this, index: &usize, _, cx| {
+        this.active = this.tabs.get(*index).map(|(live, _)| *live);
+        cx.notify();
+      }))
+      .children(self.tabs.iter().map(|(live, _)| {
+        let live = *live;
+        let model = self.model.clone();
+        Tab::new().label(self.tab_title(live, cx)).suffix(
+          Button::new(SharedString::from(format!("close-{}", live.as_uuid())))
+            .ghost()
+            .xsmall()
+            .icon(IconName::Close)
+            .accessibility_label("Close session")
+            .on_click(move |_, _, cx| model.update(cx, |model, cx| model.close(live, cx)).detach()),
+        )
+      }))
   }
 }
 
-/// What the connection to the gateway says when it is not working.
-fn connection_banner(model: &Entity<Model>, cx: &Context<Workspace>) -> Option<impl IntoElement> {
-  let text = connection_text(model.read(cx).conversation().connection())?;
-  Some(
-    div()
-      .id("connection-banner")
-      .px_4()
-      .py_1()
-      .bg(cx.theme().danger)
-      .text_color(cx.theme().danger_foreground)
-      .role(gpui_kit::Role::Status)
-      .aria_label(SharedString::from(text.clone()))
-      .child(SharedString::from(text)),
-  )
-}
-
 impl Render for Workspace {
-  fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-    let tabs = self.tabs.iter().map(|(live, _)| {
-      let live = *live;
-      let model = self.model.clone();
-      h_flex()
-        .gap_1()
-        .child(
-          Button::new(ElementId::from(SharedString::from(format!("tab-{}", live.as_uuid()))))
-            .small()
-            .selected(self.active == Some(live))
-            .label(SharedString::from(self.tab_title(live, cx)))
-            .on_click(cx.listener(move |this, _, _, cx| {
-              this.active = Some(live);
-              cx.notify();
-            })),
-        )
-        .child(
-          Button::new(ElementId::from(SharedString::from(format!("close-{}", live.as_uuid()))))
-            .small()
-            .ghost()
-            .label("Close")
-            .on_click(move |_, _, cx| model.update(cx, |model, cx| model.close(live, cx))),
-        )
-    });
+  fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    let rem = window.rem_size();
     let active = self
-      .active
-      .and_then(|live| self.tabs.iter().find(|(tab, _)| *tab == live))
+      .tabs
+      .iter()
+      .find(|(live, _)| Some(*live) == self.active)
       .map(|(_, view)| view.clone());
-    h_flex()
+    let toggle_label = if self.sidebar_visible { "Hide sidebar" } else { "Show sidebar" };
+    v_flex()
+      .id("workspace")
       .key_context(WORKSPACE_CONTEXT)
-      .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| {
-        this.sidebar_visible = !this.sidebar_visible;
-        cx.notify();
-      }))
+      .track_focus(&self.focus)
+      .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| this.toggle_sidebar(window, cx)))
       .size_full()
       .bg(cx.theme().background)
-      .items_stretch()
-      .when(self.sidebar_visible, |this| this.child(sidebar(&self.model, cx)))
+      .text_color(cx.theme().foreground)
+      .children(self.connection_banner(cx))
       .child(
-        v_flex()
-          .flex_1()
-          .min_w_0()
-          .children(connection_banner(&self.model, cx))
-          .child(h_flex().gap_2().p_2().children(tabs))
-          .child(match active {
-            Some(view) => div().flex_1().min_h_0().child(view).into_any_element(),
-            None => div().flex_1().child("Open a session from the sidebar").into_any_element(),
-          }),
+        div().flex_1().min_h_0().child(
+          h_resizable("workspace-panes")
+            .when(self.sidebar_visible, |this| {
+              this.child(
+                resizable_panel()
+                  .size(rem * 18.)
+                  .size_range(rem * 12. ..rem * 32.)
+                  .child(v_flex().size_full().min_h_0().bg(cx.theme().sidebar).child(self.projects.clone())),
+              )
+            })
+            .child(
+              resizable_panel().size_range(rem * 30. ..rem * 400.).child(
+                v_flex().size_full().min_w_0().child(self.render_tabs(cx)).child(match active {
+                  Some(view) => div().flex_1().min_h_0().child(view).into_any_element(),
+                  None => div()
+                    .flex_1()
+                    .p_4()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("Open a session from the sidebar")
+                    .into_any_element(),
+                }),
+              ),
+            ),
+        ),
+      )
+      .child(
+        StatusBar::new().left(
+          Button::new("toggle-sidebar")
+            .toggled(self.sidebar_visible)
+            .ghost()
+            .small()
+            .icon(if self.sidebar_visible {
+              IconName::PanelLeftClose
+            } else {
+              IconName::PanelLeftOpen
+            })
+            .accessibility_label(toggle_label)
+            .tooltip_with_action(toggle_label, &ToggleSidebar, Some(WORKSPACE_CONTEXT))
+            .on_click(cx.listener(|this, _, window, cx| this.toggle_sidebar(window, cx))),
+        ),
       )
   }
 }
 
+/// Test-only access, so tests reach a session's own state without widening visibility.
+#[cfg(test)]
 impl Workspace {
-  /// The title a tab shows, for tests.
-  #[cfg(test)]
-  pub(crate) fn tab_title_for_test(&self, live: LiveSessionId, cx: &gpui_kit::App) -> String {
-    self.tab_title(live, cx)
-  }
-
-  fn tab_title(&self, live: LiveSessionId, cx: &gpui_kit::App) -> String {
-    self
-      .model
-      .read(cx)
-      .conversation()
-      .live(live)
-      .map(|view| {
-        view.title.clone().unwrap_or_else(|| {
-          view
-            .cwd
-            .file_name()
-            .map_or_else(|| "session".to_owned(), |name| name.to_string_lossy().into_owned())
-        })
-      })
-      .unwrap_or_else(|| "closed".to_owned())
+  /// The view of an open session.
+  pub(crate) fn session(&self, live: LiveSessionId) -> Option<&Entity<SessionView>> {
+    self.tabs.iter().find(|(id, _)| *id == live).map(|(_, view)| view)
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use alvin_client::Client;
-  use alvin_conversation::Run;
-  use alvin_protocol::{AgentMessage, LiveApiClient, LiveSessionId, PromptStatus};
-  use gpui_kit::test::{TestQueryExt as _, TestWindowExt as _};
-  use gpui_kit::{AnyWindowHandle, AppContext as _, Bounds, Entity, TestAppContext, WindowBounds, WindowOptions, px, size};
+  use std::time::Duration;
 
-  use super::{Workspace, connection_text};
-  use crate::test_support::{Fixture, until};
+  use gpui_kit::test::{TestAppContextExt as _, TestEventExt as _, TestQueryExt as _, TestWindowExt as _};
+  use gpui_kit::{AppContext as _, MouseButton, TestAppContext};
 
-  fn open_window(cx: &mut TestAppContext, client: Client) -> (AnyWindowHandle, Entity<Workspace>) {
-    cx.update(gpui_kit::init);
-    cx.update(crate::init);
-    let (handle, workspace) = cx.update(|cx| {
-      gpui_kit::open_window(
-        WindowOptions {
-          window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1100.), px(700.))))),
-          ..Default::default()
-        },
-        cx,
-        |window, cx| cx.new(|cx| Workspace::new(client, window, cx)),
-      )
-      .expect("open the test window")
-    });
-    (handle, workspace)
-  }
+  use crate::test_support::{ROOT, live_session, open_workspace};
 
-  fn active(cx: &mut TestAppContext, workspace: &Entity<Workspace>) -> Option<LiveSessionId> {
-    cx.read(|cx| workspace.read(cx).active())
-  }
+  const BUDGET: Duration = Duration::from_secs(1);
 
-  /// Reads the active session's state out of the model.
-  fn with_active<T>(
-    cx: &mut TestAppContext,
-    workspace: &Entity<Workspace>,
-    read: impl FnOnce(&alvin_conversation::LiveView) -> T,
-  ) -> Option<T> {
-    cx.read(|cx| {
-      let workspace = workspace.read(cx);
-      let live = workspace.active()?;
-      workspace.model().read(cx).conversation().live(live).map(read)
-    })
-  }
-
-  /// Clicks the composer, found by its accessible label, types `text` and presses Enter.
-  fn type_and_send(cx: &mut TestAppContext, window: AnyWindowHandle, text: &str) {
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      let composer = window
-        .find_by_label("Message")
-        .path()
-        .last()
-        .cloned()
-        .expect("the composer has an element id");
-      window.click(composer, cx);
-      window.input(text, cx);
-      window.press("enter", cx);
-    })
-    .unwrap();
-  }
-
-  fn open_new_session(cx: &mut TestAppContext, window: AnyWindowHandle, workspace: &Entity<Workspace>) {
-    until(cx, "the projects to load", |cx| {
-      cx.read(|cx| !workspace.read(cx).model().read(cx).conversation().workspace().projects().is_empty())
-    });
-    let checkout = cx.read(|cx| {
-      let projects = workspace.read(cx).model().read(cx).conversation().workspace().projects().to_vec();
-      projects[0].checkouts[0].id.clone()
-    });
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      let id = format!("new-session-{}", checkout.as_str());
-      let button = window.find(id.clone());
-      assert!(
-        button.visible(),
-        "button {:?} sidebar {:?} viewport {:?}",
-        button.bounds(),
-        window.find("sidebar").bounds(),
-        window.viewport_size()
-      );
-      window.click(id, cx);
-    })
-    .unwrap();
-    until(cx, "the session to open", |cx| active(cx, workspace).is_some());
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
-  async fn a_new_session_streams_a_reply_and_settles(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-
-    type_and_send(cx, window, "Reply with the single word ok.");
-    until(cx, "the turn to settle", |cx| {
-      with_active(cx, &workspace, |view| view.run == Run::Settled).unwrap_or(false)
-    });
-
-    let (roles, last_prompt, streaming) = with_active(cx, &workspace, |view| {
-      (
-        view
-          .transcript
-          .iter()
-          .map(|message| matches!(message, AgentMessage::User(_)))
-          .collect::<Vec<_>>(),
-        view.last_prompt,
-        view.streaming.is_some(),
-      )
-    })
-    .unwrap();
-    assert_eq!(roles, [true, false]);
-    assert_eq!(last_prompt, Some(PromptStatus::Completed));
-    assert!(!streaming);
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn a_listed_session_opens_with_its_transcript(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    fixture.write_session();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-
-    // The sidebar lists the session real omp wrote; clicking it opens it.
-    let session = loop_until_listed(cx, &workspace);
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      window.click(format!("session-{}", session.as_str()), cx);
-    })
-    .unwrap();
-    until(cx, "the session's transcript", |cx| {
-      with_active(cx, &workspace, |view| view.transcript.len() == 2).unwrap_or(false)
-    });
-
-    let (user, assistant) = with_active(cx, &workspace, |view| {
-      (
-        matches!(view.transcript[0], AgentMessage::User(_)),
-        matches!(view.transcript[1], AgentMessage::Assistant(_)),
-      )
-    })
-    .unwrap();
-    assert!(user && assistant);
-    fixture.finish().await;
-  }
-
-  /// Waits for the sidebar to list a session that real omp wrote, and returns its id.
-  fn loop_until_listed(cx: &mut TestAppContext, workspace: &Entity<Workspace>) -> alvin_protocol::SessionId {
-    let mut found = None;
-    until(cx, "a listed session", |cx| {
-      found = cx.read(|cx| {
-        let state = workspace.read(cx).model().read(cx);
-        let workspace = state.conversation().workspace();
-        workspace.projects().iter().find_map(|project| {
-          project.checkouts.iter().find_map(|checkout| {
-            let key = alvin_conversation::SessionsKey {
-              project: project.id.clone(),
-              checkout: Some(checkout.id.clone()),
-            };
-            // The seed session is listed too; the one omp wrote has a real title.
-            workspace
-              .sessions(&key)?
-              .sessions
-              .iter()
-              .find(|session| session.title.as_deref() == Some("Reply with the single word ok."))
-              .map(|session| session.id.clone())
-          })
-        })
-      });
-      found.is_some()
-    });
-    found.unwrap()
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn a_bang_command_runs_in_the_session_and_lands_in_the_transcript(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-
-    type_and_send(cx, window, "!echo alvin-bang-ok");
-    until(cx, "the command's output", |cx| {
-      with_active(cx, &workspace, |view| {
-        view.transcript.iter().any(|message| matches!(message, AgentMessage::BashExecution(bash) if bash.output.as_deref().is_some_and(|output| output.contains("alvin-bang-ok"))))
+  async fn the_tree_lists_the_sessions_of_every_checkout(cx: &mut TestAppContext) {
+    let executor = cx.foreground_executor().clone();
+    executor.block_test(async {
+      let opened = open_workspace(cx).await;
+      cx.wait_for(opened.handle, BUDGET, |window, _| {
+        window.try_find_by_label("Write the docs").is_some()
       })
-      .unwrap_or(false)
-    });
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn escape_aborts_a_running_turn(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-
-    type_and_send(cx, window, "Write the numbers from 1 to 400, one per line, nothing else.");
-    until(cx, "the reply to start streaming", |cx| {
-      with_active(cx, &workspace, |view| view.streaming.is_some() && view.run == Run::Running).unwrap_or(false)
-    });
-    cx.update_window(window, |_, window, cx| window.press("escape", cx)).unwrap();
-    until(cx, "the turn to be aborted", |cx| {
-      with_active(cx, &workspace, |view| view.last_prompt == Some(PromptStatus::Aborted)).unwrap_or(false)
-    });
-    fixture.finish().await;
-  }
-
-  /// Enter with the platform's secondary key queues a follow-up instead of steering.
-  #[cfg(target_os = "macos")]
-  const SECONDARY_ENTER: &str = "cmd-enter";
-  #[cfg(not(target_os = "macos"))]
-  const SECONDARY_ENTER: &str = "ctrl-enter";
-
-  fn type_and_press(cx: &mut TestAppContext, window: AnyWindowHandle, text: &str, key: &str) {
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      let composer = window
-        .find_by_label("Message")
-        .path()
-        .last()
-        .cloned()
-        .expect("the composer has an element id");
-      window.click(composer, cx);
-      window.input(text, cx);
-      window.press(key, cx);
-    })
-    .unwrap();
-  }
-
-  fn composer_text(cx: &mut TestAppContext, window: AnyWindowHandle) -> String {
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      window.find_by_label("Message").value().unwrap_or_default().to_owned()
-    })
-    .unwrap()
-  }
-
-  /// Starts a long turn so there is something to queue behind.
-  fn start_long_turn(cx: &mut TestAppContext, window: AnyWindowHandle, workspace: &Entity<Workspace>) {
-    type_and_send(cx, window, "Write the numbers from 1 to 400, one per line, nothing else.");
-    until(cx, "the reply to start streaming", |cx| {
-      with_active(cx, workspace, |view| view.streaming.is_some() && view.run == Run::Running).unwrap_or(false)
-    });
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn a_queued_follow_up_shows_in_the_queue_and_can_be_removed(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    start_long_turn(cx, window, &workspace);
-
-    type_and_press(cx, window, "queued note", SECONDARY_ENTER);
-    until(cx, "the follow-up to be queued", |cx| {
-      with_active(cx, &workspace, |view| view.queue.follow_up == ["queued note"]).unwrap_or(false)
-    });
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      assert!(window.find("queue-remove-follow-up-0").visible() && window.find("queue-promote-0").visible());
-      window.click("queue-remove-follow-up-0", cx);
-    })
-    .unwrap();
-
-    until(cx, "the entry to leave the queue", |cx| {
-      with_active(cx, &workspace, |view| view.queue.follow_up.is_empty()).unwrap_or(false)
-    });
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn only_steering_entries_not_yet_sent_have_a_remove_action(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    start_long_turn(cx, window, &workspace);
-
-    type_and_press(cx, window, "steer note", "enter");
-    until(cx, "the steering message to be queued", |cx| {
-      with_active(cx, &workspace, |view| view.queue.steering == ["steer note"]).unwrap_or(false)
-    });
-
-    let sent = with_active(cx, &workspace, |view| view.queue.live_steered).unwrap();
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      // The entry is removable exactly when omp has not yet sent it into the response.
-      assert_eq!(window.try_find("queue-remove-steering-0").is_some(), sent == 0);
-    })
-    .unwrap();
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn escape_restores_withdrawn_queue_text_into_the_composer(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    start_long_turn(cx, window, &workspace);
-
-    type_and_press(cx, window, "queued note", SECONDARY_ENTER);
-    until(cx, "the follow-up to be queued", |cx| {
-      with_active(cx, &workspace, |view| view.queue.follow_up == ["queued note"]).unwrap_or(false)
-    });
-    cx.update_window(window, |_, window, cx| window.press("escape", cx)).unwrap();
-
-    until(cx, "the text to return to the composer", |cx| {
-      composer_text(cx, window) == "queued note"
-    });
-    until(cx, "the turn to be aborted", |cx| {
-      with_active(cx, &workspace, |view| view.last_prompt == Some(PromptStatus::Aborted)).unwrap_or(false)
-    });
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn cycling_the_thinking_level_changes_what_live_state_reports(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let client = fixture.client().await;
-    let (window, workspace) = open_window(cx, client.clone());
-    open_new_session(cx, window, &workspace);
-    let live = active(cx, &workspace).expect("a session is open");
-    until(cx, "the session's state to load", |cx| {
-      with_active(cx, &workspace, |view| view.thinking.is_some()).unwrap_or(false)
-    });
-    let before = with_active(cx, &workspace, |view| view.thinking).flatten();
-
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      window.click("thinking-cycle", cx);
-    })
-    .unwrap();
-
-    until(cx, "the thinking level to change", |cx| {
-      with_active(cx, &workspace, |view| view.thinking != before).unwrap_or(false)
-    });
-    let shown = with_active(cx, &workspace, |view| view.thinking).flatten();
-    let reported = LiveApiClient::state(&client, live).await.unwrap().thinking_level;
-    assert_eq!(shown, reported);
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn the_pickers_offer_omps_models_and_levels_and_show_the_current_ones(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    until(cx, "the catalog to load", |cx| {
-      let live = active(cx, &workspace).expect("a session is open");
-      cx.read(|cx| workspace.read(cx).model().read(cx).catalog(live).is_some())
-    });
-
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      assert!(window.find("model-picker").visible());
-      assert!(window.find("thinking-picker").visible());
-    })
-    .unwrap();
-    fixture.finish().await;
-  }
-
-  const ASK_PROMPT: &str = "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue. \
-                            Then reply with the single word I chose.";
-
-  fn asking(cx: &mut TestAppContext, workspace: &Entity<Workspace>) -> bool {
-    with_active(cx, workspace, |view| !view.dialogs.pending().is_empty()).unwrap_or(false)
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn an_ask_opens_a_dialog_and_answering_it_lets_the_turn_finish(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::with_tools(&["--tools", "ask"]);
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    type_and_send(cx, window, ASK_PROMPT);
-    until(cx, "the ask dialog to open", |cx| asking(cx, &workspace));
-
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      assert!(window.find("dialog-ask-0-0").visible());
-      window.click("dialog-ask-0-0", cx);
-    })
-    .unwrap();
-    // The click changed what the dialog shows; render it again before the next click.
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      window.click("dialog-ask-submit", cx);
-    })
-    .unwrap();
-
-    until(cx, "the dialog to close", |cx| !asking(cx, &workspace));
-    until(cx, "the turn to settle", |cx| {
-      with_active(cx, &workspace, |view| view.run == Run::Settled).unwrap_or(false)
-    });
-    let results = with_active(cx, &workspace, |view| {
-      view
-        .transcript
-        .iter()
-        .filter(|message| matches!(message, AgentMessage::ToolResult(_)))
-        .count()
-    })
-    .unwrap();
-    assert_eq!(results, 1);
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn cancelling_an_ask_closes_the_dialog(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::with_tools(&["--tools", "ask"]);
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    type_and_send(cx, window, ASK_PROMPT);
-    until(cx, "the ask dialog to open", |cx| asking(cx, &workspace));
-
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      window.click("dialog-cancel", cx);
-    })
-    .unwrap();
-
-    until(cx, "the dialog to close", |cx| !asking(cx, &workspace));
-    fixture.finish().await;
-  }
-
-  /// The rows the active session's history panel lists.
-  fn history_rows(cx: &mut TestAppContext, workspace: &Entity<Workspace>) -> Vec<crate::history_tree::Row> {
-    cx.read(|cx| {
-      let workspace = workspace.read(cx);
-      let Some(live) = workspace.active() else { return Vec::new() };
-      workspace
-        .tabs
-        .iter()
-        .find(|(tab, _)| *tab == live)
-        .map(|(_, view)| view.read(cx).history_row_list(cx))
-        .unwrap_or_default()
-    })
-  }
-
-  async fn entries(client: &Client, live: LiveSessionId) -> alvin_protocol::HistoryEntries {
-    LiveApiClient::entries(client, alvin_protocol::EntriesRequest { live, since: None })
-      .await
-      .unwrap()
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn the_history_panel_follows_the_session_as_turns_add_entries(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let client = fixture.client().await;
-    let (window, workspace) = open_window(cx, client.clone());
-    open_new_session(cx, window, &workspace);
-    let live = active(cx, &workspace).expect("a session is open");
-
-    type_and_send(cx, window, "Reply with the single word ok.");
-    until(cx, "the turn to settle", |cx| {
-      with_active(cx, &workspace, |view| view.run == Run::Settled).unwrap_or(false)
-    });
-    // omp sends no event when history grows; the end of the turn is what makes the UI read it.
-    let after_one = entries(&client, live).await;
-    until(cx, "the panel to list the first turn", |cx| {
-      history_rows(cx, &workspace).len() == after_one.entries.len()
-    });
-    let rows = history_rows(cx, &workspace);
-    let leaf = after_one.leaf.clone().expect("the turn has a leaf");
-    assert!(rows.iter().any(|row| row.text.starts_with("user: Reply with the single word ok.")));
-    assert!(rows.iter().any(|row| row.id == leaf && row.active));
-
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      window.click("history-toggle", cx);
-    })
-    .unwrap();
-    cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
-
-    type_and_send(cx, window, "Reply with the single word again.");
-    until(cx, "the second turn to settle and its entries to arrive", |cx| {
-      with_active(cx, &workspace, |view| {
-        view.run == Run::Settled && !view.tree_stale && view.queue.steering.is_empty()
-      })
-      .unwrap_or(false)
-        && history_rows(cx, &workspace).len() > after_one.entries.len()
-    });
-    let after_two = entries(&client, live).await;
-    until(cx, "the panel to list every entry", |cx| {
-      history_rows(cx, &workspace).len() == after_two.entries.len()
-    });
-    fixture.finish().await;
-  }
-
-  /// Runs a turn and waits until the panel lists everything omp appended for it.
-  async fn turn_and_history(
-    cx: &mut TestAppContext,
-    window: AnyWindowHandle,
-    workspace: &Entity<Workspace>,
-    client: &Client,
-    live: LiveSessionId,
-    text: &str,
-    transcript_len: usize,
-  ) {
-    type_and_send(cx, window, text);
-    // The run is already settled from the turn before, so the reply being in the transcript is what says this one ended.
-    until(cx, "the turn to settle", |cx| {
-      with_active(cx, workspace, |view| {
-        view.transcript.len() == transcript_len && view.run == Run::Settled && !view.tree_stale
-      })
-      .unwrap_or(false)
-    });
-    let appended = entries(client, live).await.entries.len();
-    until(cx, "the panel to list the turn", |cx| history_rows(cx, workspace).len() == appended);
-  }
-
-  fn click(cx: &mut TestAppContext, window: AnyWindowHandle, id: &'static str) {
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      window.click(id, cx);
-    })
-    .unwrap();
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn rows_navigate_label_and_fork_the_session(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let client = fixture.client().await;
-    let (window, workspace) = open_window(cx, client.clone());
-    open_new_session(cx, window, &workspace);
-    let live = active(cx, &workspace).expect("a session is open");
-    click(cx, window, "history-toggle");
-    turn_and_history(cx, window, &workspace, &client, live, "Reply with the single word one.", 2).await;
-    turn_and_history(cx, window, &workspace, &client, live, "Reply with the single word two.", 4).await;
-    let users: Vec<_> = history_rows(cx, &workspace)
-      .into_iter()
-      .filter(|row| row.text.starts_with("user: "))
-      .collect();
-    assert_eq!(users.len(), 2);
-    let (first, second) = (users[0].clone(), users[1].clone());
-    let select = |cx: &mut TestAppContext, id: &alvin_protocol::EntryId| {
-      cx.update(|cx| {
-        let workspace = workspace.read(cx);
-        let live = workspace.active().expect("a session is open");
-        let view = workspace
-          .tabs
-          .iter()
-          .find(|(tab, _)| *tab == live)
-          .map(|(_, view)| view.clone())
-          .expect("its tab");
-        view.update(cx, |session, cx| session.select_history_row(id.clone(), cx));
-      });
-      cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
-    };
-
-    // A label set on a row shows on it.
-    select(cx, &first.id);
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      let live = workspace.read(cx).active().expect("a session is open");
-      let view = workspace
-        .read(cx)
-        .tabs
-        .iter()
-        .find(|(tab, _)| *tab == live)
-        .map(|(_, view)| view.clone())
-        .expect("its tab");
-      view.update(cx, |session, cx| session.type_history_label("start", window, cx));
-      window.render_frame(cx);
-    })
-    .unwrap();
-    click(cx, window, "history-label-set");
-    until(cx, "the label to show on its row", |cx| {
-      history_rows(cx, &workspace)
-        .iter()
-        .any(|row| row.id == first.id && row.label.as_deref() == Some("start"))
-    });
-
-    // Going to a user message rewinds past it: its text returns to the composer and the transcript is the shorter branch.
-    select(cx, &second.id);
-    click(cx, window, "history-navigate");
-    until(cx, "the text to return to the composer", |cx| {
-      composer_text(cx, window) == "Reply with the single word two."
-    });
-    until(cx, "the transcript to become the shorter branch", |cx| {
-      with_active(cx, &workspace, |view| view.transcript.len()) == Some(2)
-    });
-    let leaf = entries(&client, live).await.leaf;
-    until(cx, "the panel to show the new active branch", |cx| {
-      let rows = history_rows(cx, &workspace);
-      rows.iter().find(|row| Some(&row.id) == leaf.as_ref()).is_some_and(|row| row.active)
-        && rows.iter().all(|row| row.id != second.id || !row.active)
-    });
-
-    // A fork moves the session onto a new file and the panel lists that file's history.
-    let before = LiveApiClient::list(&client).await.unwrap();
-    select(cx, &first.id);
-    click(cx, window, "history-fork");
-    // The new file holds the history through the first message only, so the panel shrinks when it reloads.
-    let listed = history_rows(cx, &workspace).len();
-    click(cx, window, "history-fork");
-    until(cx, "the panel to list the forked history", |cx| {
-      history_rows(cx, &workspace).len() < listed
-    });
-    let after = LiveApiClient::list(&client).await.unwrap();
-    assert_ne!(after[0].file, before[0].file, "the fork moved the session to another file");
-    let forked = entries(&client, live).await.entries.len();
-    until(cx, "the panel to list the forked history", |cx| {
-      history_rows(cx, &workspace).len() == forked
-    });
-    fixture.finish().await;
-  }
-
-  fn with_active_session(
-    cx: &mut TestAppContext,
-    window: AnyWindowHandle,
-    workspace: &Entity<Workspace>,
-    act: impl FnOnce(&crate::session::SessionView, &mut gpui_kit::Window, &mut gpui_kit::Context<crate::session::SessionView>),
-  ) {
-    cx.update_window(window, |_, window, cx| {
-      let live = workspace.read(cx).active().expect("a session is open");
-      let view = workspace
-        .read(cx)
-        .tabs
-        .iter()
-        .find(|(tab, _)| *tab == live)
-        .map(|(_, view)| view.clone())
-        .expect("its tab");
-      view.update(cx, |session, cx| act(session, window, cx));
-      window.render_frame(cx);
-    })
-    .unwrap();
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn a_slash_lists_the_sessions_commands_and_choosing_one_only_types_it(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    until(cx, "omp to announce its commands", |cx| {
-      with_active(cx, &workspace, |view| !view.commands.is_empty()).unwrap_or(false)
-    });
-    let name = with_active(cx, &workspace, |view| view.commands[0].name.clone()).expect("a session");
-    let id = gpui_kit::SharedString::from(format!("command-{name}"));
-
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      let composer = window
-        .find_by_label("Message")
-        .path()
-        .last()
-        .cloned()
-        .expect("the composer has an element id");
-      window.click(composer, cx);
-      window.input("/", cx);
-      window.render_frame(cx);
-      window.render_frame(cx);
-      assert!(window.find(id.clone()).visible());
-      window.click(id, cx);
-    })
-    .unwrap();
-
-    until(cx, "the command name in the composer", |cx| {
-      composer_text(cx, window) == format!("/{name} ")
-    });
-    // Nothing ran it: the transcript is still empty.
-    assert_eq!(with_active(cx, &workspace, |view| view.transcript.len()), Some(0));
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn renaming_a_session_updates_its_tab_and_the_sidebar(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let client = fixture.client().await;
-    let (window, workspace) = open_window(cx, client.clone());
-    open_new_session(cx, window, &workspace);
-    let live = active(cx, &workspace).expect("a session is open");
-    // A session is listed once it has a turn.
-    type_and_send(cx, window, "Reply with the single word ok.");
-    until(cx, "the turn to settle", |cx| {
-      with_active(cx, &workspace, |view| view.run == Run::Settled && view.transcript.len() == 2).unwrap_or(false)
-    });
-
-    click(cx, window, "session-menu-toggle");
-    with_active_session(cx, window, &workspace, |session, window, cx| {
-      session.type_session_name("A new name", window, cx)
-    });
-    click(cx, window, "session-rename");
-
-    until(cx, "the tab to carry the new name", |cx| {
-      workspace.read_with(cx, |workspace, cx| workspace.tab_title_for_test(live, cx)) == "A new name"
-    });
-    until(cx, "the sidebar to list the new name", |cx| {
-      cx.read(|cx| {
-        let workspace = workspace.read(cx);
-        let conversation = workspace.model().read(cx).conversation();
-        conversation.workspace().projects().iter().any(|project| {
-          project.checkouts.iter().any(|checkout| {
-            let key = alvin_conversation::SessionsKey {
-              project: project.id.clone(),
-              checkout: Some(checkout.id.clone()),
-            };
-            conversation
-              .workspace()
-              .sessions(&key)
-              .is_some_and(|list| list.sessions.iter().any(|session| session.title.as_deref() == Some("A new name")))
-          })
-        })
-      })
-    });
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn the_session_menu_shows_the_counts_omp_gives(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    type_and_send(cx, window, "Reply with the single word ok.");
-    until(cx, "the turn to settle", |cx| {
-      with_active(cx, &workspace, |view| view.run == Run::Settled && view.transcript.len() == 2).unwrap_or(false)
-    });
-
-    click(cx, window, "session-menu-toggle");
-    let live = active(cx, &workspace).expect("a session is open");
-    until(cx, "the counts to arrive", |cx| {
-      cx.read(|cx| {
-        workspace
-          .read(cx)
-          .model()
-          .read(cx)
-          .stats(live)
-          .is_some_and(|stats| stats.total_messages == 2)
-      })
-    });
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn compacting_a_long_session_replaces_its_transcript_with_a_summary_row(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    fixture.write_session();
-    fixture.grow_session(20, 20_000);
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    let session = loop_until_listed(cx, &workspace);
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      window.click(format!("session-{}", session.as_str()), cx);
-    })
-    .unwrap();
-    until(cx, "the long transcript", |cx| {
-      with_active(cx, &workspace, |view| view.transcript.len() > 20).unwrap_or(false)
-    });
-
-    click(cx, window, "session-menu-toggle");
-    click(cx, window, "session-compact");
-
-    until(cx, "the transcript to start with the compaction summary", |cx| {
-      with_active(cx, &workspace, |view| {
-        matches!(view.transcript.first(), Some(AgentMessage::CompactionSummary(_))) && view.compaction.is_none()
-      })
-      .unwrap_or(false)
-    });
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn a_killed_omp_shows_the_exited_banner_and_closing_it_removes_the_tab(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let client = fixture.client().await;
-    let (window, workspace) = open_window(cx, client.clone());
-    open_new_session(cx, window, &workspace);
-    let live = active(cx, &workspace).expect("a session is open");
-    // The view reads the session's state first; a command run meanwhile would make omp refuse it.
-    until(cx, "the session's state to load", |cx| {
-      with_active(cx, &workspace, |view| view.thinking.is_some()).unwrap_or(false)
-    });
-    let result = LiveApiClient::bash(
-      &client,
-      alvin_protocol::BashRequest {
-        live,
-        command: "echo pid=$$".to_owned(),
-      },
-    )
-    .await
-    .unwrap();
-    let pid = result.output.trim().strip_prefix("pid=").unwrap().to_owned();
-
-    assert!(std::process::Command::new("kill").args(["-9", &pid]).status().unwrap().success());
-
-    until(cx, "the session to be marked exited", |cx| {
-      with_active(cx, &workspace, |view| view.exited).unwrap_or(false)
-    });
-    cx.update_window(window, |_, window, cx| {
-      window.render_frame(cx);
-      assert!(window.find("session-banner-close").visible());
-      window.click("session-banner-close", cx);
-    })
-    .unwrap();
-    until(cx, "the tab to close", |cx| active(cx, &workspace).is_none());
-    fixture.finish().await;
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn losing_the_gateway_shows_the_connection_banner(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    // A client whose gateway end is already gone: the in-process channel closed, which the client treats as lost for good.
-    let (to_gateway, gateway_inbox) = tokio::sync::mpsc::channel(4);
-    let (gateway_outbox, from_gateway) = tokio::sync::mpsc::channel(4);
-    let client = Client::connect(alvin_client::Endpoint::Channel(alvin_client::ChannelPair::from((
-      to_gateway,
-      from_gateway,
-    ))))
-    .await
-    .unwrap();
-    let (window, workspace) = open_window(cx, client);
-    drop((gateway_inbox, gateway_outbox));
-
-    until(cx, "the connection to be lost", |cx| {
-      cx.read(|cx| workspace.read(cx).model().read(cx).conversation().connection() == alvin_conversation::Connection::Lost)
-    });
-    cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
-    let said = cx.read(|cx| connection_text(workspace.read(cx).model().read(cx).conversation().connection()));
-    assert_eq!(said.as_deref(), Some("Connection to the gateway lost"));
-  }
-
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-  #[gpui_kit::test]
-  async fn a_command_omp_rejects_is_reported_with_its_error_code(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    let live = active(cx, &workspace).expect("a session is open");
-    let failures = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-    cx.update(|cx| {
-      let model = workspace.read(cx).model().clone();
-      let failures = failures.clone();
-      cx.subscribe(&model, move |_, event: &crate::model::ModelEvent, _| {
-        if let crate::model::ModelEvent::Failed { code, message } = event {
-          failures.borrow_mut().push((*code, message.to_string()));
+      .await;
+      cx.update_window(opened.handle, |_, window, cx| {
+        window.render_frame(cx);
+        for label in ["alvin", ROOT, "New session", "Fix the build", "Write the docs"] {
+          assert!(window.find_by_label(label).visible(), "{label} is listed");
         }
       })
-      .detach();
+      .unwrap();
     });
-
-    cx.update(|cx| {
-      let model = workspace.read(cx).model().clone();
-      model.update(cx, |model, cx| {
-        model.navigate_tree(
-          live,
-          alvin_protocol::EntryId::from("no-such-entry".to_owned()),
-          false,
-          String::new(),
-          cx,
-        );
-      });
-    });
-
-    until(cx, "the failure to be reported", |_| !failures.borrow().is_empty());
-    let (code, message) = failures.borrow()[0].clone();
-    assert_eq!(code, Some(alvin_protocol::ErrorCode::OmpCommandFailed));
-    assert!(message.contains("navigate_tree"), "{message}");
-    fixture.finish().await;
   }
 
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
-  async fn interrupting_a_running_turn_sends_the_composer_text_in_its_place(cx: &mut TestAppContext) {
-    cx.executor().allow_parking();
-    let fixture = Fixture::new();
-    let (window, workspace) = open_window(cx, fixture.client().await);
-    open_new_session(cx, window, &workspace);
-    start_long_turn(cx, window, &workspace);
+  async fn an_opened_session_gets_a_tab_and_clicking_a_tab_activates_it(cx: &mut TestAppContext) {
+    let executor = cx.foreground_executor().clone();
+    executor.block_test(async {
+      let opened = open_workspace(cx).await;
+      let (first, second) = (live_session("/work/api"), live_session("/work/web"));
+      cx.update(|cx| {
+        opened.model.update(cx, |model, cx| {
+          model.seed_open(&first, cx);
+          model.seed_open(&second, cx);
+        });
+      });
+      cx.wait_for(opened.handle, BUDGET, |window, _| window.try_find_by_label("web").is_some())
+        .await;
+      cx.update_window(opened.handle, |_, window, cx| {
+        assert!(window.find_by_label("api").visible());
+        assert_eq!(opened.workspace.read(cx).active(), Some(second.live));
 
-    with_active_session(cx, window, &workspace, |session, window, cx| {
-      session.type_composer("Reply with the single word swapped.", window, cx);
-    });
-    click(cx, window, "session-interrupt");
-
-    // The long turn was cut off and the new text went to omp as its own prompt.
-    until(cx, "the replacement prompt to reach the transcript", |cx| {
-      with_active(cx, &workspace, |view| {
-        view.last_prompt == Some(PromptStatus::Aborted)
-          && view
-            .transcript
-            .iter()
-            .any(|message| matches!(message, AgentMessage::User(user) if format!("{user:?}").contains("single word swapped")))
+        let tab = window.find_by_label("api").bounds().center();
+        window.pointer_down(tab, MouseButton::Left, cx);
+        window.pointer_up(tab, MouseButton::Left, cx);
+        assert_eq!(opened.workspace.read(cx).active(), Some(first.live));
       })
-      .unwrap_or(false)
+      .unwrap();
     });
-    assert_eq!(composer_text(cx, window), "");
-    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[gpui_kit::test]
+  async fn closing_the_active_session_activates_the_one_before_it(cx: &mut TestAppContext) {
+    let executor = cx.foreground_executor().clone();
+    executor.block_test(async {
+      let opened = open_workspace(cx).await;
+      let (first, second) = (live_session("/work/api"), live_session("/work/web"));
+      cx.update(|cx| {
+        opened.model.update(cx, |model, cx| {
+          model.seed_open(&first, cx);
+          model.seed_open(&second, cx);
+          model.seed_close(second.live, cx);
+        });
+      });
+      cx.wait_for(opened.handle, BUDGET, |window, _| window.try_find_by_label("web").is_none())
+        .await;
+      cx.update_window(opened.handle, |_, window, cx| {
+        assert!(window.find_by_label("api").visible());
+        assert_eq!(opened.workspace.read(cx).active(), Some(first.live));
+      })
+      .unwrap();
+    });
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[gpui_kit::test]
+  async fn the_sidebar_key_and_the_status_bar_button_both_hide_and_show_the_tree(cx: &mut TestAppContext) {
+    let executor = cx.foreground_executor().clone();
+    executor.block_test(async {
+      let opened = open_workspace(cx).await;
+      let key = if cfg!(target_os = "macos") { "cmd-b" } else { "ctrl-b" };
+      cx.wait_for(opened.handle, BUDGET, |window, _| window.try_find_by_label("New session").is_some())
+        .await;
+
+      cx.update_window(opened.handle, |_, window, cx| {
+        window.press(key, cx);
+        assert!(!opened.workspace.read(cx).sidebar_visible);
+      })
+      .unwrap();
+      cx.wait_for(opened.handle, BUDGET, |window, _| window.try_find_by_label("New session").is_none())
+        .await;
+
+      cx.update_window(opened.handle, |_, window, cx| {
+        assert_eq!(window.find("toggle-sidebar").label(), Some("Show sidebar"));
+        window.click("toggle-sidebar", cx);
+        assert!(opened.workspace.read(cx).sidebar_visible);
+      })
+      .unwrap();
+      cx.wait_for(opened.handle, BUDGET, |window, _| window.try_find_by_label("New session").is_some())
+        .await;
+    });
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[gpui_kit::test]
+  async fn losing_the_gateway_shows_the_connection_banner(cx: &mut TestAppContext) {
+    let executor = cx.foreground_executor().clone();
+    executor.block_test(async {
+      let opened = open_workspace(cx).await;
+      cx.update_window(opened.handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("connection-banner").is_none());
+      })
+      .unwrap();
+      cx.update(|cx| {
+        opened
+          .model
+          .update(cx, |model, cx| model.seed_connection(alvin_conversation::Connection::Lost, cx))
+      });
+      cx.wait_for(opened.handle, BUDGET, |window, _| window.try_find("connection-banner").is_some())
+        .await;
+      cx.update_window(opened.handle, |_, window, _| {
+        assert_eq!(window.find("connection-banner").label(), Some("Connection to the gateway lost"));
+      })
+      .unwrap();
+    });
   }
 }

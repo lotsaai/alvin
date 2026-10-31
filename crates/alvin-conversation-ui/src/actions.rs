@@ -5,10 +5,6 @@ use gpui_kit::{App, KeyBinding, actions};
 actions!(
   alvin,
   [
-    /// Sends the composer's text.
-    Submit,
-    /// Inserts a newline in the composer.
-    Newline,
     /// Aborts the running turn, or the running `!` command.
     Abort,
     /// Shows or hides the project sidebar.

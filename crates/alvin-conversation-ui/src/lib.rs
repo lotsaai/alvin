@@ -2,9 +2,11 @@
 //! they hold no domain state, create no runtime and never see the gateway directly.
 
 mod actions;
+mod ask;
 mod composer;
 mod dialogs;
 mod history_tree;
+mod markdown;
 mod model;
 mod pickers;
 mod queue;

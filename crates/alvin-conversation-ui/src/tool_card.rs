@@ -6,13 +6,19 @@
 //! the field its view needs falls back the same way: the card shows its arguments and result as formatted JSON.
 
 use alvin_conversation::ToolExecution;
-use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::collapsible::Collapsible;
+use gpui_kit::component::diff::{Diff, DiffFile, DiffState};
+use gpui_kit::component::marker::{Marker, MarkerContent, MarkerIcon, MarkerLoadingStyle};
+use gpui_kit::component::text::TextView;
+use gpui_kit::component::{ActiveTheme as _, Icon, IconName, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
-  AnyElement, App, ElementId, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, Styled as _, div,
-  prelude::FluentBuilder as _, px,
+  AnyElement, App, ElementId, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, RenderOnce, SharedString, Styled as _,
+  Window, div, prelude::FluentBuilder as _, rems,
 };
 use serde_json::Value;
 
+#[derive(IntoElement)]
 /// What a card shows. Built from a tool call in an assistant message, and from the execution tracked while it runs.
 pub(crate) struct ToolCard {
   pub(crate) id: String,
@@ -31,8 +37,8 @@ pub(crate) enum Body {
   Bash { command: String, output: String },
   /// A file's text: what `read` returned, or what `write` was asked to write.
   File { path: String, text: String },
-  /// An edit as omp's diff of it, one `+` or `-` line per change.
-  Diff { path: String, diff: String },
+  /// An edit as a unified patch of the change.
+  Diff { patch: String },
   /// What a search tool found: a summary and one line per match or file.
   Matches { summary: String, lines: Vec<String> },
   /// The subagents a `task` launched and where each one is.
@@ -79,6 +85,28 @@ fn plural(n: i64, one: &str, many: &str) -> String {
   format!("{n} {}", if n == 1 { one } else { many })
 }
 
+/// omp's diff of an edit (` N|text`, `-N|text`, `+N|text`) as a one-hunk unified patch, or `None` when a line is not in that
+/// shape, as when omp elides unchanged stretches.
+fn unified(path: &str, diff: &str) -> Option<String> {
+  let (mut start, mut old, mut new) = (None, 0usize, 0usize);
+  let mut lines = String::new();
+  for line in diff.lines() {
+    let sign = line.chars().next().filter(|sign| matches!(sign, ' ' | '+' | '-'))?;
+    let (number, content) = line.get(1..)?.split_once('|')?;
+    start.get_or_insert(number.trim().parse::<usize>().ok()?);
+    match sign {
+      ' ' => (old, new) = (old + 1, new + 1),
+      '-' => old += 1,
+      _ => new += 1,
+    }
+    lines.push(sign);
+    lines.push_str(content);
+    lines.push('\n');
+  }
+  let start = start?;
+  Some(format!("--- a/{path}\n+++ b/{path}\n@@ -{start},{old} +{start},{new} @@\n{lines}"))
+}
+
 /// The view of a tool call. `result` is the final result, or the partial one while the call runs.
 pub(crate) fn body(name: &str, args: Option<&Value>, result: Option<&Value>) -> Body {
   let fallback = || Body::Json {
@@ -113,9 +141,9 @@ pub(crate) fn body(name: &str, args: Option<&Value>, result: Option<&Value>) -> 
       .and_then(|result| result.get("details"))
       .and_then(|details| text(Some(details), "diff"))
     {
-      Some(diff) => Body::Diff {
-        path: text(args, "path").unwrap_or_default(),
-        diff,
+      Some(diff) => match unified(&text(args, "path").unwrap_or_default(), &diff) {
+        Some(patch) => Body::Diff { patch },
+        None => fallback(),
       },
       None => fallback(),
     },
@@ -191,67 +219,94 @@ impl ToolCard {
       failed: execution.is_some_and(|execution| execution.outcome.as_ref().is_some_and(|outcome| outcome.is_error)),
     }
   }
+}
 
-  pub(crate) fn render(self, cx: &App) -> impl IntoElement {
+impl RenderOnce for ToolCard {
+  /// The card: a header that names the call and shows how it is going, and the call's arguments and result below it, folded
+  /// away until the user asks. Whether it is open is local to the card, kept under its id.
+  fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    let id = SharedString::from(format!("tool-{}", self.id));
+    let open = window.use_keyed_state(ElementId::from(SharedString::from(format!("{id}-open"))), cx, |_, _| false);
+    let is_open = *open.read(cx);
+    let body = body_element(&id, &body(&self.name, self.args.as_ref(), self.result.as_ref()), window, cx);
     let theme = cx.theme();
     let status = if self.running {
-      "running"
+      Some(
+        Marker::new()
+          .loading(true)
+          .with_loading_style(MarkerLoadingStyle::Shimmer)
+          .content(MarkerContent::new().text("Running")),
+      )
     } else if self.failed {
-      "failed"
+      Some(
+        Marker::new()
+          .text_color(theme.danger)
+          .icon(MarkerIcon::new().child(Icon::new(IconName::CircleX)))
+          .content(MarkerContent::new().text("Failed")),
+      )
     } else {
-      ""
+      None
+    };
+    let toggle = {
+      let open = open.clone();
+      Button::new(SharedString::from(format!("{id}-toggle")))
+        .ghost()
+        .xsmall()
+        .icon(if is_open { IconName::ChevronUp } else { IconName::ChevronDown })
+        .accessibility_label(if is_open { "Hide tool details" } else { "Show tool details" })
+        .on_click(move |_, _, cx| {
+          open.update(cx, |open, cx| {
+            *open = !*open;
+            cx.notify();
+          })
+        })
     };
     v_flex()
-      .id(ElementId::from(SharedString::from(format!("tool-{}", self.id))))
-      .gap_1()
+      .id(ElementId::from(id.clone()))
+      .w_full()
       .p_2()
       .border_1()
       .border_color(theme.border)
       .rounded(theme.radius)
       .child(
-        h_flex()
-          .gap_2()
+        Collapsible::new()
+          .open(is_open)
+          .gap_1()
           .child(
-            div()
-              .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-              .child(SharedString::from(self.name.clone())),
+            h_flex()
+              .gap_2()
+              .child(div().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(self.name.clone())))
+              .when_some(self.intent, |this, intent| {
+                this.child(
+                  div()
+                    .min_w_0()
+                    .truncate()
+                    .text_color(theme.muted_foreground)
+                    .child(SharedString::from(intent)),
+                )
+              })
+              .children(status)
+              .child(div().flex_1())
+              .child(toggle),
           )
-          .when_some(self.intent, |this, intent| {
-            this.child(div().text_color(theme.muted_foreground).child(SharedString::from(intent)))
-          })
-          .when(!status.is_empty(), |this| {
-            this.child(div().text_color(theme.muted_foreground).child(status))
-          }),
+          .content(body),
       )
-      .child(body_element(&body(&self.name, self.args.as_ref(), self.result.as_ref()), cx))
   }
 }
 
-/// Formatted JSON in a monospaced block.
-fn json_block(value: &Value, cx: &App) -> impl IntoElement {
-  let text = serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string());
-  div()
-    .p_1()
-    .max_h(px(240.))
-    .overflow_hidden()
-    .bg(cx.theme().muted)
-    .rounded(cx.theme().radius)
-    .font_family(cx.theme().mono_font_family.clone())
-    .text_sm()
-    .child(SharedString::from(text))
+/// How many lines of code or output a block shows before it is clipped. The block's own copy action takes all of it.
+const BLOCK_LINES: usize = 40;
+
+/// `text` as a Markdown code block. The fence is longer than any run of backticks in the text, so the text cannot end it.
+pub(crate) fn fenced(text: &str) -> String {
+  let longest = text.split(|c| c != '`').map(str::len).max().unwrap_or_default();
+  let fence = "`".repeat(longest.max(2) + 1);
+  format!("{fence}\n{text}\n{fence}")
 }
 
-/// A block of monospaced text.
-fn code_block(text: String, cx: &App) -> gpui_kit::Div {
-  div()
-    .p_1()
-    .max_h(px(240.))
-    .overflow_hidden()
-    .bg(cx.theme().muted)
-    .rounded(cx.theme().radius)
-    .font_family(cx.theme().mono_font_family.clone())
-    .text_sm()
-    .child(SharedString::from(text))
+/// A code block: selectable, with the copy action `TextView` gives its fences.
+fn code_block(id: &SharedString, part: &str, text: &str) -> TextView {
+  TextView::markdown(SharedString::from(format!("{id}-{part}")), fenced(text)).max_lines(BLOCK_LINES)
 }
 
 fn caption(text: String, cx: &App) -> gpui_kit::Div {
@@ -261,70 +316,59 @@ fn caption(text: String, cx: &App) -> gpui_kit::Div {
     .child(SharedString::from(text))
 }
 
-fn body_element(body: &Body, cx: &App) -> AnyElement {
+/// Formatted JSON as a code block.
+fn json_block(id: &SharedString, part: &str, value: &Value) -> TextView {
+  let text = serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string());
+  code_block(id, part, &text)
+}
+
+fn body_element(id: &SharedString, body: &Body, window: &mut Window, cx: &mut App) -> AnyElement {
   match body {
     Body::Bash { command, output } => v_flex()
       .gap_1()
-      .child(code_block(format!("$ {command}"), cx))
-      .when(!output.is_empty(), |this| this.child(code_block(output.clone(), cx)))
+      .child(code_block(id, "command", &format!("$ {command}")))
+      .when(!output.is_empty(), |this| this.child(code_block(id, "output", output)))
       .into_any_element(),
     Body::File { path, text } => v_flex()
       .gap_1()
       .child(caption(path.clone(), cx))
-      .child(code_block(text.clone(), cx))
+      .child(code_block(id, "text", text))
       .into_any_element(),
-    Body::Diff { path, diff } => {
-      let theme = cx.theme();
-      let mut lines = v_flex()
-        .p_1()
-        .max_h(px(240.))
-        .overflow_hidden()
-        .bg(theme.muted)
-        .rounded(theme.radius)
-        .font_family(theme.mono_font_family.clone())
-        .text_sm();
-      for line in diff.lines() {
-        let colour = match line.chars().next() {
-          Some('+') => Some(theme.success),
-          Some('-') => Some(theme.danger),
-          _ => None,
-        };
-        lines = lines.child(
-          div()
-            .when_some(colour, |this, colour| this.text_color(colour))
-            .child(SharedString::from(line.to_owned())),
-        );
-      }
-      v_flex().gap_1().child(caption(path.clone(), cx)).child(lines).into_any_element()
+    Body::Diff { patch } => {
+      let files = window.use_keyed_state(ElementId::from(SharedString::from(format!("{id}-diff"))), cx, |_, cx| {
+        let files = DiffFile::parse(patch).unwrap_or_else(|error| {
+          tracing::warn!(%error, "an edit's diff is not a unified patch");
+          Vec::new()
+        });
+        DiffState::new(files, cx)
+      });
+      let rows = patch.lines().count();
+      Diff::new(&files)
+        .h(rems(1.5 * (rows + 2).min(20) as f32))
+        .w_full()
+        .into_any_element()
     }
     Body::Matches { summary, lines } => v_flex()
       .gap_1()
       .child(caption(summary.clone(), cx))
-      .child(code_block(lines.join("\n"), cx))
+      .child(code_block(id, "matches", &lines.join("\n")))
       .into_any_element(),
-    Body::Subagents(agents) => {
-      let mut column = v_flex().gap_1();
-      for agent in agents {
-        column = column.child(
-          h_flex()
-            .gap_2()
-            .text_sm()
-            .child(
-              div()
-                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                .child(SharedString::from(agent.id.clone())),
-            )
-            .child(caption(format!("{}, {}", agent.agent, agent.status), cx))
-            .child(caption(plural(agent.tool_calls, "tool call", "tool calls"), cx))
-            .child(div().flex_1().min_w_0().truncate().child(SharedString::from(agent.task.clone()))),
-        );
-      }
-      column.into_any_element()
-    }
+    Body::Subagents(agents) => v_flex()
+      .gap_1()
+      .children(agents.iter().map(|agent| {
+        h_flex()
+          .gap_2()
+          .text_sm()
+          .child(div().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(agent.id.clone())))
+          .child(caption(format!("{}, {}", agent.agent, agent.status), cx))
+          .child(caption(plural(agent.tool_calls, "tool call", "tool calls"), cx))
+          .child(div().flex_1().min_w_0().truncate().child(SharedString::from(agent.task.clone())))
+      }))
+      .into_any_element(),
     Body::Json { args, result } => v_flex()
       .gap_1()
-      .children(args.as_ref().map(|args| json_block(args, cx)))
-      .children(result.as_ref().map(|result| json_block(result, cx)))
+      .children(args.as_ref().map(|args| json_block(id, "args", args)))
+      .children(result.as_ref().map(|result| json_block(id, "result", result)))
       .into_any_element(),
   }
 }
@@ -405,12 +449,16 @@ mod tests {
 
   #[test]
   fn edit_shows_omps_diff_of_the_change() {
-    let Body::Diff { path, diff } = finished(TOOLS, "edit") else {
+    let Body::Diff { patch } = finished(TOOLS, "edit") else {
       panic!("an edit with a diff renders as one");
     };
-    assert_eq!(path, "notes.txt");
-    assert!(diff.lines().any(|line| line.starts_with('-') && line.ends_with("beta")), "{diff}");
-    assert!(diff.lines().any(|line| line.starts_with('+') && line.ends_with("gamma")), "{diff}");
+    let files = gpui_kit::component::diff::DiffFile::parse(&patch).unwrap();
+    assert_eq!(
+      (files[0].path().as_ref(), files[0].additions(), files[0].deletions()),
+      ("notes.txt", 1, 1)
+    );
+    assert!(patch.lines().any(|line| line == "-beta"), "{patch}");
+    assert!(patch.lines().any(|line| line == "+gamma"), "{patch}");
   }
 
   #[test]

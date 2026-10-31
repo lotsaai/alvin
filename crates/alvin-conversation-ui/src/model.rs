@@ -57,11 +57,11 @@ pub enum ModelEvent {
 
 /// What a live session can be switched to: omp's models, and the thinking levels the current model accepts.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Catalog {
+pub(crate) struct Catalog {
   /// The models omp can use.
-  pub models: Vec<ModelInfo>,
-  /// The thinking levels of the current model.
-  pub levels: Vec<ThinkingLevel>,
+  pub(crate) models: Vec<ModelInfo>,
+  /// The thinking levels the current model accepts.
+  pub(crate) levels: Vec<ThinkingLevel>,
 }
 
 /// Projects, sessions and live sessions, and the commands that change them.
@@ -128,7 +128,7 @@ impl Model {
   }
 
   /// The models and thinking levels of a session, once loaded.
-  pub fn catalog(&self, live: LiveSessionId) -> Option<&Catalog> {
+  pub(crate) fn catalog(&self, live: LiveSessionId) -> Option<&Catalog> {
     self.catalogs.get(&live)
   }
 
@@ -156,7 +156,7 @@ impl Model {
   }
 
   /// Loads the projects and the first page of every checkout's sessions.
-  pub fn refresh_projects(&mut self, cx: &mut Context<Self>) {
+  pub fn refresh_projects(&mut self, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let projects = ProjectsApiClient::list(&client).await.map_err(Error::from);
@@ -187,17 +187,21 @@ impl Model {
           return;
         }
       };
+      let mut loads = Vec::new();
       for key in keys {
-        if this.update(cx, |model, cx| model.load_sessions(key, None, cx)).is_err() {
-          return;
+        match this.update(cx, |model, cx| model.load_sessions(key, None, cx)) {
+          Ok(load) => loads.push(load),
+          Err(_) => return,
         }
       }
+      for load in loads {
+        load.await;
+      }
     })
-    .detach();
   }
 
   /// Loads a page of a checkout's sessions, newest first. Without a cursor it is the first page and replaces the list.
-  pub fn load_sessions(&mut self, key: SessionsKey, after: Option<SessionCursor>, cx: &mut Context<Self>) {
+  pub fn load_sessions(&mut self, key: SessionsKey, after: Option<SessionCursor>, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let request = ListSessions {
@@ -208,39 +212,46 @@ impl Model {
       };
       match SessionsApiClient::list(&client, request).await.map_err(Error::from) {
         Ok(page) => {
-          drop(this.update(cx, |model, cx| {
-            model.conversation.load_sessions(key, after.as_ref(), page);
-            cx.notify();
-          }));
+          if this
+            .update(cx, |model, cx| {
+              model.conversation.load_sessions(key, after.as_ref(), page);
+              cx.notify();
+            })
+            .is_err()
+          {
+            tracing::debug!("model released before the command finished");
+          }
         }
         Err(error) => fail(&this, cx, &error),
       }
     })
-    .detach();
   }
 
   /// Opens a listed session in a live session, or the live session it is already in.
-  pub fn open_session(&mut self, session: SessionId, cx: &mut Context<Self>) {
-    self.open(OpenTarget::Session { session }, cx);
+  pub fn open_session(&mut self, session: SessionId, cx: &mut Context<Self>) -> Task<()> {
+    self.open(OpenTarget::Session { session }, cx)
   }
 
   /// Opens a new session in a checkout of a project.
-  pub fn new_session(&mut self, project: ProjectId, checkout: CheckoutId, cx: &mut Context<Self>) {
-    self.open(OpenTarget::New { project, checkout }, cx);
+  pub fn new_session(&mut self, project: ProjectId, checkout: CheckoutId, cx: &mut Context<Self>) -> Task<()> {
+    self.open(OpenTarget::New { project, checkout }, cx)
   }
 
-  fn open(&mut self, target: OpenTarget, cx: &mut Context<Self>) {
+  fn open(&mut self, target: OpenTarget, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let opened = LiveApiClient::open(&client, OpenRequest { target, model: None })
         .await
         .map_err(Error::from);
       match opened {
-        Ok(summary) => drop(this.update(cx, |model, cx| model.opened(summary, cx))),
+        Ok(summary) => {
+          if this.update(cx, |model, cx| model.opened(summary, cx)).is_err() {
+            tracing::debug!("model released before the command finished");
+          }
+        }
         Err(error) => fail(&this, cx, &error),
       }
     })
-    .detach();
   }
 
   fn opened(&mut self, summary: LiveSessionSummary, cx: &mut Context<Self>) {
@@ -340,13 +351,13 @@ impl Model {
 
   /// Sends what the user typed. A leading `!` runs the rest as a shell command; anything else goes to omp unchanged. While a
   /// turn runs, a message is queued instead: it steers the turn, or with `follow_up` waits for it to end.
-  pub fn send(&mut self, live: LiveSessionId, text: &str, follow_up: bool, cx: &mut Context<Self>) {
+  pub fn send(&mut self, live: LiveSessionId, text: &str, follow_up: bool, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     if let Some(command) = text.strip_prefix('!') {
       let command = command.to_owned();
       self.bash_running.insert(live);
       cx.notify();
-      cx.spawn(async move |this, cx| {
+      return cx.spawn(async move |this, cx| {
         let result = LiveApiClient::bash(&client, BashRequest { live, command })
           .await
           .map_err(Error::from);
@@ -355,19 +366,22 @@ impl Model {
           Ok(_) => Some(load(&client, live).await),
           Err(_) => None,
         };
-        drop(this.update(cx, |model, cx| {
-          model.bash_running.remove(&live);
-          match (result, reloaded) {
-            (Err(error), _) => model.fail(&error, cx),
-            (Ok(_), Some(Ok((_, page)))) => model.conversation.load_page(live, page),
-            (Ok(_), Some(Err(error))) => model.fail(&error, cx),
-            (Ok(_), None) => {}
-          }
-          cx.notify();
-        }));
-      })
-      .detach();
-      return;
+        if this
+          .update(cx, |model, cx| {
+            model.bash_running.remove(&live);
+            match (result, reloaded) {
+              (Err(error), _) => model.fail(&error, cx),
+              (Ok(_), Some(Ok((_, page)))) => model.conversation.load_page(live, page),
+              (Ok(_), Some(Err(error))) => model.fail(&error, cx),
+              (Ok(_), None) => {}
+            }
+            cx.notify();
+          })
+          .is_err()
+        {
+          tracing::debug!("model released before the command finished");
+        }
+      });
     }
     let running = self.conversation.live(live).is_some_and(|view| view.run == Run::Running);
     let request = PromptRequest {
@@ -384,11 +398,10 @@ impl Model {
         fail(&this, cx, &error);
       }
     })
-    .detach();
   }
 
   /// Aborts the running turn and sends `text` in its place. Messages queued behind the turn are not touched.
-  pub fn interrupt_and_send(&mut self, live: LiveSessionId, text: String, cx: &mut Context<Self>) {
+  pub fn interrupt_and_send(&mut self, live: LiveSessionId, text: String, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let request = PromptRequest { live, message: text };
@@ -396,12 +409,11 @@ impl Model {
         fail(&this, cx, &error);
       }
     })
-    .detach();
   }
 
   /// Aborts what is running: the `!` command when there is one, else the turn. Queued messages the abort withdraws come back
   /// as [`ModelEvent::ComposerText`].
-  pub fn abort(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+  pub fn abort(&mut self, live: LiveSessionId, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     let bash = self.bash_running.contains(&live);
     let queued = self
@@ -419,7 +431,10 @@ impl Model {
               .map(|message| message.text.as_str())
               .collect::<Vec<_>>()
               .join("\n");
-            drop(this.update(cx, |_, cx| cx.emit(ModelEvent::ComposerText { live, text })));
+            if this.update(cx, |_, cx| cx.emit(ModelEvent::ComposerText { live, text })).is_err() {
+              tracing::debug!("model released before the command finished");
+              return;
+            };
           }
           Err(error) => fail(&this, cx, &error),
         }
@@ -434,11 +449,10 @@ impl Model {
         fail(&this, cx, &error);
       }
     })
-    .detach();
   }
 
   /// Takes a queued message out of its queue.
-  pub fn remove_queued(&mut self, live: LiveSessionId, message: String, queue: QueuedMessageQueue, cx: &mut Context<Self>) {
+  pub fn remove_queued(&mut self, live: LiveSessionId, message: String, queue: QueuedMessageQueue, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let request = RemoveQueuedRequest { live, message, queue };
@@ -446,11 +460,10 @@ impl Model {
         fail(&this, cx, &error);
       }
     })
-    .detach();
   }
 
   /// Moves a queued follow-up to the steering queue.
-  pub fn promote_queued(&mut self, live: LiveSessionId, message: String, cx: &mut Context<Self>) {
+  pub fn promote_queued(&mut self, live: LiveSessionId, message: String, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       if let Err(error) = QueueApiClient::promote(&client, PromoteQueuedRequest { live, message })
@@ -460,7 +473,6 @@ impl Model {
         fail(&this, cx, &error);
       }
     })
-    .detach();
   }
 
   /// Reads the entries omp appended since the tree's newest, or all of them when there is no tree yet or omp does not know
@@ -529,11 +541,18 @@ impl Model {
     let client = self.client.clone();
     cx.spawn(
       async move |this, cx| match LiveApiClient::branch_messages(&client, live).await.map_err(Error::from) {
-        Ok(messages) => drop(this.update(cx, |model, cx| {
-          let ids = messages.into_iter().map(|message| EntryId::from(message.entry_id)).collect();
-          model.branch_candidates.insert(live, ids);
-          cx.notify();
-        })),
+        Ok(messages) => {
+          if this
+            .update(cx, |model, cx| {
+              let ids = messages.into_iter().map(|message| EntryId::from(message.entry_id)).collect();
+              model.branch_candidates.insert(live, ids);
+              cx.notify();
+            })
+            .is_err()
+          {
+            tracing::debug!("model released before the command finished");
+          }
+        }
         Err(error) => fail(&this, cx, &error),
       },
     )
@@ -545,22 +564,36 @@ impl Model {
   fn reload(&mut self, live: LiveSessionId, new_file: bool, cx: &mut Context<Self>) {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| match load(&client, live).await {
-      Ok((state, page)) => drop(this.update(cx, |model, cx| {
-        model.conversation.set_state(live, &state);
-        model.conversation.load_page(live, page);
-        if new_file {
-          model.conversation.forget_tree(live);
+      Ok((state, page)) => {
+        if this
+          .update(cx, |model, cx| {
+            model.conversation.set_state(live, &state);
+            model.conversation.load_page(live, page);
+            if new_file {
+              model.conversation.forget_tree(live);
+            }
+            model.refresh_tree(live, cx);
+            cx.notify();
+          })
+          .is_err()
+        {
+          tracing::debug!("model released before the command finished");
         }
-        model.refresh_tree(live, cx);
-        cx.notify();
-      })),
+      }
       Err(error) => fail(&this, cx, &error),
     })
     .detach();
   }
 
   /// Moves the active branch to an entry. A user message rewinds past itself and its text goes to the composer.
-  pub fn navigate_tree(&mut self, live: LiveSessionId, entry: EntryId, summarize: bool, instructions: String, cx: &mut Context<Self>) {
+  pub fn navigate_tree(
+    &mut self,
+    live: LiveSessionId,
+    entry: EntryId,
+    summarize: bool,
+    instructions: String,
+    cx: &mut Context<Self>,
+  ) -> Task<()> {
     let client = self.client.clone();
     if summarize {
       self.summarizing.insert(live);
@@ -574,103 +607,122 @@ impl Model {
         custom_instructions: (!instructions.trim().is_empty()).then_some(instructions),
       };
       let result = LiveApiClient::navigate_tree(&client, request).await.map_err(Error::from);
-      drop(this.update(cx, |model, cx| {
-        model.summarizing.remove(&live);
-        match result {
-          Ok(result) if !result.cancelled => {
-            if let Some(text) = result.editor_text {
-              cx.emit(ModelEvent::ComposerText { live, text });
+      if this
+        .update(cx, |model, cx| {
+          model.summarizing.remove(&live);
+          match result {
+            Ok(result) if !result.cancelled => {
+              if let Some(text) = result.editor_text {
+                cx.emit(ModelEvent::ComposerText { live, text });
+              }
+              model.reload(live, false, cx);
             }
-            model.reload(live, false, cx);
+            Ok(_) => {}
+            Err(error) => model.fail(&error, cx),
           }
-          Ok(_) => {}
-          Err(error) => model.fail(&error, cx),
-        }
-        cx.notify();
-      }));
+          cx.notify();
+        })
+        .is_err()
+      {
+        tracing::debug!("model released before the command finished");
+      }
     })
-    .detach();
   }
 
   /// Stops the branch summary a navigation is generating.
-  pub fn abort_branch_summary(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+  pub fn abort_branch_summary(&mut self, live: LiveSessionId, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       if let Err(error) = LiveApiClient::abort_branch_summary(&client, live).await.map_err(Error::from) {
         fail(&this, cx, &error);
       }
     })
-    .detach();
   }
 
   /// Branches at a user message; its text goes to the composer.
-  pub fn branch(&mut self, live: LiveSessionId, entry: EntryId, cx: &mut Context<Self>) {
+  pub fn branch(&mut self, live: LiveSessionId, entry: EntryId, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let result = LiveApiClient::branch(&client, EntryRequest { live, entry })
         .await
         .map_err(Error::from);
-      drop(this.update(cx, |model, cx| match result {
-        Ok(result) if !result.cancelled => {
-          cx.emit(ModelEvent::ComposerText { live, text: result.text });
-          model.reload(live, true, cx);
-        }
-        Ok(_) => {}
-        Err(error) => model.fail(&error, cx),
-      }));
+      if this
+        .update(cx, |model, cx| match result {
+          Ok(result) if !result.cancelled => {
+            cx.emit(ModelEvent::ComposerText { live, text: result.text });
+            model.reload(live, true, cx);
+          }
+          Ok(_) => {}
+          Err(error) => model.fail(&error, cx),
+        })
+        .is_err()
+      {
+        tracing::debug!("model released before the command finished");
+      }
     })
-    .detach();
   }
 
   /// Forks the session into a new file, through an entry.
-  pub fn fork(&mut self, live: LiveSessionId, entry: Option<EntryId>, cx: &mut Context<Self>) {
+  pub fn fork(&mut self, live: LiveSessionId, entry: Option<EntryId>, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let result = LiveApiClient::fork(&client, ForkRequest { live, entry }).await.map_err(Error::from);
-      drop(this.update(cx, |model, cx| match result {
-        Ok(result) if !result.cancelled => model.reload(live, true, cx),
-        Ok(_) => {}
-        Err(error) => model.fail(&error, cx),
-      }));
+      if this
+        .update(cx, |model, cx| match result {
+          Ok(result) if !result.cancelled => model.reload(live, true, cx),
+          Ok(_) => {}
+          Err(error) => model.fail(&error, cx),
+        })
+        .is_err()
+      {
+        tracing::debug!("model released before the command finished");
+      }
     })
-    .detach();
   }
 
   /// Sets an entry's label, or clears it.
-  pub fn label(&mut self, live: LiveSessionId, entry: EntryId, label: Option<String>, cx: &mut Context<Self>) {
+  pub fn label(&mut self, live: LiveSessionId, entry: EntryId, label: Option<String>, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let result = LiveApiClient::label(&client, LabelRequest { live, entry, label })
         .await
         .map_err(Error::from);
-      drop(this.update(cx, |model, cx| match result {
-        Ok(()) => model.refresh_tree(live, cx),
-        Err(error) => model.fail(&error, cx),
-      }));
+      if this
+        .update(cx, |model, cx| match result {
+          Ok(()) => model.refresh_tree(live, cx),
+          Err(error) => model.fail(&error, cx),
+        })
+        .is_err()
+      {
+        tracing::debug!("model released before the command finished");
+      }
     })
-    .detach();
   }
 
   /// Names the session. The tab and the sidebar follow once omp has the name.
-  pub fn rename(&mut self, live: LiveSessionId, name: String, cx: &mut Context<Self>) {
+  pub fn rename(&mut self, live: LiveSessionId, name: String, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let result = LiveApiClient::rename(&client, RenameRequest { live, name })
         .await
         .map_err(Error::from);
-      drop(this.update(cx, |model, cx| match result {
-        Ok(()) => {
-          model.refresh_state(live, cx);
-          model.refresh_projects(cx);
-        }
-        Err(error) => model.fail(&error, cx),
-      }));
+      if this
+        .update(cx, |model, cx| match result {
+          Ok(()) => {
+            model.refresh_state(live, cx);
+            model.refresh_projects(cx).detach();
+          }
+          Err(error) => model.fail(&error, cx),
+        })
+        .is_err()
+      {
+        tracing::debug!("model released before the command finished");
+      }
     })
-    .detach();
   }
 
   /// Compacts the conversation. Progress arrives as events; the transcript is read again once it is done.
-  pub fn compact(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+  pub fn compact(&mut self, live: LiveSessionId, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let result = LiveApiClient::compact(
@@ -682,42 +734,56 @@ impl Model {
       )
       .await
       .map_err(Error::from);
-      drop(this.update(cx, |model, cx| match result {
-        Ok(_) => model.reload(live, false, cx),
-        Err(error) => model.fail(&error, cx),
-      }));
+      if this
+        .update(cx, |model, cx| match result {
+          Ok(_) => model.reload(live, false, cx),
+          Err(error) => model.fail(&error, cx),
+        })
+        .is_err()
+      {
+        tracing::debug!("model released before the command finished");
+      }
     })
-    .detach();
   }
 
   /// Reads the counts of the session.
-  pub fn refresh_stats(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+  pub fn refresh_stats(&mut self, live: LiveSessionId, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(
       async move |this, cx| match LiveApiClient::stats(&client, live).await.map_err(Error::from) {
-        Ok(stats) => drop(this.update(cx, |model, cx| {
-          model.stats.insert(live, stats);
-          cx.notify();
-        })),
+        Ok(stats) => {
+          if this
+            .update(cx, |model, cx| {
+              model.stats.insert(live, stats);
+              cx.notify();
+            })
+            .is_err()
+          {
+            tracing::debug!("model released before the command finished");
+          }
+        }
         Err(error) => fail(&this, cx, &error),
       },
     )
-    .detach();
   }
 
   /// Writes the session as an HTML page, where omp chooses.
-  pub fn export_html(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+  pub fn export_html(&mut self, live: LiveSessionId, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let result = LiveApiClient::export_html(&client, ExportRequest { live, output_path: None })
         .await
         .map_err(Error::from);
-      drop(this.update(cx, |model, cx| match result {
-        Ok(path) => cx.emit(ModelEvent::Exported { live, path }),
-        Err(error) => model.fail(&error, cx),
-      }));
+      if this
+        .update(cx, |model, cx| match result {
+          Ok(path) => cx.emit(ModelEvent::Exported { live, path }),
+          Err(error) => model.fail(&error, cx),
+        })
+        .is_err()
+      {
+        tracing::debug!("model released before the command finished");
+      }
     })
-    .detach();
   }
 
   /// Tells the views what arrived for the user since `seen` notices: the new notices, and text an extension put in the
@@ -735,7 +801,7 @@ impl Model {
   }
 
   /// Answers or dismisses a dialog. The dialog closes once omp has the answer.
-  pub fn respond(&mut self, live: LiveSessionId, response: ExtensionUiResponse, cx: &mut Context<Self>) {
+  pub fn respond(&mut self, live: LiveSessionId, response: ExtensionUiResponse, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     let id = match &response {
       ExtensionUiResponse::ValueUiResponse(response) => response.id.clone(),
@@ -748,14 +814,20 @@ impl Model {
         .await
         .map_err(Error::from)
       {
-        Ok(()) => drop(this.update(cx, |model, cx| {
-          model.conversation.dialog_answered(live, &id);
-          cx.notify();
-        })),
+        Ok(()) => {
+          if this
+            .update(cx, |model, cx| {
+              model.conversation.dialog_answered(live, &id);
+              cx.notify();
+            })
+            .is_err()
+          {
+            tracing::debug!("model released before the command finished");
+          }
+        }
         Err(error) => fail(&this, cx, &error),
       }
     })
-    .detach();
   }
 
   /// Reads `live/state` again, for what changed in omp without an event that says what.
@@ -763,10 +835,17 @@ impl Model {
     let client = self.client.clone();
     cx.spawn(
       async move |this, cx| match LiveApiClient::state(&client, live).await.map_err(Error::from) {
-        Ok(state) => drop(this.update(cx, |model, cx| {
-          model.conversation.set_state(live, &state);
-          cx.notify();
-        })),
+        Ok(state) => {
+          if this
+            .update(cx, |model, cx| {
+              model.conversation.set_state(live, &state);
+              cx.notify();
+            })
+            .is_err()
+          {
+            tracing::debug!("model released before the command finished");
+          }
+        }
         Err(error) => fail(&this, cx, &error),
       },
     )
@@ -784,10 +863,17 @@ impl Model {
       }
       .await;
       match loaded {
-        Ok(catalog) => drop(this.update(cx, |model, cx| {
-          model.catalogs.insert(live, catalog);
-          cx.notify();
-        })),
+        Ok(catalog) => {
+          if this
+            .update(cx, |model, cx| {
+              model.catalogs.insert(live, catalog);
+              cx.notify();
+            })
+            .is_err()
+          {
+            tracing::debug!("model released before the command finished");
+          }
+        }
         Err(error) => fail(&this, cx, &error),
       }
     })
@@ -795,37 +881,37 @@ impl Model {
   }
 
   /// Switches the session to a model, then shows what omp now reports.
-  pub fn set_model(&mut self, live: LiveSessionId, provider: String, model_id: String, cx: &mut Context<Self>) {
+  pub fn set_model(&mut self, live: LiveSessionId, provider: String, model_id: String, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     self.change_model(cx, live, async move {
       ModelApiClient::set_model(&client, SetModelRequest { live, provider, model_id })
         .await
         .map(drop)
-    });
+    })
   }
 
   /// Switches to the next model in omp's cycle.
-  pub fn cycle_model(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+  pub fn cycle_model(&mut self, live: LiveSessionId, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
-    self.change_model(cx, live, async move { ModelApiClient::cycle_model(&client, live).await.map(drop) });
+    self.change_model(cx, live, async move { ModelApiClient::cycle_model(&client, live).await.map(drop) })
   }
 
   /// Sets the thinking level, then shows what omp now reports.
-  pub fn set_thinking(&mut self, live: LiveSessionId, level: ThinkingLevel, cx: &mut Context<Self>) {
+  pub fn set_thinking(&mut self, live: LiveSessionId, level: ThinkingLevel, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     self.change_thinking(cx, live, async move {
       ModelApiClient::set_thinking(&client, SetThinkingRequest { live, level }).await
-    });
+    })
   }
 
   /// Switches to the next thinking level.
-  pub fn cycle_thinking(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+  pub fn cycle_thinking(&mut self, live: LiveSessionId, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     self.change_thinking(
       cx,
       live,
       async move { ModelApiClient::cycle_thinking(&client, live).await.map(drop) },
-    );
+    )
   }
 
   /// A model change also changes the thinking levels on offer.
@@ -834,15 +920,21 @@ impl Model {
     cx: &mut Context<Self>,
     live: LiveSessionId,
     call: impl Future<Output = Result<(), E>> + 'static,
-  ) {
+  ) -> Task<()> {
     cx.spawn(async move |this, cx| match call.await.map_err(Into::into) {
-      Ok(()) => drop(this.update(cx, |model, cx| {
-        model.refresh_state(live, cx);
-        model.load_catalog(live, cx);
-      })),
+      Ok(()) => {
+        if this
+          .update(cx, |model, cx| {
+            model.refresh_state(live, cx);
+            model.load_catalog(live, cx);
+          })
+          .is_err()
+        {
+          tracing::debug!("model released before the command finished");
+        }
+      }
       Err(error) => fail(&this, cx, &error),
     })
-    .detach();
   }
 
   fn change_thinking<E: Into<Error> + 'static>(
@@ -850,39 +942,97 @@ impl Model {
     cx: &mut Context<Self>,
     live: LiveSessionId,
     call: impl Future<Output = Result<(), E>> + 'static,
-  ) {
+  ) -> Task<()> {
     cx.spawn(async move |this, cx| match call.await.map_err(Into::into) {
-      Ok(()) => drop(this.update(cx, |model, cx| model.refresh_state(live, cx))),
+      Ok(()) => {
+        if this.update(cx, |model, cx| model.refresh_state(live, cx)).is_err() {
+          tracing::debug!("model released before the command finished");
+        }
+      }
       Err(error) => fail(&this, cx, &error),
     })
-    .detach();
   }
 
   /// Closes a live session and its omp process.
-  pub fn close(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+  pub fn close(&mut self, live: LiveSessionId, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(
       async move |this, cx| match LiveApiClient::close(&client, live).await.map_err(Error::from) {
-        Ok(()) => drop(this.update(cx, |model, cx| {
-          model.sessions.remove(&live);
-          model.bash_running.remove(&live);
-          model.branch_candidates.remove(&live);
-          model.summarizing.remove(&live);
-          model.stats.remove(&live);
-          model.catalogs.remove(&live);
-          model.tree_reads.remove(&live);
-          model.conversation.close(live);
-          cx.emit(ModelEvent::Closed(live));
-          cx.notify();
-        })),
+        Ok(()) => {
+          if this
+            .update(cx, |model, cx| {
+              model.sessions.remove(&live);
+              model.bash_running.remove(&live);
+              model.branch_candidates.remove(&live);
+              model.summarizing.remove(&live);
+              model.stats.remove(&live);
+              model.catalogs.remove(&live);
+              model.tree_reads.remove(&live);
+              model.conversation.close(live);
+              cx.emit(ModelEvent::Closed(live));
+              cx.notify();
+            })
+            .is_err()
+          {
+            tracing::debug!("model released before the command finished");
+          }
+        }
         Err(error) => fail(&this, cx, &error),
       },
     )
-    .detach();
   }
 
   fn fail(&mut self, error: &Error, cx: &mut Context<Self>) {
     cx.emit(failure(error));
+  }
+}
+
+/// Test-only access. It stays inside the module, so the model's public API does not widen for the tests.
+#[cfg(test)]
+impl Model {
+  /// Puts projects and their first session pages in the state, as `projects/list` and `sessions/list` would have.
+  pub(crate) fn seed_workspace(
+    &mut self,
+    projects: Vec<alvin_protocol::ProjectSummary>,
+    pages: Vec<(SessionsKey, alvin_protocol::SessionPage)>,
+    cx: &mut Context<Self>,
+  ) {
+    self.conversation.set_projects(projects);
+    for (key, page) in pages {
+      self.conversation.load_sessions(key, None, page);
+    }
+    cx.notify();
+  }
+
+  /// Tracks a live session and announces it, as `live/open` would have. No omp starts.
+  pub(crate) fn seed_open(&mut self, summary: &LiveSessionSummary, cx: &mut Context<Self>) {
+    self.conversation.open(summary);
+    cx.emit(ModelEvent::Opened(summary.live));
+    cx.notify();
+  }
+
+  /// Announces that a live session closed, as `live/close` would have.
+  pub(crate) fn seed_close(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    cx.emit(ModelEvent::Closed(live));
+    cx.notify();
+  }
+
+  /// Folds a live-session event into the state, as the event stream would have.
+  pub(crate) fn seed_event(&mut self, event: &alvin_protocol::Event, cx: &mut Context<Self>) {
+    self.conversation.apply(event);
+    cx.notify();
+  }
+
+  /// Puts a page of messages in a live session's transcript, as `live/messages` would have.
+  pub(crate) fn seed_messages(&mut self, live: LiveSessionId, page: alvin_protocol::MessagesPage, cx: &mut Context<Self>) {
+    self.conversation.load_page(live, page);
+    cx.notify();
+  }
+
+  /// Records the connection state the client would have reported.
+  pub(crate) fn seed_connection(&mut self, connection: Connection, cx: &mut Context<Self>) {
+    self.conversation.set_connection(connection);
+    cx.notify();
   }
 }
 
@@ -925,5 +1075,7 @@ fn failure(error: &Error) -> ModelEvent {
 
 fn fail(this: &WeakEntity<Model>, cx: &mut AsyncApp, error: &Error) {
   let event = failure(error);
-  drop(this.update(cx, |_, cx| cx.emit(event)));
+  if this.update(cx, |_, cx| cx.emit(event)).is_err() {
+    tracing::debug!("model released before the command finished");
+  }
 }

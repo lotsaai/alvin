@@ -1,320 +1,283 @@
-//! The dialog an extension or a tool is waiting on: `select`, `confirm`, `input`, `editor` and `ask`.
+//! The dialog an extension tool is waiting on: `select`, `confirm`, `input`, `editor` and `ask`.
 //!
-//! omp can have several open; the session shows the oldest and the rest wait their turn. The host holds only what the user is
-//! in the middle of choosing or typing; whether a dialog is open is the model's.
+//! omp can have several open; a session shows the oldest and the rest wait their turn. What the user is choosing or
+//! typing lives in the dialog's own body entity; whether a dialog is open is the model's.
 
-use std::collections::BTreeMap;
+use std::cell::Cell;
 use std::rc::Rc;
 
 use alvin_conversation::request_id;
 use alvin_protocol::{
-  AnswersUiResponse, AskAnswer, AskUiRequest, CancelUiResponse, ConfirmUiResponse, ExtensionUiRequest, ExtensionUiResponse, LitTrue,
-  LiveSessionId, ValueUiResponse,
+  CancelUiResponse, ConfirmUiResponse, ExtensionUiRequest, ExtensionUiResponse, LitTrue, LiveSessionId, ValueUiResponse,
 };
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{Textarea, TextareaState};
-use gpui_kit::component::{ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, h_flex, v_flex};
-use gpui_kit::{
-  AnyElement, App, AppContext as _, Div, ElementId, Entity, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-  SharedString, Stateful, Styled as _, Window, div,
-};
+use gpui_kit::component::dialog::DialogFooter;
+use gpui_kit::component::input::{Input, InputContentType, InputState, Textarea, TextareaState};
+use gpui_kit::component::radio::RadioGroup;
+use gpui_kit::component::{Disableable as _, WindowExt as _, v_flex};
+use gpui_kit::{App, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, SharedString, Styled as _, Window};
 
 use crate::model::Model;
 
-type Respond = Rc<dyn Fn(ExtensionUiResponse, &mut App)>;
-
-fn element(prefix: &str, index: usize) -> ElementId {
-  ElementId::from(SharedString::from(format!("{prefix}-{index}")))
-}
-
-fn title(text: &str) -> Div {
-  div().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(text.to_owned()))
-}
-
-/// What the user is choosing or typing in the dialog on show.
-pub(crate) struct DialogHost {
-  /// The request on show, so a new one starts from a clean slate.
+/// Which dialog is on screen for a session, and whether the user already answered it.
+pub(crate) struct Dialogs {
   shown: Option<String>,
-  /// The text of an `input` or `editor` dialog.
-  text: Entity<TextareaState>,
-  /// The free-text box of each `ask` question, by question id.
-  custom: BTreeMap<String, Entity<TextareaState>>,
-  /// The options chosen for each `ask` question, by question id.
-  chosen: BTreeMap<String, Vec<String>>,
+  answered: Rc<Cell<bool>>,
 }
 
-impl DialogHost {
-  pub(crate) fn new(window: &mut Window, cx: &mut App) -> Entity<Self> {
-    let text = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 8));
-    cx.new(|_| Self {
+impl Dialogs {
+  pub(crate) fn new() -> Self {
+    Self {
       shown: None,
-      text,
-      custom: BTreeMap::new(),
-      chosen: BTreeMap::new(),
-    })
+      answered: Rc::new(Cell::new(false)),
+    }
   }
 
-  /// Starts over when the dialog on show changed.
-  pub(crate) fn sync(host: &Entity<Self>, model: &Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut App) {
+  /// Opens the oldest pending dialog when it is not the one on screen, and closes the one on screen when omp withdrew it.
+  pub(crate) fn sync(&mut self, model: &Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut App) {
     let current = model
       .read(cx)
       .conversation()
       .live(live)
       .and_then(|view| view.dialogs.pending().first().cloned());
     let current_id = current.as_ref().map(|request| request_id(request).to_owned());
-    if current_id == host.read(cx).shown {
+    if current_id == self.shown {
       return;
     }
-    let prefill = match &current {
-      Some(ExtensionUiRequest::Editor(request)) => request.prefill.clone().unwrap_or_default(),
-      _ => String::new(),
-    };
-    let text = host.read(cx).text.clone();
-    text.update(cx, |text, cx| text.set_value(prefill, window, cx));
-    let mut custom = BTreeMap::new();
-    let mut chosen = BTreeMap::new();
-    if let Some(ExtensionUiRequest::Ask(ask)) = &current {
-      for question in &ask.questions {
-        custom.insert(
-          question.id.clone(),
-          cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4).placeholder("Something else")),
-        );
-        let recommended = question
-          .recommended
-          .and_then(|index| usize::try_from(index).ok())
-          .and_then(|index| question.options.get(index));
-        if let Some(option) = recommended {
-          chosen.insert(question.id.clone(), vec![option.label.clone()]);
-        }
-      }
+    if self.shown.is_some() && !self.answered.get() {
+      window.close_dialog(cx);
     }
-    host.update(cx, |host, cx| {
-      host.shown = current_id;
-      host.custom = custom;
-      host.chosen = chosen;
-      cx.notify();
-    });
-  }
-
-  /// Chooses an option of an `ask` question. A question that takes one answer replaces the choice; one that takes several
-  /// toggles the option.
-  fn choose(&mut self, question: &str, label: &str, multi: bool) {
-    let chosen = self.chosen.entry(question.to_owned()).or_default();
-    if !multi {
-      *chosen = vec![label.to_owned()];
-    } else if let Some(position) = chosen.iter().position(|option| option == label) {
-      chosen.remove(position);
-    } else {
-      chosen.push(label.to_owned());
+    self.shown = current_id;
+    self.answered = Rc::new(Cell::new(false));
+    if let Some(request) = current {
+      open(model, live, request, self.answered.clone(), window, cx);
     }
-  }
-
-  /// The answers of an `ask`, once every question has an option or some text.
-  fn answers(&self, ask: &AskUiRequest, cx: &App) -> Option<Vec<AskAnswer>> {
-    ask
-      .questions
-      .iter()
-      .map(|question| {
-        let selected_options = self.chosen.get(&question.id).cloned().unwrap_or_default();
-        let custom = self
-          .custom
-          .get(&question.id)
-          .map(|text| text.read(cx).value().trim().to_owned())
-          .filter(|text| !text.is_empty());
-        (!selected_options.is_empty() || custom.is_some()).then(|| AskAnswer {
-          id: question.id.clone(),
-          selected_options,
-          custom_input: custom,
-        })
-      })
-      .collect()
   }
 }
 
-/// The oldest pending dialog of the session, or nothing.
-pub(crate) fn view(host: &Entity<DialogHost>, model: &Entity<Model>, live: LiveSessionId, cx: &App) -> Option<AnyElement> {
-  let request = model.read(cx).conversation().live(live)?.dialogs.pending().first()?.clone();
-  let respond: Respond = {
-    let model = model.clone();
-    Rc::new(move |response, cx| model.update(cx, |model, cx| model.respond(live, response, cx)))
+/// What a dialog sends back, and the bookkeeping around sending it.
+#[derive(Clone)]
+pub(crate) struct Reply {
+  model: Entity<Model>,
+  live: LiveSessionId,
+  answered: Rc<Cell<bool>>,
+}
+
+impl Reply {
+  pub(crate) fn send(&self, response: ExtensionUiResponse, cx: &mut App) {
+    self.answered.set(true);
+    self.model.update(cx, |model, cx| model.respond(self.live, response, cx)).detach();
+  }
+
+  pub(crate) fn cancel(&self, id: &str, cx: &mut App) {
+    self.send(
+      ExtensionUiResponse::CancelUiResponse(CancelUiResponse {
+        id: id.to_owned(),
+        cancelled: LitTrue,
+        timed_out: None,
+      }),
+      cx,
+    );
+  }
+}
+
+fn open(
+  model: &Entity<Model>,
+  live: LiveSessionId,
+  request: ExtensionUiRequest,
+  answered: Rc<Cell<bool>>,
+  window: &mut Window,
+  cx: &mut App,
+) {
+  let reply = Reply {
+    model: model.clone(),
+    live,
+    answered,
   };
-  let cancel = |request_id: &str| {
-    let (request_id, respond) = (request_id.to_owned(), respond.clone());
-    Button::new(ElementId::from("dialog-cancel"))
-      .small()
-      .ghost()
-      .label("Cancel")
-      .on_click(move |_, _, cx| {
-        respond(
-          ExtensionUiResponse::CancelUiResponse(CancelUiResponse {
-            id: request_id.clone(),
-            cancelled: LitTrue,
-            timed_out: None,
-          }),
-          cx,
-        );
-      })
-  };
-  let panel = v_flex().id("dialog").p_3().gap_2().border_t_1().border_color(cx.theme().border);
-  let dialog = match &request {
+  match request {
     ExtensionUiRequest::Confirm(confirm) => {
-      let answer = |name: &'static str, label: &'static str, confirmed: bool| {
-        let (request_id, respond) = (confirm.id.clone(), respond.clone());
-        Button::new(ElementId::from(name)).small().label(label).on_click(move |_, _, cx| {
-          respond(
-            ExtensionUiResponse::ConfirmUiResponse(ConfirmUiResponse {
-              id: request_id.clone(),
-              confirmed,
-            }),
-            cx,
-          );
+      window.open_alert_dialog(cx, move |alert, _, _| {
+        let (ok, no) = (reply.clone(), reply.clone());
+        let (yes_id, no_id) = (confirm.id.clone(), confirm.id.clone());
+        alert
+          .title(SharedString::from(confirm.title.clone()))
+          .description(SharedString::from(confirm.message.clone()))
+          .confirm()
+          .ok_text("Yes")
+          .cancel_text("No")
+          .on_ok(move |_, _, cx| {
+            ok.send(
+              ExtensionUiResponse::ConfirmUiResponse(ConfirmUiResponse {
+                id: yes_id.clone(),
+                confirmed: true,
+              }),
+              cx,
+            );
+            true
+          })
+          .on_cancel(move |_, _, cx| {
+            no.send(
+              ExtensionUiResponse::ConfirmUiResponse(ConfirmUiResponse {
+                id: no_id.clone(),
+                confirmed: false,
+              }),
+              cx,
+            );
+            true
+          })
+      });
+    }
+    ExtensionUiRequest::Select(_) | ExtensionUiRequest::Input(_) | ExtensionUiRequest::Editor(_) => {
+      let title = SharedString::from(title(&request));
+      let id = request_id(&request).to_owned();
+      let body = cx.new(|cx| Body::new(reply.clone(), request, window, cx));
+      window.open_dialog(cx, move |dialog, _, _| {
+        let (reply, id) = (reply.clone(), id.clone());
+        dialog.title(title.clone()).child(body.clone()).on_cancel(move |_, _, cx| {
+          reply.cancel(&id, cx);
+          true
         })
-      };
-      panel
-        .child(title(&confirm.title))
-        .child(SharedString::from(confirm.message.clone()))
-        .child(
-          h_flex()
-            .gap_2()
-            .child(answer("dialog-confirm-yes", "Yes", true))
-            .child(answer("dialog-confirm-no", "No", false))
-            .child(cancel(&confirm.id)),
-        )
+      });
     }
-    ExtensionUiRequest::Select(select) => {
-      let mut options = h_flex().gap_2().flex_wrap();
-      for (index, option) in select.options.iter().enumerate() {
-        let (request_id, value, respond) = (select.id.clone(), option.clone(), respond.clone());
-        options = options.child(
-          Button::new(element("dialog-option", index))
-            .small()
-            .label(SharedString::from(option.clone()))
-            .on_click(move |_, _, cx| {
-              respond(
-                ExtensionUiResponse::ValueUiResponse(ValueUiResponse {
-                  id: request_id.clone(),
-                  value: value.clone(),
-                }),
-                cx,
-              );
-            }),
-        );
-      }
-      panel.child(title(&select.title)).child(options).child(cancel(&select.id))
-    }
-    ExtensionUiRequest::Input(input) => text_dialog(panel, host, &input.title, &input.id, &respond, cancel(&input.id), cx),
-    ExtensionUiRequest::Editor(editor) => text_dialog(panel, host, &editor.title, &editor.id, &respond, cancel(&editor.id), cx),
-    ExtensionUiRequest::Ask(ask) => ask_dialog(panel, host, ask, &respond, cancel(&ask.id), cx),
-    // Requests that are not dialogs never wait in the model.
+    ExtensionUiRequest::Ask(ask) => crate::ask::open(reply, ask, window, cx),
     ExtensionUiRequest::Cancel(_)
     | ExtensionUiRequest::Notify(_)
     | ExtensionUiRequest::SetStatus(_)
     | ExtensionUiRequest::SetWidget(_)
     | ExtensionUiRequest::SetTitle(_)
     | ExtensionUiRequest::SetEditorText(_)
-    | ExtensionUiRequest::OpenUrl(_) => return None,
-  };
-  Some(dialog.into_any_element())
+    | ExtensionUiRequest::OpenUrl(_) => {}
+  }
 }
 
-fn text_dialog(
-  panel: Stateful<Div>,
-  host: &Entity<DialogHost>,
-  heading: &str,
-  request_id: &str,
-  respond: &Respond,
-  cancel: Button,
-  cx: &App,
-) -> Stateful<Div> {
-  let text = host.read(cx).text.clone();
-  let (request_id, respond, answer) = (request_id.to_owned(), respond.clone(), text.clone());
-  panel
-    .child(title(heading))
-    .child(Textarea::new(&text).accessibility_id("dialog-text").aria_label("Answer"))
-    .child(
-      h_flex()
-        .gap_2()
-        .child(
-          Button::new(ElementId::from("dialog-submit"))
-            .small()
-            .label("Submit")
-            .on_click(move |_, _, cx| {
-              let value = answer.read(cx).value().to_string();
-              respond(
-                ExtensionUiResponse::ValueUiResponse(ValueUiResponse {
-                  id: request_id.clone(),
-                  value,
-                }),
-                cx,
-              );
-            }),
-        )
-        .child(cancel),
-    )
+/// The dialog's title: what the extension asked, or the first question's header.
+fn title(request: &ExtensionUiRequest) -> String {
+  match request {
+    ExtensionUiRequest::Select(select) => select.title.clone(),
+    ExtensionUiRequest::Input(input) => input.title.clone(),
+    ExtensionUiRequest::Editor(editor) => editor.title.clone(),
+    _ => String::new(),
+  }
 }
 
-fn ask_dialog(
-  panel: Stateful<Div>,
-  host: &Entity<DialogHost>,
-  ask: &AskUiRequest,
-  respond: &Respond,
-  cancel: Button,
-  cx: &App,
-) -> Stateful<Div> {
-  let mut panel = panel;
-  for (q, question) in ask.questions.iter().enumerate() {
-    let mut options = h_flex().gap_2().flex_wrap();
-    for (o, option) in question.options.iter().enumerate() {
-      let selected = host
-        .read(cx)
-        .chosen
-        .get(&question.id)
-        .is_some_and(|chosen| chosen.contains(&option.label));
-      let (host, question_id, label, multi) = (host.clone(), question.id.clone(), option.label.clone(), question.multi);
-      options = options.child(
-        Button::new(ElementId::from(SharedString::from(format!("dialog-ask-{q}-{o}"))))
-          .small()
-          .selected(selected)
-          .label(SharedString::from(option.label.clone()))
-          .on_click(move |_, _, cx| {
-            host.update(cx, |host, cx| {
-              host.choose(&question_id, &label, multi);
-              cx.notify();
-            });
-          }),
-      );
-    }
-    panel = panel.child(title(&question.question)).child(options);
-    if let Some(custom) = host.read(cx).custom.get(&question.id) {
-      panel = panel.child(
-        Textarea::new(custom)
-          .accessibility_id(SharedString::from(format!("dialog-ask-text-{q}")))
-          .aria_label("Something else"),
-      );
+/// The body of a `select`, `input` or `editor` dialog: what to choose or type, and the buttons that send it.
+struct Body {
+  reply: Reply,
+  request: ExtensionUiRequest,
+  /// The option picked in a `select`.
+  selected: Option<usize>,
+  /// The text of an `input`.
+  line: Entity<InputState>,
+  /// The text of an `editor`.
+  block: Entity<TextareaState>,
+}
+
+impl Body {
+  fn new(reply: Reply, request: ExtensionUiRequest, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    let placeholder = match &request {
+      ExtensionUiRequest::Input(input) => input.placeholder.clone().unwrap_or_default(),
+      _ => String::new(),
+    };
+    let prefill = match &request {
+      ExtensionUiRequest::Editor(editor) => editor.prefill.clone().unwrap_or_default(),
+      _ => String::new(),
+    };
+    let line = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+    let block = cx.new(|cx| {
+      let mut state = TextareaState::new(window, cx).auto_grow(3, 12);
+      state.set_value(prefill, window, cx);
+      state
+    });
+    Self {
+      reply,
+      request,
+      selected: None,
+      line,
+      block,
     }
   }
-  let ready = host.read(cx).answers(ask, cx).is_some();
-  let (host, respond, ask) = (host.clone(), respond.clone(), ask.clone());
-  panel.child(
-    h_flex()
-      .gap_2()
-      .child(
-        Button::new(ElementId::from("dialog-ask-submit"))
-          .small()
-          .label("Submit")
-          .disabled(!ready)
-          .on_click(move |_, _, cx| {
-            if let Some(answers) = host.read(cx).answers(&ask, cx) {
-              respond(
-                ExtensionUiResponse::AnswersUiResponse(AnswersUiResponse {
-                  id: ask.id.clone(),
-                  answers,
-                }),
-                cx,
-              );
-            }
-          }),
-      )
-      .child(cancel),
-  )
+
+  /// What the user's choices say, ready to send, once they are complete.
+  fn response(&self, cx: &App) -> Option<ExtensionUiResponse> {
+    match &self.request {
+      ExtensionUiRequest::Select(select) => {
+        let value = select.options.get(self.selected?)?.clone();
+        Some(ExtensionUiResponse::ValueUiResponse(ValueUiResponse {
+          id: select.id.clone(),
+          value,
+        }))
+      }
+      ExtensionUiRequest::Input(input) => Some(ExtensionUiResponse::ValueUiResponse(ValueUiResponse {
+        id: input.id.clone(),
+        value: self.line.read(cx).value().to_string(),
+      })),
+      ExtensionUiRequest::Editor(editor) => Some(ExtensionUiResponse::ValueUiResponse(ValueUiResponse {
+        id: editor.id.clone(),
+        value: self.block.read(cx).value().to_string(),
+      })),
+      _ => None,
+    }
+  }
+
+  fn fields(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+    match &self.request {
+      ExtensionUiRequest::Select(select) => RadioGroup::new(SharedString::from(format!("select-{}", select.id)))
+        .children(select.options.iter().map(|option| SharedString::from(option.clone())))
+        .selected_index(self.selected)
+        .on_change(cx.listener(|this, index: &usize, _, cx| {
+          this.selected = Some(*index);
+          cx.notify();
+        }))
+        .into_any_element(),
+      ExtensionUiRequest::Input(input) => {
+        let line = Input::new(&self.line).aria_label(SharedString::from(input.title.clone()));
+        match input.secret {
+          Some(true) => line.content_type(InputContentType::Password).mask_toggle().into_any_element(),
+          _ => line.into_any_element(),
+        }
+      }
+      ExtensionUiRequest::Editor(editor) => Textarea::new(&self.block)
+        .aria_label(SharedString::from(editor.title.clone()))
+        .into_any_element(),
+      _ => v_flex().into_any_element(),
+    }
+  }
+}
+
+impl Render for Body {
+  fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    let id = request_id(&self.request).to_owned();
+    let response = self.response(cx);
+    let submit = match &self.request {
+      ExtensionUiRequest::Select(_) => "Select",
+      _ => "Submit",
+    };
+    v_flex().gap_4().child(self.fields(cx)).child(
+      DialogFooter::new()
+        .child(
+          Button::new(SharedString::from(format!("dialog-cancel-{id}")))
+            .outline()
+            .label("Cancel")
+            .on_click(cx.listener({
+              let id = id.clone();
+              move |this, _, window, cx| {
+                this.reply.cancel(&id, cx);
+                window.close_dialog(cx);
+              }
+            })),
+        )
+        .child(
+          Button::new(SharedString::from(format!("dialog-submit-{id}")))
+            .primary()
+            .label(submit)
+            .disabled(response.is_none())
+            .on_click(cx.listener(move |this, _, window, cx| {
+              if let Some(response) = this.response(cx) {
+                this.reply.send(response, cx);
+                window.close_dialog(cx);
+              }
+            })),
+        ),
+    )
+  }
 }

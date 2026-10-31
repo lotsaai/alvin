@@ -476,7 +476,16 @@ mod tests {
     for event in &recorded.events {
       conversation.apply(event);
       if matches!(&event.body, EventBody::Agent(RpcAgentEvent::QueueUpdate(_))) {
-        waiting.push(conversation.live(live).unwrap().queue.follow_up.clone());
+        waiting.push(
+          conversation
+            .live(live)
+            .unwrap()
+            .queue
+            .follow_up
+            .iter()
+            .map(|message| message.text.clone())
+            .collect::<Vec<_>>(),
+        );
       }
     }
 
@@ -486,7 +495,7 @@ mod tests {
       [vec!["Now reply with the single word done.".to_owned()], Vec::<String>::new()]
     );
     let view = conversation.live(live).unwrap();
-    assert_eq!(view.queue.steering, Vec::<String>::new());
+    assert!(view.queue.steering.is_empty());
     assert_eq!(view.queue.live_steered, 0);
     assert_eq!(comparable(&view.transcript), comparable(&recorded.messages.messages));
     assert_eq!(view.run, Run::Settled);

@@ -12,7 +12,7 @@ mod workspace;
 pub use conversation::{Connection, Conversation};
 pub use dialogs::{Dialogs, request_id};
 pub use live::{Compaction, Level, LiveView, Notice, Origin, Retry, Run, Widget};
-pub use queue::Queue;
+pub use queue::{Queue, QueuedMessage};
 pub use streaming::Streaming;
 pub use tools::{ToolExecution, ToolOutcome, Tools};
 pub use tree::{Node, Tree};

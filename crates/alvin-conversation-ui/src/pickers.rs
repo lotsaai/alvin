@@ -10,7 +10,7 @@ use gpui_kit::component::searchable_list::SearchableListItem;
 use gpui_kit::component::select::{Select, SelectEvent, SelectState};
 use gpui_kit::component::{Sizable as _, h_flex};
 use gpui_kit::{
-  App, AppContext as _, Context, ElementId, Entity, IntoElement, ParentElement as _, SharedString, Styled as _, Subscription, Window, px,
+  App, AppContext as _, Context, ElementId, Entity, IntoElement, ParentElement as _, SharedString, Styled as _, Subscription, Window, rems,
 };
 
 use crate::model::{Catalog, Model};
@@ -81,7 +81,9 @@ impl Pickers {
           if let Some(chosen) = chosen
             && current.as_ref() != Some(key)
           {
-            model.update(cx, |model, cx| model.set_model(live, chosen.provider, chosen.id, cx));
+            model
+              .update(cx, |model, cx| model.set_model(live, chosen.provider, chosen.id, cx))
+              .detach();
           }
         }
       }),
@@ -98,7 +100,7 @@ impl Pickers {
           if let Some(chosen) = chosen
             && current != Some(chosen)
           {
-            model.update(cx, |model, cx| model.set_thinking(live, chosen, cx));
+            model.update(cx, |model, cx| model.set_thinking(live, chosen, cx)).detach();
           }
         }
       }),
@@ -155,14 +157,14 @@ impl Pickers {
           .id("model-picker")
           .accessibility_label("Model")
           .small()
-          .menu_width(px(320.)),
+          .menu_width(rems(20.)),
       )
       .child(
         Button::new(ElementId::from("model-cycle"))
           .small()
           .ghost()
           .label("Next model")
-          .on_click(move |_, _, cx| cycle_model.update(cx, |model, cx| model.cycle_model(live, cx))),
+          .on_click(move |_, _, cx| cycle_model.update(cx, |model, cx| model.cycle_model(live, cx)).detach()),
       )
       .child(
         Select::new(&self.levels)
@@ -175,7 +177,7 @@ impl Pickers {
           .small()
           .ghost()
           .label("Next thinking")
-          .on_click(move |_, _, cx| cycle_thinking.update(cx, |model, cx| model.cycle_thinking(live, cx))),
+          .on_click(move |_, _, cx| cycle_thinking.update(cx, |model, cx| model.cycle_thinking(live, cx)).detach()),
       )
   }
 }

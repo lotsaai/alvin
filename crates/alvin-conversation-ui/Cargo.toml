@@ -10,7 +10,11 @@ alvin-client = { version = "0.1.0", path = "../alvin-client" }
 alvin-conversation = { version = "0.1.0", path = "../alvin-conversation" }
 alvin-protocol = { version = "0.1.0", path = "../alvin-protocol" }
 gpui-kit = "0.8.1"
+lsp-types = "0.97.0"
 serde_json = "1.0.154"
+tracing = "0.1.44"
+verdant = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3" }
+verdant-parsers-git = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3", features = ["markdown", "markdown_inline"] }
 
 [dev-dependencies]
 alvin-gateway = { path = "../alvin-gateway" }

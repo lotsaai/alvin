@@ -20,7 +20,7 @@ pub use error::{Error, Result};
 pub use error_codes::{ErrorCode, ErrorData};
 pub use events::{Event, EventBody};
 pub use history::{EntriesRequest, Entry, EntryKind, HistoryEntries};
-pub use ids::{CheckoutId, EntryId, EventId, LiveSessionId, ProjectId, SessionId};
+pub use ids::{CheckoutId, EntryId, EventId, LiveSessionId, ProjectId, QueuedMessageId, SessionId};
 pub use live::{
   BashRequest, CompactRequest, EntryRequest, EventsApiClient, ExportRequest, ForkRequest, LabelRequest, LiveApiClient, LiveSessionSummary,
   MessagesRequest, NavigateRequest, OpenRequest, OpenTarget, PromptRequest, RenameRequest, SubscribeRequest,
