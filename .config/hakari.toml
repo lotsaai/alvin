@@ -1,0 +1,5 @@
+hakari-package = "alvin-workspace-hack"
+dep-format-version = "4"
+resolver = "2"
+
+platforms = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]

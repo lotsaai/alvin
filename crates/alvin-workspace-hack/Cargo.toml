@@ -1,0 +1,12 @@
+[package]
+name = "alvin-workspace-hack"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "workspace-hack package, managed by hakari"
+
+# To remove these dependencies, omit this crate from your workspace's `members`
+# list in the root Cargo.toml.
+
+### BEGIN HAKARI SECTION
+### END HAKARI SECTION

@@ -14,25 +14,21 @@ python.uv_venv_auto = "create|source"
 [tools]
 "aqua:nextest-rs/nextest/cargo-nextest" = "latest"
 "cargo:cargo-sort" = "latest"
-"go:github.com/sqlc-dev/sqlc/cmd/sqlc" = "latest"
 hk = "latest"
 node = "24"
+bun = "latest"
 pkl = "latest"
 fnox = "latest"
 taplo = "latest"
 shellcheck = "latest"
 cargo-binstall = "latest"
-rust = { version = "latest", profile = "default", components = "llvm-tools,rust-analyzer", targets = "aarch64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android,wasm32-unknown-unknown" }
-# "github:longbridge/nsh" = "0.3.0"
-java = "latest"
+rust = { version = "latest", profile = "default", components = "llvm-tools,rust-analyzer", targets = "aarch64-apple-darwin,wasm32-unknown-unknown" }
 "cargo:cargo-hakari" = "latest"
 "github:casualjim/remark" = "latest"
 uv = "latest"
 python = "3.14"
 yamllint = "latest"
 
-# NSH CLI builds every runner (desktop, iOS, wasm) itself; its version pins the
-# nsh-core/nsh-base crates the app crate depends on (mise.lock holds both).
 [env]
 _.file = ".env"
 # _.fnox-env = { tools = true }

@@ -1,41 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck source=/dev/null
 
-#MISE description="Run all tests this OS can: Rust nextest, the headless NSH tests, then this OS's real hosts"
-#MISE sources=["Cargo.toml", "Cargo.lock", "crates/**/*.rs", "crates/**/Cargo.toml", "crates/**/*.test.tsx"]
-#MISE depends=["nsh:prep", "build:debug"]
-
-proj_dir=$(git rev-parse --show-toplevel)
-cd "$proj_dir" || exit 1
-
-set -euo pipefail
-
-source "$(dirname "$0")/server.sh"
-server_start
-
-cargo nextest run --cargo-quiet --show-progress=bar --status-level=slow "$@"
-nsh test crates/heyday-app "$@"
-# The host tasks below start their own stack on the same ports.
-server_stop
-trap - EXIT
-# The real hosts this OS runs. Their prerequisites (a window server, a
-# browser, simulator runtimes, a plugged-in device) are the machine's setup.
-case "$(uname -s)" in
-Darwin)
-	mise run test:macos
-	mise run test:web
-	mise run test:ios
-	;;
-Linux)
-	mise run test:linux
-	mise run test:web
-	mise run test:android
-	;;
-MINGW* | MSYS* | CYGWIN*)
-	mise run test:windows
-	mise run test:web
-	;;
-*)
-	echo "no real-host NSH tests for $(uname -s)" >&2
-	;;
-esac
+#MISE description="Run all tests: Rust nextest"
+#MISE sources=["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml", "crates/*/build.rs", "crates/*/src/**/*.rs", "crates/*/tests/**/*.rs", "crates/*/fixtures/**"]
+#MISE depends=["test:rust"]

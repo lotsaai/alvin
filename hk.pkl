@@ -11,8 +11,6 @@ local linters = new Mapping<String, Step> {
   ["cargo-clippy"] = new Step {
     glob = List("**/*.rs")
     stage = List("**/*.rs")
-    // NSH generates its runners, describe crate and dev hosts under `.nsh/`.
-    exclude = "**/.nsh/**"
     check = "cargo clippy --quiet --workspace --all-targets -- -D warnings"
     fix = "cargo clippy --quiet --workspace --all-targets --fix --allow-dirty --allow-staged -- -D warnings"
     check_first = true
@@ -21,7 +19,6 @@ local linters = new Mapping<String, Step> {
   ["rustfmt"] = new Step {
     glob = List("**/*.rs")
     stage = List("**/*.rs")
-    exclude = "**/.nsh/**"
     check = "rustfmt --quiet --edition 2024 --check {{files}}"
     fix = "rustfmt --quiet --edition 2024 {{files}}"
     depends = "cargo-sort"
@@ -29,7 +26,6 @@ local linters = new Mapping<String, Step> {
   ["cargo-sort"] = new Step {
     glob = List("**/Cargo.toml")
     stage = List("**/Cargo.toml")
-    exclude = "**/.nsh/**"
     check = "cargo sort --workspace --grouped --check ."
     fix = "cargo sort --workspace --grouped ."
     check_first = true
@@ -51,7 +47,6 @@ local linters = new Mapping<String, Step> {
   }
   ["taplo"] {
     glob = "*.toml"
-    exclude = "**/.nsh/**"
     check = "taplo check {{files}}"
   }
   ["pkl"] {

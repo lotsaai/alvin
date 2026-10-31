@@ -2,7 +2,7 @@
 
 #MISE description="Regenerate the cargo-hakari workspace-hack crate and sync member deps"
 #MISE sources=[".config/hakari.toml", "Cargo.toml", "crates/*/Cargo.toml"]
-#MISE outputs=["crates/heyday-workspace-hack/Cargo.toml"]
+#MISE outputs=["crates/alvin-workspace-hack/Cargo.toml"]
 
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
