@@ -30,9 +30,9 @@ impl WsServer {
 }
 
 impl Gateway {
-  /// Binds `addr` and serves the gateway's methods over WebSocket until [`WsServer::shutdown`].
-  pub async fn serve_ws(&self, addr: SocketAddr) -> Result<WsServer> {
-    let listener = TcpListener::bind(addr).await.map_err(Error::Bind)?;
+  /// Serves the gateway's methods over WebSocket on `listener` until [`WsServer::shutdown`]. The caller binds the
+  /// listener and may keep a clone of it, which keeps the port taken across a restart of the server.
+  pub async fn serve_ws(&self, listener: TcpListener) -> Result<WsServer> {
     let local_addr = listener.local_addr().map_err(Error::Bind)?;
     let (stop, handle) = stop_channel();
     tokio::spawn(accept(self.methods()?, listener, stop));

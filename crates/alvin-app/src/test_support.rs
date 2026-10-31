@@ -1,19 +1,16 @@
 //! Helpers for the app's startup test: a real git repository and a gateway config that starts real omp in isolation.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, Instant};
 
 use alvin_gateway::{GatewayConfig, HostConfig};
 use alvin_protocol::EventId;
-use gpui_kit::TestAppContext;
 
 /// The model the test runs against.
-const MODEL: &str = "zai/glm-5.3-flash";
-
-/// How long a test waits for omp before failing.
-const PATIENCE: Duration = Duration::from_secs(120);
+const MODEL: &str = "openrouter/inclusionai/ling-3.0-flash";
 
 /// The records of one real omp run, used only so the temporary repository is a listed project.
 const SEED_RECORDS: &str = include_str!("../fixtures/seed-session.jsonl");
@@ -54,9 +51,7 @@ impl Fixture {
 
   /// A gateway configuration over the repository's sessions that starts real omp in isolation.
   pub(crate) fn config(&self) -> GatewayConfig {
-    let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
-      .map(PathBuf::from)
-      .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".omp/agent"));
+    // omp gets the fixture's own home and agent directory, and the model key from the environment the tests run in.
     let args = [
       "--no-tools",
       "--no-skills",
@@ -72,10 +67,18 @@ impl Fixture {
     let omp = HostConfig::builder()
       .omp(PathBuf::from("omp"))
       .extra_args(args)
-      .env(vec![
-        (OsString::from("HOME"), self.home.clone().into_os_string()),
-        (OsString::from("PI_CODING_AGENT_DIR"), agent_dir.into_os_string()),
-      ])
+      .env(
+        [
+          (OsString::from("HOME"), self.home.clone().into_os_string()),
+          (OsString::from("PI_CODING_AGENT_DIR"), self.home.join("agent").into_os_string()),
+        ]
+        .into_iter()
+        .chain([(
+          OsString::from("OPENROUTER_API_KEY"),
+          std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is set in the environment the tests run in"),
+        )])
+        .collect(),
+      )
       .build();
     GatewayConfig::builder()
       .sessions_dir(self.sessions.clone())
@@ -92,26 +95,50 @@ impl Drop for Fixture {
   }
 }
 
-/// Whether process `pid` exists.
-pub(crate) fn alive(pid: u32) -> bool {
-  Command::new("kill")
-    .args(["-0", &pid.to_string()])
-    .output()
-    .unwrap()
-    .status
-    .success()
+/// A shell command that reports its pid through the fifo at `fifo`, then becomes `/bin/sleep 600` still holding the
+/// fifo's write end, so reading the fifo reaches end-of-file exactly when the process is gone.
+pub(crate) fn sleeper(fifo: &Path) -> String {
+  format!("/bin/sh -c 'exec 3> {}; echo $$ >&3; exec /bin/sleep 600'", fifo.display())
 }
 
-/// Runs the foreground executor until `done` holds. omp and the gateway run on tokio threads, so progress arrives in real
-/// time: this polls rather than advancing GPUI's test clock.
-pub(crate) fn until(cx: &mut TestAppContext, what: &str, mut done: impl FnMut(&mut TestAppContext) -> bool) {
-  let deadline = Instant::now() + PATIENCE;
-  loop {
-    cx.run_until_parked();
-    if done(cx) {
-      return;
-    }
-    assert!(Instant::now() < deadline, "timed out waiting for {what}");
-    std::thread::sleep(Duration::from_millis(25));
+impl Fixture {
+  /// Creates the fifo a [`sleeper`] reports through.
+  pub(crate) fn make_fifo(&self) -> PathBuf {
+    let fifo = self.base.join("child.fifo");
+    let status = Command::new("mkfifo").arg(&fifo).status().unwrap();
+    assert!(status.success());
+    fifo
+  }
+}
+
+/// A [`sleeper`] that has reported in.
+pub(crate) struct Child {
+  reader: BufReader<File>,
+}
+
+impl Child {
+  /// Waits for the sleeper to report through `fifo`. The fifo is read with blocking calls on the blocking pool: kqueue
+  /// does not report end-of-file on a fifo, so tokio's pipe types cannot tell when the writer died.
+  pub(crate) async fn report(fifo: &Path) -> Self {
+    let fifo = fifo.to_owned();
+    tokio::task::spawn_blocking(move || {
+      // Opening the read end blocks until the sleeper opens the write end.
+      let mut reader = BufReader::new(File::open(fifo).unwrap());
+      let mut line = String::new();
+      reader.read_line(&mut line).unwrap();
+      Self { reader }
+    })
+    .await
+    .unwrap()
+  }
+
+  /// Resolves once the sleeper has died: its write end of the fifo closes with it.
+  pub(crate) async fn died(mut self) {
+    tokio::task::spawn_blocking(move || {
+      let mut rest = Vec::new();
+      self.reader.read_to_end(&mut rest).unwrap();
+    })
+    .await
+    .unwrap();
   }
 }

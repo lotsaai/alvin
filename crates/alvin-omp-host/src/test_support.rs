@@ -1,10 +1,11 @@
 //! Helpers for tests that start real omp.
 
 use std::ffi::OsString;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
 
 use alvin_protocol::{AssistantMessageEvent, EventBody, LiveSessionId, PromptStatus, RpcAgentEvent};
 use tokio::sync::mpsc::Receiver;
@@ -12,10 +13,7 @@ use tokio::sync::mpsc::Receiver;
 use crate::{Host, HostConfig, Session, StartRequest};
 
 /// The model every test runs against.
-pub const MODEL: &str = "zai/glm-5.3-flash";
-
-/// How long a test waits for omp before failing it.
-pub const PATIENCE: Duration = Duration::from_secs(120);
+pub const MODEL: &str = "openrouter/inclusionai/ling-3.0-flash";
 
 /// A uniquely named canonical temporary directory, removed on drop.
 pub struct TempDir(PathBuf);
@@ -49,6 +47,23 @@ pub struct Fixture {
   _home: TempDir,
 }
 
+/// The model key, from the environment the tests run in.
+fn openrouter_api_key() -> OsString {
+  std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is set in the environment the tests run in")
+}
+
+/// The environment of a test's omp: a home and an agent directory of its own, so nothing under the real home is read, and the
+/// model key from the environment the tests run in. Without the key omp reports it when a test prompts.
+fn omp_env(home: &std::path::Path) -> Vec<(OsString, OsString)> {
+  [
+    (OsString::from("HOME"), home.as_os_str().to_owned()),
+    (OsString::from("PI_CODING_AGENT_DIR"), home.join("agent").into_os_string()),
+  ]
+  .into_iter()
+  .chain([(OsString::from("OPENROUTER_API_KEY"), openrouter_api_key())])
+  .collect()
+}
+
 impl Fixture {
   pub fn new() -> Self {
     Self::with_capacity(1024)
@@ -56,9 +71,6 @@ impl Fixture {
 
   pub fn with_capacity(capacity: usize) -> Self {
     let home = TempDir::new();
-    let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
-      .map(PathBuf::from)
-      .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".omp/agent"));
     let config = HostConfig::builder()
       .omp(PathBuf::from("omp"))
       .extra_args(
@@ -66,10 +78,7 @@ impl Fixture {
           .map(OsString::from)
           .to_vec(),
       )
-      .env(vec![
-        (OsString::from("HOME"), home.path().as_os_str().to_owned()),
-        (OsString::from("PI_CODING_AGENT_DIR"), agent_dir.into_os_string()),
-      ])
+      .env(omp_env(home.path()))
       .event_capacity(NonZeroUsize::new(capacity).unwrap())
       .build();
     Self {
@@ -93,12 +102,9 @@ impl Fixture {
   }
 }
 
-/// Receives the next event, failing the test if omp stays silent for [`PATIENCE`].
+/// Receives the next event, failing the test if the stream ended.
 pub async fn next(events: &mut Receiver<EventBody>) -> EventBody {
-  tokio::time::timeout(PATIENCE, events.recv())
-    .await
-    .unwrap()
-    .expect("the event stream ended")
+  events.recv().await.expect("the event stream ended")
 }
 
 /// Collects events up to and including the prompt result.
@@ -148,31 +154,54 @@ pub fn alive(pid: u32) -> bool {
     .success()
 }
 
-/// Waits until `pid` is gone, failing the test after ten seconds.
-pub async fn gone(pid: u32) {
-  for _ in 0..200 {
-    if !alive(pid) {
-      return;
-    }
-    tokio::time::sleep(Duration::from_millis(50)).await;
-  }
-  panic!("process {pid} is still running");
+/// A shell command that reports its own pid through the fifo at `fifo`, then becomes `/bin/sleep 600` still holding
+/// the fifo's write end. omp runs commands in its own shell where `sleep` is a builtin without a process and `$!` is
+/// empty, so the child reports its pid itself; the sandbox denies listing processes.
+pub fn sleeper(fifo: &Path) -> String {
+  format!("/bin/sh -c 'exec 3> {}; echo $$ >&3; exec /bin/sleep 600'", fifo.display())
 }
 
-/// A shell command that writes its own pid to `file`, then becomes `/bin/sleep 600`. omp runs commands in its own shell
-/// where `sleep` is a builtin without a process and `$!` is empty, so the child reports its pid itself; the sandbox
-/// denies listing processes.
-pub fn sleeper(file: &Path) -> String {
-  format!("/bin/sh -c 'echo $$ > {}; exec /bin/sleep 600'", file.display())
+/// Creates the fifo a [`sleeper`] reports through.
+pub fn make_fifo(dir: &Path) -> PathBuf {
+  let fifo = dir.join("child.fifo");
+  let status = Command::new("mkfifo").arg(&fifo).status().unwrap();
+  assert!(status.success());
+  fifo
 }
 
-/// Waits for `file` to hold a pid and returns it, failing the test after ten seconds.
-pub async fn pid_in(file: &Path) -> u32 {
-  for _ in 0..200 {
-    if let Some(pid) = std::fs::read_to_string(file).ok().and_then(|text| text.trim().parse().ok()) {
-      return pid;
-    }
-    tokio::time::sleep(Duration::from_millis(50)).await;
+/// A [`sleeper`] that has reported in.
+pub struct Child {
+  /// The sleeper's pid.
+  pub pid: u32,
+  reader: BufReader<File>,
+}
+
+impl Child {
+  /// Waits for the sleeper to report its pid through `fifo`. The fifo is read with blocking calls on the blocking
+  /// pool: kqueue does not report end-of-file on a fifo, so tokio's pipe types cannot tell when the writer died.
+  pub async fn report(fifo: &Path) -> Self {
+    let fifo = fifo.to_owned();
+    tokio::task::spawn_blocking(move || {
+      // Opening the read end blocks until the sleeper opens the write end.
+      let mut reader = BufReader::new(File::open(fifo).unwrap());
+      let mut line = String::new();
+      reader.read_line(&mut line).unwrap();
+      Self {
+        pid: line.trim().parse().unwrap(),
+        reader,
+      }
+    })
+    .await
+    .unwrap()
   }
-  panic!("{} never received a pid", file.display());
+
+  /// Resolves once the sleeper has died: its write end of the fifo closes with it.
+  pub async fn died(mut self) {
+    tokio::task::spawn_blocking(move || {
+      let mut rest = Vec::new();
+      self.reader.read_to_end(&mut rest).unwrap();
+    })
+    .await
+    .unwrap();
+  }
 }

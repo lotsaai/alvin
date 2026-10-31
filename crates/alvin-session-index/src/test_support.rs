@@ -52,20 +52,17 @@ pub fn run(dir: &Path, program: &str, args: &[&str]) {
 
 /// Runs real `omp` once in `cwd` and returns the session file it wrote under `session_dir`.
 ///
-/// The run is isolated: `HOME` is a throwaway directory, so omp reads and writes nothing under the real home
-/// (the sandbox denies parts of it, and tests must not touch it). omp still reads the machine's agent
-/// configuration, so its model credentials resolve; this code never opens or prints anything in it.
+/// The run is isolated: `HOME` and omp's agent directory are throwaway directories, so omp reads and writes nothing under the
+/// real home (the sandbox denies parts of it, and tests must not touch it). The model key comes from the environment the
+/// tests run in.
 pub fn run_omp(cwd: &Path, session_dir: &Path, prompt: &str) -> PathBuf {
   let home = TempDir::new();
-  let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
-    .map(PathBuf::from)
-    .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".omp/agent"));
   let output = Command::new("omp")
     .args([
       "-p",
       prompt,
       "--model",
-      "zai/glm-5.3-flash",
+      "openrouter/inclusionai/ling-3.0-flash",
       "--no-tools",
       "--no-skills",
       "--no-rules",
@@ -75,7 +72,11 @@ pub fn run_omp(cwd: &Path, session_dir: &Path, prompt: &str) -> PathBuf {
     .arg(session_dir)
     .current_dir(cwd)
     .env("HOME", home.path())
-    .env("PI_CODING_AGENT_DIR", agent_dir)
+    .env("PI_CODING_AGENT_DIR", home.path().join("agent"))
+    .env(
+      "OPENROUTER_API_KEY",
+      std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is set in the environment the tests run in"),
+    )
     .output()
     .unwrap();
   assert!(

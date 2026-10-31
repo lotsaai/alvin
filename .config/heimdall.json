@@ -10,6 +10,7 @@
         "~/.bun",
         "~/.cache/bun",
         "~/.cache/hk",
+        "~/.cache/uv",
         "~/.local/state/mise",
         "~/.local/share/mise",
         "~/.local/state/hk",
@@ -86,6 +87,44 @@
       ],
       "bare": true,
       "message": "run `mise test:rust` bare only, no pipe, no tail, no redirect, just the command"
+    },
+    {
+      "name": "bare-only-format-rust",
+      "blocked": [
+        "mise",
+        "format"
+      ],
+      "bare": true,
+      "message": "run `mise format` bare only, no pipe, no tail, no redirect, just the command"
+    },
+    {
+      "name": "bare-only-run-format-rust",
+      "blocked": [
+        "mise",
+        "run",
+        "format"
+      ],
+      "bare": true,
+      "message": "run `mise run format` bare only, no pipe, no tail, no redirect, just the command"
+    },
+    {
+      "name": "bare-only-check-rust",
+      "blocked": [
+        "mise",
+        "check"
+      ],
+      "bare": true,
+      "message": "run `mise check` bare only, no pipe, no tail, no redirect, just the command"
+    },
+    {
+      "name": "bare-only-run-check-rust",
+      "blocked": [
+        "mise",
+        "run",
+        "check"
+      ],
+      "bare": true,
+      "message": "run `mise run check` bare only, no pipe, no tail, no redirect, just the command"
     },
     {
       "name": "no-cargo-check",

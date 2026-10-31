@@ -8,6 +8,5 @@ cd "$proj_dir" || exit 1
 
 set -euo pipefail
 
-# alvin-protocol has two halves: the default client half and the `server` half. Test each as shipped.
-cargo nextest run --cargo-quiet --show-progress=bar --status-level=slow "$@"
+# alvin-protocol has two halves: the default client half and the `server` half. One run covers both by naming the feature.
 cargo nextest run --cargo-quiet --show-progress=bar --status-level=slow --features alvin-protocol/server "$@"

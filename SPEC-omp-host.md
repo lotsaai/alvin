@@ -72,7 +72,7 @@ crates/alvin-omp-host/src/job.rs        Windows Job Object, cfg(windows), plan T
 
 ## Testing Strategy
 
-- Real omp: tests start `omp --mode rpc-ui` with model `zai/glm-5.3-flash` and use omp's existing configuration; they never read credentials.
+- Real omp: tests start `omp --mode rpc-ui` with model `openrouter/inclusionai/ling-3.0-flash` and use omp's existing configuration; they never read credentials.
 - Dialogs: a prompt that makes omp call its `ask` tool produces one `ask` extension UI request, and the answer reaches omp.
 - A real prompt round trip streams text deltas and ends with a prompt result, in order.
 - Abort stops a running turn; `bash` runs a command and returns its output.

@@ -1,8 +1,9 @@
 //! The crate's error type. Every variant that comes from `omp-rpc` keeps it as its `#[source]` and names the session's
 //! working directory and, where one is involved, the command.
 
-use std::io;
 use std::path::PathBuf;
+
+use crate::transport::Error as RpcError;
 
 /// What can go wrong supervising an omp process.
 #[derive(Debug, thiserror::Error)]
@@ -14,7 +15,7 @@ pub enum Error {
     cwd: PathBuf,
     /// The failure.
     #[source]
-    source: Box<omp_rpc::Error>,
+    source: Box<RpcError>,
   },
 
   /// omp did not send its `ready` frame in time.
@@ -24,7 +25,7 @@ pub enum Error {
     cwd: PathBuf,
     /// The timeout.
     #[source]
-    source: Box<omp_rpc::Error>,
+    source: Box<RpcError>,
   },
 
   /// omp rejected a command. `code` is omp's own error code when it sent one.
@@ -38,7 +39,7 @@ pub enum Error {
     code: Option<String>,
     /// omp's answer.
     #[source]
-    source: Box<omp_rpc::Error>,
+    source: Box<RpcError>,
   },
 
   /// The omp process is gone: it exited or the session was closed.
@@ -48,7 +49,7 @@ pub enum Error {
     cwd: PathBuf,
     /// What the client saw.
     #[source]
-    source: Box<omp_rpc::Error>,
+    source: Box<RpcError>,
   },
 
   /// Any other failure talking to omp: a deadline, a malformed frame, a broken pipe.
@@ -60,7 +61,7 @@ pub enum Error {
     command: &'static str,
     /// The failure.
     #[source]
-    source: Box<omp_rpc::Error>,
+    source: Box<RpcError>,
   },
 
   /// An entry of omp's history lacks the fields every entry has.
@@ -90,25 +91,7 @@ pub enum Error {
     cwd: PathBuf,
     /// The failure.
     #[source]
-    source: Box<omp_rpc::Error>,
-  },
-
-  /// Closing found a command still in flight. Teardown finishes when that command returns and the last handle to the
-  /// process drops.
-  #[error("a command is still running in {cwd}; omp is torn down when it returns")]
-  CloseInFlight {
-    /// The session's working directory.
-    cwd: PathBuf,
-  },
-
-  /// The event bridge thread could not be started.
-  #[error("starting the event bridge for {cwd}")]
-  Bridge {
-    /// The session's working directory.
-    cwd: PathBuf,
-    /// The failure.
-    #[source]
-    source: io::Error,
+    source: Box<RpcError>,
   },
 
   /// A hook cancelled the switch to the session file being resumed.
@@ -126,10 +109,6 @@ pub enum Error {
     /// The path.
     path: PathBuf,
   },
-
-  /// A blocking task panicked or was cancelled.
-  #[error("blocking omp task did not finish")]
-  Task(#[from] tokio::task::JoinError),
 }
 
 /// Result alias for this crate.
@@ -137,12 +116,12 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 impl Error {
   /// Classifies an `omp-rpc` failure of `command` in `cwd`.
-  pub(crate) fn from_rpc(cwd: &std::path::Path, command: &'static str, source: omp_rpc::Error) -> Self {
+  pub(crate) fn from_rpc(cwd: &std::path::Path, command: &'static str, source: RpcError) -> Self {
     let cwd = cwd.to_path_buf();
     let source = Box::new(source);
     match *source {
-      omp_rpc::Error::Closed => Self::ProcessExited { cwd, source },
-      omp_rpc::Error::Command { ref code, .. } => Self::Command {
+      RpcError::Closed => Self::ProcessExited { cwd, source },
+      RpcError::Command { ref code, .. } => Self::Command {
         cwd,
         command,
         code: code.clone(),

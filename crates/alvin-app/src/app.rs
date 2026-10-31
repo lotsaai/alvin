@@ -8,7 +8,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use alvin_client::{ChannelPair, Client, Endpoint};
-use alvin_conversation_ui::Workspace;
+use alvin_conversation_ui::{Model, Workspace};
 use alvin_gateway::Gateway;
 use gpui_kit::{App, AppContext as _, Bounds, Entity, KeyBinding, WindowBounds, WindowOptions, actions, px, size};
 
@@ -96,7 +96,11 @@ pub(crate) fn start(cx: &mut App, client: Client, embedded: Embedded) -> eyre::R
       ..Default::default()
     },
     cx,
-    |window, cx| cx.new(|cx| Workspace::new(client, window, cx)),
+    |window, cx| {
+      let model = cx.new(|cx| Model::new(client, cx));
+      model.update(cx, |model, cx| model.refresh_projects(cx)).detach();
+      cx.new(|cx| Workspace::new(model, window, cx))
+    },
   )
   .map_err(|error| eyre::eyre!("opening the main window: {error}"))?;
   Ok(workspace)
@@ -141,46 +145,44 @@ mod tests {
   use gpui_kit::TestAppContext;
 
   use super::{Embedded, Quit, start};
-  use crate::test_support::{Fixture, alive, until};
+  use crate::test_support::{Child, Fixture, sleeper};
 
-  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
   async fn the_window_lists_the_project_opens_a_session_and_quit_leaves_no_omp(cx: &mut TestAppContext) {
+    // `#[tokio::test]` polls this body, so GPUI's scheduler would never step the tasks it awaits. GPUI's executor drives the
+    // body instead, while tokio's runtime context stays entered for the client and gateway tasks.
     cx.executor().allow_parking();
+    let executor = cx.foreground_executor().clone();
+    executor.block_test(async {
     let fixture = Fixture::new();
     let gateway = Gateway::new(fixture.config());
     let channel = |capacity| ChannelPair::from(gateway.connect_channel(capacity).unwrap());
     let client = Client::connect(Endpoint::Channel(channel(64))).await.unwrap();
-    // A second connection to the same gateway: it finds the omp process id and sees that quit closed the session.
+    // A second connection to the same gateway: it runs a command in the session and sees that quit closed it.
     let probe = Client::connect(Endpoint::Channel(channel(16))).await.unwrap();
 
     let workspace = cx.update(|cx| start(cx, client, Embedded(Some(gateway.clone())))).unwrap();
     let model = cx.read(|cx| workspace.read(cx).model().clone());
-    until(cx, "the temporary project to be listed", |cx| {
-      cx.read(|cx| !model.read(cx).conversation().workspace().projects().is_empty())
-    });
+    cx.update(|cx| model.update(cx, |model, cx| model.refresh_projects(cx))).await;
 
     let (project, checkout) = cx.read(|cx| {
       let project = model.read(cx).conversation().workspace().projects()[0].clone();
       (project.id, project.checkouts[0].id.clone())
     });
-    cx.update(|cx| model.update(cx, |model, cx| model.new_session(project, checkout, cx)));
-    until(cx, "the session to open", |cx| cx.read(|cx| workspace.read(cx).active().is_some()));
+    cx.update(|cx| model.update(cx, |model, cx| model.new_session(project, checkout, cx)))
+      .await;
     let live = cx.read(|cx| workspace.read(cx).active().unwrap());
-    let result = LiveApiClient::bash(
-      &probe,
-      BashRequest {
-        live,
-        command: "echo pid=$$".to_owned(),
-      },
-    )
-    .await
-    .unwrap();
-    let pid: u32 = result.output.trim().strip_prefix("pid=").unwrap().parse().unwrap();
-    assert!(alive(pid));
+    // A foreground command that reports in and keeps running; the call is dropped once it has reported.
+    let fifo = fixture.make_fifo();
+    let child = tokio::select! {
+      result = LiveApiClient::bash(&probe, BashRequest { live, command: sleeper(&fifo) }) => panic!("the sleeper ended on its own: {result:?}"),
+      child = Child::report(&fifo) => child,
+    };
 
     cx.update(|cx| cx.dispatch_action(&Quit));
-    until(cx, "omp to be gone", |_| !alive(pid));
+    child.died().await;
     assert_eq!(LiveApiClient::list(&probe).await.unwrap(), vec![]);
+    })
   }
 }

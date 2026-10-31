@@ -1,0 +1,15 @@
+[profile.default]
+# Every test talks to real omp and finishes in seconds. A test over 1 minute is reported as slow, and over 2 minutes it is hung: nextest kills it.
+slow-timeout = { period = "1m", terminate-after = 2 }
+
+[profile.default.junit]
+path = "junit.xml"
+
+# Each of these tests starts a real omp process, which costs CPU and a model call. Started all at once they starve
+# each other, so at most four run at a time.
+[test-groups]
+omp = { max-threads = 4 }
+
+[[profile.default.overrides]]
+filter = 'package(alvin-gateway) | package(alvin-omp-host) | package(alvin-session-index) | package(alvin-app)'
+test-group = 'omp'

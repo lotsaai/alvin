@@ -1,13 +1,15 @@
-//! Pure translation from `omp-rpc` events to protocol event bodies.
+//! Pure translation from the transport's events to protocol event bodies.
 //!
-//! `omp-rpc` and `alvin-protocol` both generate their wire types from omp's schema, so the types match in shape but are
-//! distinct Rust types: `alvin-protocol` must not depend on `omp-rpc`. A value crosses by way of its JSON form.
+//! The transport and `alvin-protocol` both generate their wire types from omp's schema, so the types match in shape but
+//! are distinct Rust types: `alvin-protocol` must not depend on `omp-rpc`. A value crosses by way of its JSON form.
 
 use alvin_protocol::EventBody;
-use omp_rpc::{Event, RpcNotification};
+use omp_rpc::RpcNotification;
 use serde::Serialize;
 use serde::de::Deserialize;
 use serde_json::Value;
+
+use crate::transport::Event;
 
 /// A frame omp sent that the protocol does not expose.
 #[derive(Debug, Clone, PartialEq)]
@@ -26,7 +28,7 @@ impl Untranslated {
 /// Translates one `omp-rpc` event into a protocol event body, or into the raw frame when the protocol does not expose it.
 pub fn translate(event: Event) -> Result<EventBody, Untranslated> {
   match event {
-    Event::Notification(notification) => notification_body(notification),
+    Event::Notification(notification) => notification_body(*notification),
     Event::UnmatchedResponse(response) => untranslated(&response),
     Event::Undecodable { raw, error } => Ok(EventBody::Undecodable { raw, error }),
   }
@@ -98,7 +100,7 @@ mod tests {
       .filter_map(|line| {
         let frame: Value = serde_json::from_str(line).unwrap();
         match RpcServerFrame::deserialize(&frame).unwrap() {
-          RpcServerFrame::RpcNotification(notification) => Some(Event::Notification(notification)),
+          RpcServerFrame::RpcNotification(notification) => Some(Event::Notification(Box::new(notification))),
           RpcServerFrame::Response(_) => None,
           other => panic!("unexpected frame {other:?}"),
         }
@@ -161,7 +163,7 @@ mod tests {
   fn an_unknown_frame_is_untranslated_with_its_raw_json() {
     let frame = serde_json::json!({ "type": "from_the_future", "n": 1 });
 
-    let translated = translate(Event::Notification(RpcNotification::Unknown(frame.clone())));
+    let translated = translate(Event::Notification(Box::new(RpcNotification::Unknown(frame.clone()))));
 
     assert_eq!(translated, Err(Untranslated { frame }));
   }

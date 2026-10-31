@@ -22,7 +22,8 @@ fn main() -> eyre::Result<()> {
 fn run(settings: Settings) -> eyre::Result<()> {
   tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(async {
     let gateway = Gateway::new(settings.gateway);
-    let server = gateway.serve_ws(settings.listen).await?;
+    let listener = tokio::net::TcpListener::bind(settings.listen).await?;
+    let server = gateway.serve_ws(listener).await?;
     tracing::info!(addr = %server.local_addr(), "alvind listening");
     shutdown_signal().await?;
     tracing::info!("shutting down");

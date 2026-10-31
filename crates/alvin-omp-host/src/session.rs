@@ -3,7 +3,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::{Duration, Instant};
 
 use alvin_protocol::{
   AbortAndRestoreQueueResult, AvailableSlashCommand, BashResult, BranchMessage, BranchResult, CancellationResult, CompactionResult,
@@ -12,14 +11,14 @@ use alvin_protocol::{
 };
 use omp_rpc::{
   AbortAndPromptCommand, AbortAndRestoreQueueCommand, AbortBashCommand, AbortBranchSummaryCommand, AbortCommand, BashCommand,
-  BranchCommand, Client, Command, CompactCommand, CycleModelCommand, CycleThinkingLevelCommand, ExportHtmlCommand, FollowUpCommand,
-  ForkCommand, GetAvailableCommandsCommand, GetAvailableModelsCommand, GetAvailableThinkingLevelsCommand, GetBranchMessagesCommand,
-  GetEntriesCommand, GetMessagesPageCommand, GetSessionStatsCommand, GetStateCommand, NavigateTreeCommand, PromoteQueuedMessageCommand,
-  PromptCommand, RemoveQueuedMessageCommand, RpcInbound, SetLabelCommand, SetModelCommand, SetSessionNameCommand, SetThinkingLevelCommand,
-  SteerCommand,
+  BranchCommand, Command, CompactCommand, CycleModelCommand, CycleThinkingLevelCommand, ExportHtmlCommand, FollowUpCommand, ForkCommand,
+  GetAvailableCommandsCommand, GetAvailableModelsCommand, GetAvailableThinkingLevelsCommand, GetBranchMessagesCommand, GetEntriesCommand,
+  GetMessagesPageCommand, GetSessionStatsCommand, GetStateCommand, NavigateTreeCommand, PromoteQueuedMessageCommand, PromptCommand,
+  RemoveQueuedMessageCommand, RpcInbound, SetLabelCommand, SetModelCommand, SetSessionNameCommand, SetThinkingLevelCommand, SteerCommand,
 };
 
 use crate::translate::convert;
+use crate::transport::{Client, Error as RpcError};
 use crate::{Error, Result};
 
 /// A running `omp --mode rpc-ui` process and its working directory. Dropping the handle tears the
@@ -27,7 +26,8 @@ use crate::{Error, Result};
 pub struct Session {
   cwd: PathBuf,
   pid: u32,
-  client: Option<Arc<Client>>,
+  /// `None` once closed.
+  client: Option<Client>,
   closing: Arc<AtomicBool>,
   untranslated: Arc<AtomicU64>,
 }
@@ -45,7 +45,7 @@ impl Session {
     Self {
       cwd,
       pid,
-      client: Some(Arc::new(client)),
+      client: Some(client),
       closing,
       untranslated,
     }
@@ -118,12 +118,11 @@ impl Session {
     let response = convert("dialog response", &response)?;
     let client = self
       .client
-      .clone()
-      .ok_or_else(|| Error::from_rpc(&self.cwd, "extension_ui_response", omp_rpc::Error::Closed))?;
-    let cwd = self.cwd.clone();
-    // Queueing a frame does not wait for omp, but the client's lock is blocking.
-    let outcome = tokio::task::spawn_blocking(move || client.send(&RpcInbound::ExtensionUiResponse(response))).await?;
-    outcome.map_err(|source| Error::from_rpc(&cwd, "extension_ui_response", source))
+      .as_ref()
+      .ok_or_else(|| Error::from_rpc(&self.cwd, "extension_ui_response", RpcError::Closed))?;
+    client
+      .send(&RpcInbound::ExtensionUiResponse(response))
+      .map_err(|source| Error::from_rpc(&self.cwd, "extension_ui_response", source))
   }
 
   /// The entries omp appended after `since`, or all of them.
@@ -290,29 +289,30 @@ impl Session {
     self.call(AbortBashCommand::default()).await
   }
 
-  /// Closes the session and confirms that omp and its children are gone. Fails with [`Error::CloseInFlight`] when a
-  /// command is still running; the teardown then finishes when it returns.
+  /// Closes the session and confirms that omp and its children are gone: running work is aborted first, then the client
+  /// closes and takes the process tree down.
   pub async fn close(mut self) -> Result<()> {
     self.closing.store(true, Ordering::SeqCst);
     let client = self
       .client
       .take()
-      .ok_or_else(|| Error::from_rpc(&self.cwd, "close", omp_rpc::Error::Closed))?;
-    let cwd = self.cwd.clone();
-    tokio::task::spawn_blocking(move || teardown(cwd, client)).await?
+      .ok_or_else(|| Error::from_rpc(&self.cwd, "close", RpcError::Closed))?;
+    abort_running_work(&self.cwd, &client).await;
+    client.close().await.map_err(|source| Error::Teardown {
+      cwd: self.cwd.clone(),
+      source: Box::new(source),
+    })
   }
 
-  async fn call<C>(&self, command: C) -> Result<C::Output>
-  where
-    C: Command + Send + 'static,
-    C::Output: Send + 'static,
-  {
+  async fn call<C: Command>(&self, command: C) -> Result<C::Output> {
     let client = self
       .client
-      .clone()
-      .ok_or_else(|| Error::from_rpc(&self.cwd, C::NAME, omp_rpc::Error::Closed))?;
-    let outcome = tokio::task::spawn_blocking(move || client.call(&command)).await?;
-    outcome.map_err(|source| Error::from_rpc(&self.cwd, C::NAME, source))
+      .as_ref()
+      .ok_or_else(|| Error::from_rpc(&self.cwd, C::NAME, RpcError::Closed))?;
+    client
+      .call(&command)
+      .await
+      .map_err(|source| Error::from_rpc(&self.cwd, C::NAME, source))
   }
 }
 
@@ -322,71 +322,42 @@ impl Drop for Session {
     let Some(client) = self.client.take() else {
       return;
     };
-    let cwd = self.cwd.clone();
-    let job = move || {
-      if let Err(error) = teardown(cwd, client) {
-        tracing::warn!(%error, "tearing down a dropped omp session");
-      }
-    };
-    // Tearing down waits for omp to exit, so it never runs on a runtime worker.
-    match tokio::runtime::Handle::try_current() {
-      Ok(runtime) => drop(runtime.spawn_blocking(job)),
-      Err(error) => {
-        tracing::trace!(%error, "dropped outside a runtime; tearing down inline");
-        job();
-      }
+    // Aborting and tearing down wait on omp, so they run as a task. Without a runtime the client's own drop ends the
+    // process tree.
+    if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+      let cwd = self.cwd.clone();
+      drop(runtime.spawn(async move {
+        abort_running_work(&cwd, &client).await;
+        if let Err(error) = client.close().await {
+          tracing::warn!(%error, cwd = %cwd.display(), "tearing down a dropped omp session");
+        }
+      }));
     }
   }
 }
 
-/// How long teardown waits for commands in flight to return after aborting them.
-const IN_FLIGHT_GRACE: Duration = Duration::from_secs(5);
-
-/// Stops running work, then closes the client once nothing else holds it: SIGTERM then SIGKILL to omp's process group
-/// on Unix.
-///
 /// omp runs every command in a process group of its own, so signalling omp's group cannot reach a running command's
 /// processes. omp kills its own children when told to abort, so abort first. Processes a command left running in the
 /// background after it returned are out of reach here.
-fn teardown(cwd: PathBuf, client: Arc<Client>) -> Result<()> {
-  abort_running_work(&cwd, &client);
-  let deadline = Instant::now() + IN_FLIGHT_GRACE;
-  while Arc::strong_count(&client) > 1 && Instant::now() < deadline {
-    std::thread::sleep(Duration::from_millis(10));
-  }
-  match Arc::try_unwrap(client) {
-    Ok(client) => client.close().map_err(|source| Error::Teardown {
-      cwd,
-      source: Box::new(source),
-    }),
-    Err(client) => {
-      drop(client);
-      Err(Error::CloseInFlight { cwd })
-    }
-  }
+async fn abort_running_work(cwd: &Path, client: &Client) {
+  log_abort(cwd, AbortBashCommand::NAME, client.call(&AbortBashCommand::default()).await);
+  log_abort(cwd, AbortCommand::NAME, client.call(&AbortCommand::default()).await);
 }
 
-fn abort_running_work(cwd: &Path, client: &Client) {
-  log_abort(cwd, AbortBashCommand::NAME, client.call(&AbortBashCommand::default()));
-  log_abort(cwd, AbortCommand::NAME, client.call(&AbortCommand::default()));
-}
-
-fn log_abort(cwd: &Path, command: &'static str, outcome: std::result::Result<(), omp_rpc::Error>) {
+fn log_abort(cwd: &Path, command: &'static str, outcome: std::result::Result<(), RpcError>) {
   match outcome {
     // The process already ended: nothing left to abort.
-    Ok(()) | Err(omp_rpc::Error::Closed) => {}
+    Ok(()) | Err(RpcError::Closed) => {}
     Err(error) => tracing::warn!(cwd = %cwd.display(), command, %error, "aborting before teardown failed"),
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use std::time::Duration;
-
   use alvin_protocol::{AssistantMessageEvent, EventBody, PromptStatus, RpcAgentEvent};
 
   use crate::Error;
-  use crate::test_support::{Fixture, PATIENCE, alive, gone, next, pid_in, prompt_status, sleeper, streamed_text, until_prompt_result};
+  use crate::test_support::{Child, Fixture, alive, make_fifo, next, prompt_status, sleeper, streamed_text, until_prompt_result};
 
   #[tokio::test]
   async fn a_prompt_streams_text_deltas_in_order_and_ends_with_its_result() {
@@ -445,13 +416,14 @@ mod tests {
     session.close().await.unwrap();
   }
 
-  /// Starts `sleeper` as a running foreground command and returns its process id. The call's future is dropped, as a
-  /// cancelled request would be, so its blocking task keeps waiting while the test closes the session.
-  async fn running_child(session: &super::Session, fixture: &Fixture) -> u32 {
-    let file = fixture.cwd.path().join("child.pid");
-    let cancelled = tokio::time::timeout(Duration::from_millis(500), session.bash(sleeper(&file))).await;
-    assert!(cancelled.is_err());
-    pid_in(&file).await
+  /// Starts `sleeper` as a foreground command and returns it once it has reported in. The call's future is dropped
+  /// when the child reports, as a cancelled request would be, while the command keeps running in omp.
+  async fn running_child(session: &super::Session, fixture: &Fixture) -> Child {
+    let fifo = make_fifo(fixture.cwd.path());
+    tokio::select! {
+      result = session.bash(sleeper(&fifo)) => panic!("the sleeper ended on its own: {result:?}"),
+      child = Child::report(&fifo) => child,
+    }
   }
 
   #[tokio::test]
@@ -460,26 +432,27 @@ mod tests {
     let (session, _events) = fixture.start().await;
     let omp = session.pid();
     let child = running_child(&session, &fixture).await;
-    assert!(alive(omp) && alive(child));
+    let child_pid = child.pid;
+    assert!(alive(omp) && alive(child_pid));
 
     session.close().await.unwrap();
 
     assert!(!alive(omp), "omp {omp} survived close");
-    assert!(!alive(child), "child {child} survived close");
+    child.died().await;
+    assert!(!alive(child_pid), "child {child_pid} survived close");
   }
 
   #[tokio::test]
-  async fn dropping_the_handle_leaves_neither_omp_nor_a_running_command() {
+  async fn dropping_the_handle_leaves_no_running_command_and_ends_the_event_stream() {
     let fixture = Fixture::new();
-    let (session, _events) = fixture.start().await;
-    let omp = session.pid();
+    let (session, mut events) = fixture.start().await;
     let child = running_child(&session, &fixture).await;
-    assert!(alive(omp) && alive(child));
 
     drop(session);
 
-    gone(omp).await;
-    gone(child).await;
+    // The stream ends when omp's stdout closes, which happens when teardown has killed it.
+    while events.recv().await.is_some() {}
+    child.died().await;
   }
 
   #[tokio::test]
@@ -512,17 +485,8 @@ mod tests {
       .prompt("Write the numbers from 1 to 60, one per line, nothing else.".to_owned())
       .await
       .unwrap();
-    let mut seen = Vec::new();
-    let deadline = tokio::time::Instant::now() + PATIENCE;
-    loop {
-      let event = tokio::time::timeout_at(deadline, events.recv()).await.unwrap().unwrap();
-      let done = matches!(event, EventBody::PromptResult(_));
-      seen.push(event);
-      if done {
-        break;
-      }
-      tokio::time::sleep(Duration::from_millis(15)).await;
-    }
+    // A one-event channel makes omp's frames queue behind the consumer; the test reads them as they arrive.
+    let seen = until_prompt_result(&mut events).await;
 
     let (streamed, ended) = streamed_text(&seen);
     assert!(streamed.contains("60"), "{streamed:?}");

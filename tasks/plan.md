@@ -158,7 +158,7 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 **Acceptance criteria:**
 - [ ] On Windows, the Task 7 teardown tests pass, including the grandchild `bash` case.
 - [ ] macOS and Linux behavior is unchanged.
-**Verification:** `mise format` on macOS. Then write `tasks/briefs/task-10-windows.md`. It covers: the revision; prerequisites (mise, omp at the pinned version, an omp config that can reach `zai/glm-5.3-flash`); running `mise run --force test`; the teardown tests to watch, which must leave no `omp.exe` and no grandchild `bash`, confirmed with `Get-Process`; and a report format (pass/fail per test, full failure output, `omp --version`, `rustc --version`). The user runs the brief on the Windows VM and relays the report. Fixes found there go through the same loop. If the VM is not ready, Task 10 stays blocked. Task 11 onward does not depend on it, so work continues, and Task 10's verification is due before the final checkpoint.
+**Verification:** `mise format` on macOS. Then write `tasks/briefs/task-10-windows.md`. It covers: the revision; prerequisites (mise, omp at the pinned version, an omp config that can reach `openrouter/inclusionai/ling-3.0-flash`); running `mise run --force test`; the teardown tests to watch, which must leave no `omp.exe` and no grandchild `bash`, confirmed with `Get-Process`; and a report format (pass/fail per test, full failure output, `omp --version`, `rustc --version`). The user runs the brief on the Windows VM and relays the report. Fixes found there go through the same loop. If the VM is not ready, Task 10 stays blocked. Task 11 onward does not depend on it, so work continues, and Task 10's verification is due before the final checkpoint.
 **Dependencies:** 7. **Files:** `crates/alvin-omp-host/src/{job,host}.rs`, `Cargo.toml`. **Scope:** S.
 
 ### Checkpoint 2b: CLI end to end
@@ -250,7 +250,7 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 |---|---|---|
 | omp's `emitRust` output or our patch doesn't produce compiling, wasm-safe, `allow`-free code | High | Task 2 is a spike with a findings note and a checkpoint before anything depends on it |
 | omp file facts (title slot, status windows) differ in 18.14.0 | Med | Task 3 confirms them against real files first and updates the spec |
-| Real-omp tests are slow or flaky (model latency, `zai/glm-5.3-flash` availability) | Med | Use deterministic prompts (`!cmd`, short replies). No retries added to tests. Flakes get reported, not masked |
+| Real-omp tests are slow or flaky (model latency, `openrouter/inclusionai/ling-3.0-flash` availability) | Med | Use deterministic prompts (`!cmd`, short replies). No retries added to tests. Flakes get reported, not masked |
 | Windows feedback loop is slow and goes through the user | Med | Briefs are self-contained, with exact commands and a fixed report format, so one relay round trip gives a full result. Windows-only code stays in `job.rs` |
 | gpui-kit `MessageScroller` / headless test gaps | Med | Task 12 reads the component docs first. Any missing test support is escalated, not worked around |
 

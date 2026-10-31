@@ -73,6 +73,8 @@ enum Entry {
 #[derive(Deserialize)]
 struct Message {
   role: String,
+  /// Absent on messages that are not chat turns, such as `bashExecution`.
+  #[serde(default)]
   content: serde_json::Value,
 }
 
@@ -267,6 +269,21 @@ mod tests {
     let head = parse(Path::new("s.jsonl"), format!("{header}\n").as_bytes(), modified()).unwrap();
 
     assert_eq!(head.title.as_deref(), Some("from header"));
+  }
+
+  #[test]
+  fn a_message_without_content_does_not_fail_the_head() {
+    let (_slot, header) = real_head();
+    let bash = r#"{"type":"message","id":"b1","message":{"role":"bashExecution","command":"ls","output":"","exitCode":0}}"#;
+
+    let head = parse(
+      Path::new("s.jsonl"),
+      format!("{header}\n{bash}\n{}\n", user_message("after bash")).as_bytes(),
+      modified(),
+    )
+    .unwrap();
+
+    assert_eq!(head.title.as_deref(), Some("after bash"));
   }
 
   #[test]

@@ -317,12 +317,12 @@ mod tests {
       target: OpenTarget::Session {
         session: SessionId::from("s".to_owned()),
       },
-      model: Some("zai/glm-5.3-flash".to_owned()),
+      model: Some("openrouter/inclusionai/ling-3.0-flash".to_owned()),
     };
     let json = serde_json::to_value(&resume).unwrap();
     assert_eq!(
       json,
-      json!({ "target": { "kind": "session", "session": "s" }, "model": "zai/glm-5.3-flash" })
+      json!({ "target": { "kind": "session", "session": "s" }, "model": "openrouter/inclusionai/ling-3.0-flash" })
     );
   }
 }

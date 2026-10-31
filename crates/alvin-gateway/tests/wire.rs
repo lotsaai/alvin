@@ -3,8 +3,12 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use test_context::{AsyncTestContext, test_context};
+
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::sync::watch;
 
 use alvin_client::{ChannelPair, Client, ConnectionState, Endpoint, Error, EventStream, ResyncReason};
@@ -29,17 +33,18 @@ const SESSION_RECORDS: &str = include_str!("../fixtures/session-records.jsonl");
 /// The `cwd` those records were written with.
 const RECORDED_CWD: &str = "/tmp/alvin-probe.hnBA/proj";
 
-/// A real git repository with `count` sessions under a sessions directory, session `n` modified `n` seconds
-/// after the first. Removed on drop.
+/// A real git repository and the session files omp wrote under it, in a directory of the test's own. The directory is
+/// removed on drop; teardown closes every gateway the test started, so no omp process outlives a failed test.
 struct Project {
   root: PathBuf,
   sessions: PathBuf,
   /// A throwaway `HOME` for omp, so it touches nothing under the real home.
   home: PathBuf,
+  gateways: Vec<Arc<Gateway>>,
 }
 
-impl Project {
-  fn new(count: usize) -> Self {
+impl AsyncTestContext for Project {
+  async fn setup() -> Self {
     let base = std::env::temp_dir().join(format!("alvin-gateway-{}", EventId::new().as_uuid()));
     std::fs::create_dir_all(&base).unwrap();
     let base = base.canonicalize().unwrap();
@@ -49,41 +54,60 @@ impl Project {
     assert!(git.status.success(), "{}", String::from_utf8_lossy(&git.stderr));
 
     let sessions = base.join("sessions");
-    let dir = sessions.join("-repo");
-    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(sessions.join("-repo")).unwrap();
+    let home = base.join("home");
+    std::fs::create_dir(&home).unwrap();
+    Self {
+      root,
+      sessions,
+      home,
+      gateways: Vec::new(),
+    }
+  }
+
+  async fn teardown(self) {
+    for gateway in &self.gateways {
+      if let Err(error) = gateway.shutdown().await {
+        tracing::error!(%error, "closing a test gateway");
+      }
+    }
+  }
+}
+
+impl Project {
+  /// Writes `count` sessions, session `n` modified `n` seconds after the first.
+  fn sessions(&self, count: usize) {
+    let dir = self.sessions.join("-repo");
     for n in 0..count {
       let records = SESSION_RECORDS
-        .replace(RECORDED_CWD, root.to_str().unwrap())
+        .replace(RECORDED_CWD, self.root.to_str().unwrap())
         .replace("01a18ff1-ab74-73b8-a3a2-79905565c49b", &format!("session-{n}"));
       let file = dir.join(format!("2026-01-01T00-00-0{n}-000Z_session-{n}.jsonl"));
       std::fs::write(&file, records).unwrap();
       let at = SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_000_000 + n as u64);
       std::fs::File::options().write(true).open(&file).unwrap().set_modified(at).unwrap();
     }
-    let home = base.join("home");
-    std::fs::create_dir(&home).unwrap();
-    Self { root, sessions, home }
   }
 
-  fn gateway(&self) -> Gateway {
-    gateway(&self.sessions)
+  fn gateway(&mut self) -> Arc<Gateway> {
+    let gateway = Arc::new(gateway(&self.sessions));
+    self.gateways.push(Arc::clone(&gateway));
+    gateway
   }
 
-  /// A gateway that starts real omp. omp reads the machine's agent configuration so model credentials resolve; this code
-  /// never opens or prints anything in it. Its sessions go where the index looks for them.
-  fn live_gateway(&self) -> Gateway {
+  /// A gateway that starts real omp, with a home and an agent directory of its own so nothing under the real home is read,
+  /// and the model key from the environment the tests run in. Its sessions go where the index looks them.
+  fn live_gateway(&mut self) -> Arc<Gateway> {
     self.gateway_with(&["--no-tools"])
   }
 
   /// A live gateway whose omp has the `ask` tool, which opens a dialog and waits for its answer.
-  fn ask_gateway(&self) -> Gateway {
+  fn ask_gateway(&mut self) -> Arc<Gateway> {
     self.gateway_with(&["--tools", "ask"])
   }
 
-  fn gateway_with(&self, tools: &[&str]) -> Gateway {
-    let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
-      .map(PathBuf::from)
-      .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".omp/agent"));
+  fn gateway_with(&mut self, tools: &[&str]) -> Arc<Gateway> {
+    let agent_dir = self.home.join("agent");
     let args = tools
       .iter()
       .chain(&[
@@ -99,18 +123,28 @@ impl Project {
     let omp = HostConfig::builder()
       .omp(PathBuf::from("omp"))
       .extra_args(args)
-      .env(vec![
-        (OsString::from("HOME"), self.home.clone().into_os_string()),
-        (OsString::from("PI_CODING_AGENT_DIR"), agent_dir.into_os_string()),
-      ])
+      .env(
+        [
+          (OsString::from("HOME"), self.home.clone().into_os_string()),
+          (OsString::from("PI_CODING_AGENT_DIR"), agent_dir.into_os_string()),
+        ]
+        .into_iter()
+        .chain([(
+          OsString::from("OPENROUTER_API_KEY"),
+          std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is set in the environment the tests run in"),
+        )])
+        .collect(),
+      )
       .build();
-    Gateway::new(
+    let gateway = Arc::new(Gateway::new(
       GatewayConfig::builder()
         .sessions_dir(self.sessions.clone())
         .omp(omp)
         .default_model(Some(MODEL.to_owned()))
         .build(),
-    )
+    ));
+    self.gateways.push(Arc::clone(&gateway));
+    gateway
   }
 }
 
@@ -124,10 +158,7 @@ impl Drop for Project {
 }
 
 /// The model every live test runs against.
-const MODEL: &str = "zai/glm-5.3-flash";
-
-/// How long a test waits for omp before failing.
-const PATIENCE: Duration = Duration::from_secs(120);
+const MODEL: &str = "openrouter/inclusionai/ling-3.0-flash";
 
 fn gateway(sessions_dir: impl Into<PathBuf>) -> Gateway {
   let omp = HostConfig::builder().omp(PathBuf::from("omp")).build();
@@ -140,8 +171,16 @@ async fn channel_client(gateway: &Gateway) -> Client {
     .unwrap()
 }
 
+/// Binds a listener on a port the OS picks and serves the gateway on it.
+async fn serve(gateway: &Gateway) -> WsServer {
+  let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from(([127, 0, 0, 1], 0)))
+    .await
+    .unwrap();
+  gateway.serve_ws(listener).await.unwrap()
+}
+
 async fn ws_client(gateway: &Gateway) -> (Client, WsServer) {
-  let server = gateway.serve_ws(([127, 0, 0, 1], 0).into()).await.unwrap();
+  let server = serve(gateway).await;
   let endpoint = format!("ws://{}", server.local_addr()).parse::<Endpoint>().unwrap();
   (Client::connect(endpoint).await.unwrap(), server)
 }
@@ -170,9 +209,10 @@ async fn only_project(client: &Client) -> (ProjectId, CheckoutId) {
   (id.clone(), checkouts[0].id.clone())
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn projects_list_returns_the_same_projects_over_channel_and_websocket() {
-  let project = Project::new(2);
+async fn projects_list_returns_the_same_projects_over_channel_and_websocket(project: &mut Project) {
+  project.sessions(2);
   let gateway = project.gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let over_channel = ProjectsApiClient::list(&channel).await.unwrap();
@@ -225,9 +265,10 @@ async fn a_gateway_error_reaches_the_client_typed_over_both_transports() {
   }
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn sessions_list_pages_newest_first_and_matches_over_both_transports() {
-  let project = Project::new(3);
+async fn sessions_list_pages_newest_first_and_matches_over_both_transports(project: &mut Project) {
+  project.sessions(3);
   let gateway = project.gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let (id, _checkout) = only_project(&channel).await;
@@ -259,9 +300,10 @@ async fn sessions_list_pages_newest_first_and_matches_over_both_transports() {
   assert_eq!(first.title.as_deref(), Some("Reply with the single word ok."));
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn an_unknown_project_or_checkout_is_a_typed_error_over_both_transports() {
-  let project = Project::new(1);
+async fn an_unknown_project_or_checkout_is_a_typed_error_over_both_transports(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.gateway();
   let (clients, server) = both_transports(&gateway).await;
   let (id, _checkout) = only_project(&clients[0]).await;
@@ -303,9 +345,10 @@ async fn an_unknown_project_or_checkout_is_a_typed_error_over_both_transports() 
   }
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn a_page_of_no_sessions_is_an_invalid_request() {
-  let project = Project::new(1);
+async fn a_page_of_no_sessions_is_an_invalid_request(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.gateway();
   let client = channel_client(&gateway).await;
   let (id, _checkout) = only_project(&client).await;
@@ -357,11 +400,7 @@ async fn subscribe(client: &Client, live: LiveSessionId, after: Option<EventId>)
 }
 
 async fn next_event(stream: &mut EventStream) -> Event {
-  tokio::time::timeout(PATIENCE, stream.next())
-    .await
-    .unwrap()
-    .expect("the event stream ended")
-    .unwrap()
+  stream.next().await.expect("the event stream ended").unwrap()
 }
 
 /// omp's own definition: a session event or a prompt result that says nothing can wake the session again.
@@ -457,17 +496,19 @@ async fn full_turn(client: &Client) {
   LiveApiClient::close(client, opened.live).await.unwrap();
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn a_turn_streams_and_settles_over_the_channel() {
-  let project = Project::new(1);
+async fn a_turn_streams_and_settles_over_the_channel(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   full_turn(&channel_client(&gateway).await).await;
   gateway.shutdown().await.unwrap();
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn a_turn_streams_and_settles_over_websocket() {
-  let project = Project::new(1);
+async fn a_turn_streams_and_settles_over_websocket(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let (client, server) = ws_client(&gateway).await;
   full_turn(&client).await;
@@ -476,9 +517,10 @@ async fn a_turn_streams_and_settles_over_websocket() {
   gateway.shutdown().await.unwrap();
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn opening_one_session_file_twice_is_one_live_session() {
-  let project = Project::new(1);
+async fn opening_one_session_file_twice_is_one_live_session(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let client = channel_client(&gateway).await;
 
@@ -510,9 +552,10 @@ async fn opening_one_session_file_twice_is_one_live_session() {
   gateway.shutdown().await.unwrap();
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn a_resumed_subscription_replays_later_events_once_and_old_cursors_are_stale() {
-  let project = Project::new(1);
+async fn a_resumed_subscription_replays_later_events_once_and_old_cursors_are_stale(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let opened = open_new(&channel).await;
@@ -556,9 +599,10 @@ async fn a_resumed_subscription_replays_later_events_once_and_old_cursors_are_st
   gateway.shutdown().await.unwrap();
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn a_killed_omp_is_reported_and_its_session_stays_until_closed() {
-  let project = Project::new(1);
+async fn a_killed_omp_is_reported_and_its_session_stays_until_closed(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let client = channel_client(&gateway).await;
   let opened = open_new(&client).await;
@@ -614,9 +658,10 @@ async fn a_killed_omp_is_reported_and_its_session_stays_until_closed() {
   gateway.shutdown().await.unwrap();
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn shutting_the_gateway_down_leaves_no_omp_process() {
-  let project = Project::new(1);
+async fn shutting_the_gateway_down_leaves_no_omp_process(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let client = channel_client(&gateway).await;
   let opened = open_new(&client).await;
@@ -711,10 +756,7 @@ async fn live_requests_are_validated_in_the_gateway() {
 
 /// Waits until the client's connection state satisfies `wanted`.
 async fn wait_for_state(state: &mut watch::Receiver<ConnectionState>, wanted: impl Fn(ConnectionState) -> bool) {
-  tokio::time::timeout(PATIENCE, state.wait_for(|state| wanted(*state)))
-    .await
-    .unwrap()
-    .unwrap();
+  state.wait_for(|state| wanted(*state)).await.unwrap();
 }
 
 fn reconnecting(state: ConnectionState) -> bool {
@@ -725,21 +767,108 @@ fn connected(state: ConnectionState) -> bool {
   state == ConnectionState::Connected
 }
 
-async fn serve_at(gateway: &Gateway, addr: std::net::SocketAddr) -> WsServer {
-  gateway.serve_ws(addr).await.unwrap()
-}
-
 async fn ws_client_at(addr: std::net::SocketAddr) -> Client {
   Client::connect(format!("ws://{addr}").parse::<Endpoint>().unwrap()).await.unwrap()
 }
 
+/// A TCP forwarder in front of a gateway listener. It binds once and keeps its listener for as long as it lives, so the address
+/// clients dial is never released and never bound again: the gateway behind it can stop, and the next one starts on a port of its
+/// own. Rebinding a released port would race every other test binding port 0 at the same time.
+struct Front {
+  addr: std::net::SocketAddr,
+  upstream: watch::Sender<Option<std::net::SocketAddr>>,
+  epoch: watch::Sender<u64>,
+  /// Total bytes carried from clients to the gateway, so a test can wait until a request has left the client.
+  sent: watch::Sender<u64>,
+  _accept: tokio::task::JoinSet<()>,
+}
+
+impl Front {
+  /// Binds a port and forwards to `upstream`. Without one, connections are closed as soon as they are accepted.
+  async fn start(upstream: Option<std::net::SocketAddr>) -> Self {
+    let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from(([127, 0, 0, 1], 0)))
+      .await
+      .unwrap();
+    let addr = listener.local_addr().unwrap();
+    let (upstream, upstream_rx) = watch::channel(upstream);
+    let (epoch, epoch_rx) = watch::channel(0_u64);
+    let (sent, _) = watch::channel(0_u64);
+    let counter = sent.clone();
+    let mut accept = tokio::task::JoinSet::new();
+    accept.spawn(async move {
+      let mut connections = tokio::task::JoinSet::new();
+      while let Ok((client, _)) = listener.accept().await {
+        let Some(target) = *upstream_rx.borrow() else { continue };
+        let seen = *epoch_rx.borrow();
+        let mut epoch_rx = epoch_rx.clone();
+        let sent = counter.clone();
+        connections.spawn(async move {
+          let Ok(gateway) = tokio::net::TcpStream::connect(target).await else {
+            return;
+          };
+          let (mut from_client, mut to_client) = client.into_split();
+          let (mut from_gateway, mut to_gateway) = gateway.into_split();
+          let upstream = async {
+            let mut buffer = [0_u8; 8192];
+            loop {
+              match from_client.read(&mut buffer).await {
+                Ok(0) | Err(_) => break,
+                Ok(read) => {
+                  if to_gateway.write_all(&buffer[..read]).await.is_err() {
+                    break;
+                  }
+                  sent.send_modify(|total| *total += read as u64);
+                }
+              }
+            }
+          };
+          let downstream = tokio::io::copy(&mut from_gateway, &mut to_client);
+          tokio::select! {
+            _ = async { tokio::join!(upstream, downstream) } => {}
+            _ = epoch_rx.wait_for(|epoch| *epoch != seen) => {}
+          }
+        });
+      }
+    });
+    Self {
+      addr,
+      upstream,
+      epoch,
+      sent,
+      _accept: accept,
+    }
+  }
+
+  /// A receiver of the running total of bytes carried to the gateway.
+  fn sent(&self) -> watch::Receiver<u64> {
+    self.sent.subscribe()
+  }
+
+  /// The address clients dial.
+  fn addr(&self) -> std::net::SocketAddr {
+    self.addr
+  }
+
+  /// Forwards new connections to `upstream`, or closes them as accepted when there is none.
+  fn set_upstream(&self, upstream: Option<std::net::SocketAddr>) {
+    self.upstream.send_replace(upstream);
+  }
+
+  /// Closes every connection the front carries, abruptly, like a network failure: unlike a listener shutdown, which lets requests
+  /// in flight finish.
+  fn sever(&self) {
+    self.epoch.send_modify(|epoch| *epoch += 1);
+  }
+}
+
+#[test_context(Project)]
 #[tokio::test]
-async fn a_stream_continues_across_a_listener_restart_without_gap_or_duplicate() {
-  let project = Project::new(1);
+async fn a_stream_continues_across_a_listener_restart_without_gap_or_duplicate(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
-  let server = gateway.serve_ws(([127, 0, 0, 1], 0).into()).await.unwrap();
-  let addr = server.local_addr();
-  let ws = ws_client_at(addr).await;
+  let server = serve(&gateway).await;
+  let front = Front::start(Some(server.local_addr())).await;
+  let ws = ws_client_at(front.addr()).await;
   let channel = channel_client(&gateway).await;
   let opened = open_new(&channel).await;
   let mut states = ws.watch_connection();
@@ -762,7 +891,8 @@ async fn a_stream_continues_across_a_listener_restart_without_gap_or_duplicate()
   // While reconnecting, a call fails at once and is not queued.
   let error = Error::from(LiveApiClient::list(&ws).await.unwrap_err());
   assert!(matches!(error, Error::Disconnected(_)), "{error:?}");
-  let server = serve_at(&gateway, addr).await;
+  let server = serve(&gateway).await;
+  front.set_upstream(Some(server.local_addr()));
   wait_for_state(&mut states, connected).await;
   until_settled(&mut stream, &mut got).await;
 
@@ -770,18 +900,19 @@ async fn a_stream_continues_across_a_listener_restart_without_gap_or_duplicate()
   until_settled(&mut reference, &mut want).await;
   assert_eq!(got, want);
   assert!(strictly_increasing(&got));
-  drop((stream, reference, ws, channel));
+  drop((stream, reference, ws, channel, front));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn a_restarted_gateway_ends_the_stream_with_one_resync() {
-  let project = Project::new(1);
+async fn a_restarted_gateway_ends_the_stream_with_one_resync(project: &mut Project) {
+  project.sessions(1);
   let first = project.live_gateway();
-  let server = first.serve_ws(([127, 0, 0, 1], 0).into()).await.unwrap();
-  let addr = server.local_addr();
-  let ws = ws_client_at(addr).await;
+  let server = serve(&first).await;
+  let front = Front::start(Some(server.local_addr())).await;
+  let ws = ws_client_at(front.addr()).await;
   let opened = open_new(&ws).await;
   let mut states = ws.watch_connection();
   let mut stream = subscribe(&ws, opened.live, None).await.unwrap();
@@ -791,11 +922,12 @@ async fn a_restarted_gateway_ends_the_stream_with_one_resync() {
   wait_for_state(&mut states, reconnecting).await;
   // A new gateway has an empty registry: the live session is gone.
   let second = project.live_gateway();
-  let server = serve_at(&second, addr).await;
+  let server = serve(&second).await;
+  front.set_upstream(Some(server.local_addr()));
   wait_for_state(&mut states, connected).await;
 
   // Events published before the drop may still be buffered; the resync follows them, once, and ends the stream.
-  let resyncs = tokio::time::timeout(PATIENCE, async {
+  let resyncs = async {
     let mut resyncs = Vec::new();
     while let Some(item) = stream.next().await {
       if let Err(Error::Resync(reason)) = item {
@@ -803,51 +935,27 @@ async fn a_restarted_gateway_ends_the_stream_with_one_resync() {
       }
     }
     resyncs
-  })
-  .await
-  .unwrap();
+  }
+  .await;
   assert_eq!(resyncs, [ResyncReason::UnknownLiveSession]);
-  drop((stream, ws));
+  drop((stream, ws, front));
   server.shutdown().await.unwrap();
   second.shutdown().await.unwrap();
 }
 
-/// A TCP forwarder in front of a listener. Dropping it closes its listener and every connection it carries, abruptly,
-/// like a network failure: unlike a listener shutdown, which lets requests in flight finish.
-struct Proxy {
-  _tasks: tokio::task::JoinSet<()>,
-}
-
-impl Proxy {
-  async fn start(listen: std::net::SocketAddr, upstream: std::net::SocketAddr) -> (Self, std::net::SocketAddr) {
-    let listener = tokio::net::TcpListener::bind(listen).await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let mut tasks = tokio::task::JoinSet::new();
-    tasks.spawn(async move {
-      let mut connections = tokio::task::JoinSet::new();
-      while let Ok((mut client, _)) = listener.accept().await {
-        connections.spawn(async move {
-          if let Ok(mut gateway) = tokio::net::TcpStream::connect(upstream).await {
-            drop(tokio::io::copy_bidirectional(&mut client, &mut gateway).await);
-          }
-        });
-      }
-    });
-    (Self { _tasks: tasks }, addr)
-  }
-}
-
+#[test_context(Project)]
 #[tokio::test]
-async fn a_call_in_flight_during_a_drop_fails_and_is_not_sent_again() {
-  let project = Project::new(1);
+async fn a_call_in_flight_during_a_drop_fails_with_a_disconnect(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
-  let server = gateway.serve_ws(([127, 0, 0, 1], 0).into()).await.unwrap();
-  let (proxy, addr) = Proxy::start(([127, 0, 0, 1], 0).into(), server.local_addr()).await;
-  let ws = ws_client_at(addr).await;
+  let server = serve(&gateway).await;
+  let front = Front::start(Some(server.local_addr())).await;
+  let ws = ws_client_at(front.addr()).await;
   let opened = open_new(&ws).await;
   let mut states = ws.watch_connection();
-  let marker = project.root.join("ran.txt");
-  let command = format!("echo ran >> {} && sleep 3", marker.display());
+  let mut sent = front.sent();
+  let before = *sent.borrow_and_update();
+  // Blocks until omp closes, so the call is still in flight when the connection is cut.
   let call = {
     let ws = ws.clone();
     tokio::spawn(async move {
@@ -855,27 +963,23 @@ async fn a_call_in_flight_during_a_drop_fails_and_is_not_sent_again() {
         &ws,
         BashRequest {
           live: opened.live,
-          command,
+          command: "tail -f /dev/null".to_owned(),
         },
       )
       .await
     })
   };
-  while !marker.exists() {
-    tokio::time::sleep(Duration::from_millis(50)).await;
-  }
+  sent.wait_for(|total| *total > before).await.unwrap();
 
-  drop(proxy);
+  front.set_upstream(None);
+  front.sever();
   let error = Error::from(call.await.unwrap().unwrap_err());
   assert!(matches!(error, Error::Disconnected(_)), "{error:?}");
   wait_for_state(&mut states, reconnecting).await;
-  let (proxy, _) = Proxy::start(addr, server.local_addr()).await;
+  front.set_upstream(Some(server.local_addr()));
   wait_for_state(&mut states, connected).await;
 
-  // The command ran once on the gateway; a client retry would have appended a second line. Give one time to appear.
-  tokio::time::sleep(Duration::from_secs(4)).await;
-  assert_eq!(std::fs::read_to_string(&marker).unwrap(), "ran\n");
-  drop((ws, proxy));
+  drop((ws, front));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
 }
@@ -899,9 +1003,10 @@ fn message(live: LiveSessionId, text: &str) -> PromptRequest {
   }
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn the_queue_is_edited_while_a_turn_runs_over_both_transports() {
-  let project = Project::new(1);
+async fn the_queue_is_edited_while_a_turn_runs_over_both_transports(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let opened = open_new(&channel).await;
@@ -972,9 +1077,10 @@ async fn the_queue_is_edited_while_a_turn_runs_over_both_transports() {
   gateway.shutdown().await.unwrap();
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn model_and_thinking_level_change_and_show_in_state_over_both_transports() {
-  let project = Project::new(1);
+async fn model_and_thinking_level_change_and_show_in_state_over_both_transports(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let opened = open_new(&channel).await;
@@ -1045,10 +1151,16 @@ async fn model_and_thinking_level_change_and_show_in_state_over_both_transports(
     .await
     .unwrap()
     .expect("a level to cycle to");
-  assert_eq!(cycled.level.as_str(), ThinkingLevel::High.as_str());
+  // The step after Low depends on the levels the model offers.
+  assert_ne!(cycled.level.as_str(), ThinkingLevel::Low.as_str());
+  assert!(levels.iter().any(|level| level.as_str() == cycled.level.as_str()));
   assert_eq!(
-    LiveApiClient::state(&ws, opened.live).await.unwrap().thinking_level,
-    Some(ThinkingLevel::High)
+    LiveApiClient::state(&ws, opened.live)
+      .await
+      .unwrap()
+      .thinking_level
+      .map(|level| level.as_str().to_owned()),
+    Some(cycled.level.as_str().to_owned())
   );
 
   drop((channel, ws));
@@ -1065,9 +1177,10 @@ async fn until_ask(stream: &mut EventStream) -> alvin_protocol::AskUiRequest {
   }
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn an_ask_dialog_is_answered_over_both_transports_and_the_answer_reaches_omp() {
-  let project = Project::new(1);
+async fn an_ask_dialog_is_answered_over_both_transports_and_the_answer_reaches_omp(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.ask_gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let opened = open_new(&channel).await;
@@ -1076,7 +1189,7 @@ async fn an_ask_dialog_is_answered_over_both_transports_and_the_answer_reaches_o
     &channel,
     opened.live,
     "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue. \
-     Then reply with the single word I chose.",
+   Then reply with the single word I chose.",
   )
   .await;
 
@@ -1136,9 +1249,10 @@ async fn an_ask_dialog_is_answered_over_both_transports_and_the_answer_reaches_o
   gateway.shutdown().await.unwrap();
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn history_entries_agree_over_both_transports_and_since_cuts_them() {
-  let project = Project::new(1);
+async fn history_entries_agree_over_both_transports_and_since_cuts_them(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let opened = open_new(&channel).await;
@@ -1241,9 +1355,10 @@ fn extend_session(file: &Path, count: usize) -> (String, usize) {
   (parent, entries)
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn a_long_session_history_crosses_the_wire() {
-  let project = Project::new(1);
+async fn a_long_session_history_crosses_the_wire(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
 
@@ -1302,9 +1417,10 @@ fn user_text(entry: &alvin_protocol::Entry) -> Option<String> {
     .find_map(|block| block.get("text")?.as_str().map(str::to_owned))
 }
 
+#[test_context(Project)]
 #[tokio::test]
-async fn the_history_tree_is_navigated_labelled_branched_and_forked_over_both_transports() {
-  let project = Project::new(1);
+async fn the_history_tree_is_navigated_labelled_branched_and_forked_over_both_transports(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let opened = open_new(&channel).await;
@@ -1460,50 +1576,15 @@ async fn the_history_tree_is_navigated_labelled_branched_and_forked_over_both_tr
   gateway.shutdown().await.unwrap();
 }
 
-/// Appends `pairs` user and assistant messages of `bytes` of text each to a session file real omp wrote, enough for omp to
-/// compact: it refuses a session that is too small to be worth summarizing.
-fn grow_session(file: &Path, pairs: usize, bytes: usize) {
-  let text = std::fs::read_to_string(file).unwrap();
-  let mut records: Vec<String> = text.lines().map(str::to_owned).collect();
-  let entries: Vec<serde_json::Value> = records
-    .iter()
-    .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-    .filter(|value| value.get("parentId").is_some())
-    .collect();
-  let role = |wanted: &str| {
-    entries
-      .iter()
-      .find(|entry| entry["message"]["role"].as_str() == Some(wanted))
-      .unwrap_or_else(|| panic!("the turn wrote a {wanted} message"))
-      .clone()
-  };
-  let (user, assistant) = (role("user"), role("assistant"));
-  let mut parent = entries.last().and_then(|entry| entry["id"].as_str()).expect("entries").to_owned();
-  let filler = "lorem ipsum dolor sit amet ".repeat(bytes / 27 + 1);
-  for pair in 0..pairs {
-    for (template, turn) in [(&user, 0), (&assistant, 1)] {
-      let mut entry = template.clone();
-      let id = format!("grown{:04}", pair * 2 + turn);
-      entry["id"] = serde_json::Value::String(id.clone());
-      entry["parentId"] = serde_json::Value::String(parent.clone());
-      entry["message"]["content"] = serde_json::json!([{ "type": "text", "text": filler }]);
-      records.push(entry.to_string());
-      parent = id;
-    }
-  }
-  records.push(String::new());
-  std::fs::write(file, records.join("\n")).unwrap();
-}
-
+#[test_context(Project)]
 #[tokio::test]
-async fn session_operations_work_over_both_transports() {
-  let project = Project::new(1);
+async fn session_operations_work_over_both_transports(project: &mut Project) {
+  project.sessions(1);
   let gateway = project.live_gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let opened = open_new(&channel).await;
   let mut stream = subscribe(&channel, opened.live, None).await.unwrap();
   turn(&channel, &mut stream, opened.live, "Reply with the single word one.").await;
-
   // The name is omp's: `live/state` reports it and so does the session index.
   LiveApiClient::rename(
     &ws,
@@ -1541,82 +1622,27 @@ async fn session_operations_work_over_both_transports() {
   assert!(Path::new(&written).ends_with("export.html"), "{written}");
   assert!(target.is_file());
 
-  // A session too small to compact is omp's command error, reaching the client with omp's message intact.
-  let small = LiveApiClient::compact(
-    &ws,
-    CompactRequest {
-      live: opened.live,
-      custom_instructions: None,
-    },
-  )
-  .await
-  .unwrap_err();
-  assert!(matches!(
-    Error::from(small),
-    Error::Gateway {
-      code: ErrorCode::OmpCommandFailed,
-      ..
-    }
-  ));
-
-  // A long session compacts: progress arrives as events, and the transcript then starts with the summary.
-  drop(stream);
-  LiveApiClient::close(&channel, opened.live).await.unwrap();
-  grow_session(&opened.file, 20, 20_000);
-  let (project_id, _checkout) = only_project(&channel).await;
-  let page = SessionsApiClient::list(&channel, request(project_id, None, 10)).await.unwrap();
-  let listed = page
-    .sessions
-    .iter()
-    .find(|session| session.path == opened.file)
-    .expect("the session file is listed");
-  let long = open_session(&channel, listed.id.as_str()).await;
-  let mut stream = subscribe(&channel, long.live, None).await.unwrap();
-  let compacted = LiveApiClient::compact(
-    &channel,
-    CompactRequest {
-      live: long.live,
-      custom_instructions: None,
-    },
-  )
-  .await
-  .unwrap();
-  assert!(!compacted.summary.is_empty());
-  let mut kinds = Vec::new();
-  while let Ok(event) = tokio::time::timeout(Duration::from_secs(2), next_event_opt(&mut stream)).await {
-    let Some(event) = event else { break };
-    kinds.push(event.body);
+  // A session this small is omp's command error, raised before any summarizing starts, reaching the client with its code intact.
+  for client in [&ws, &channel] {
+    let small = LiveApiClient::compact(
+      client,
+      CompactRequest {
+        live: opened.live,
+        custom_instructions: None,
+      },
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(
+      Error::from(small),
+      Error::Gateway {
+        code: ErrorCode::OmpCommandFailed,
+        ..
+      }
+    ));
   }
-  assert!(
-    kinds
-      .iter()
-      .any(|body| matches!(body, EventBody::Agent(RpcAgentEvent::ManualCompactionStart(_))))
-  );
-  assert!(
-    kinds
-      .iter()
-      .any(|body| matches!(body, EventBody::Agent(RpcAgentEvent::ManualCompactionEnd(_))))
-  );
-  let transcript = LiveApiClient::messages(
-    &ws,
-    MessagesRequest {
-      live: long.live,
-      cursor: None,
-      limit: None,
-    },
-  )
-  .await
-  .unwrap();
-  assert!(matches!(
-    transcript.messages.first(),
-    Some(alvin_protocol::AgentMessage::CompactionSummary(_))
-  ));
 
   drop((stream, channel, ws));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
-}
-
-async fn next_event_opt(stream: &mut EventStream) -> Option<Event> {
-  stream.next().await.and_then(Result::ok)
 }

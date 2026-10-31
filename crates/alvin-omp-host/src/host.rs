@@ -3,17 +3,18 @@
 use std::ffi::OsString;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::process::Command as Process;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use tokio::process::Command as Process;
 
 use alvin_protocol::EventBody;
-use omp_rpc::{Client, ClientOptions, Command, SetAskDialogCommand, SwitchSessionCommand};
+use omp_rpc::{Command, SetAskDialogCommand, SwitchSessionCommand};
 use tokio::sync::mpsc;
 use typed_builder::TypedBuilder;
 
 use crate::bridge::Bridge;
 use crate::session::Session;
+use crate::transport::{Client, ClientOptions, Error as RpcError};
 use crate::{Error, Result};
 
 /// Events buffered between omp and the consumer before the pump waits.
@@ -68,12 +69,11 @@ impl Host {
   /// and its one event stream; the stream is the caller's to drain. `rpc-ui` is the same
   /// transport as `rpc` with extension dialogs enabled; omp-rpc speaks it unchanged.
   pub async fn start(&self, request: StartRequest) -> Result<(Session, mpsc::Receiver<EventBody>)> {
-    let config = Arc::clone(&self.config);
-    tokio::task::spawn_blocking(move || launch(&config, request)).await?
+    launch(&self.config, request).await
   }
 }
 
-fn launch(config: &HostConfig, request: StartRequest) -> Result<(Session, mpsc::Receiver<EventBody>)> {
+async fn launch(config: &HostConfig, request: StartRequest) -> Result<(Session, mpsc::Receiver<EventBody>)> {
   let StartRequest {
     cwd,
     model,
@@ -93,27 +93,30 @@ fn launch(config: &HostConfig, request: StartRequest) -> Result<(Session, mpsc::
     .args(&config.extra_args)
     .envs(config.env.iter().map(|(name, value)| (name, value)));
 
-  let (client, source) = Client::spawn(process, ClientOptions::default()).map_err(|source| match source {
-    omp_rpc::Error::Timeout { ref command } if command == "ready" => Error::ReadyTimeout {
-      cwd: cwd.clone(),
-      source: Box::new(source),
-    },
-    source => Error::Spawn {
-      cwd: cwd.clone(),
-      source: Box::new(source),
-    },
-  })?;
+  let (client, source) = Client::spawn(process, ClientOptions::default())
+    .await
+    .map_err(|source| match source {
+      RpcError::Timeout { ref command } if command == "ready" => Error::ReadyTimeout {
+        cwd: cwd.clone(),
+        source: Box::new(source),
+      },
+      source => Error::Spawn {
+        cwd: cwd.clone(),
+        source: Box::new(source),
+      },
+    })?;
 
   // Without it each `ask` call arrives as one `select` per choice. omp is pinned to one release that supports it, so a
   // failure is a startup error, not a fallback.
   let enabled = client
     .call(&SetAskDialogCommand { enabled: true })
+    .await
     .map_err(|source| Error::from_rpc(&cwd, SetAskDialogCommand::NAME, source))?;
   if !enabled {
     return Err(Error::from_rpc(
       &cwd,
       SetAskDialogCommand::NAME,
-      omp_rpc::Error::Protocol("omp did not enable ask dialogs".to_owned()),
+      RpcError::Protocol("omp did not enable ask dialogs".to_owned()),
     ));
   }
 
@@ -125,13 +128,14 @@ fn launch(config: &HostConfig, request: StartRequest) -> Result<(Session, mpsc::
         provider: None,
         model_id: None,
       })
+      .await
       .map_err(|source| Error::from_rpc(&cwd, SwitchSessionCommand::NAME, source))?;
     if switched.cancelled {
       return Err(Error::ResumeCancelled { cwd, path: path.clone() });
     }
   }
-  let pid = client.pid().ok_or_else(|| Error::from_rpc(&cwd, "spawn", omp_rpc::Error::Closed))?;
+  let pid = client.pid().ok_or_else(|| Error::from_rpc(&cwd, "spawn", RpcError::Closed))?;
   let closing = Arc::new(AtomicBool::new(false));
-  let bridge = Bridge::start(source, config.event_capacity, Arc::clone(&closing), &cwd)?;
+  let bridge = Bridge::start(source, config.event_capacity, Arc::clone(&closing), cwd.clone());
   Ok((Session::new(cwd, pid, client, closing, bridge.untranslated), bridge.events))
 }

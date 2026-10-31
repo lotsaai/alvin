@@ -1,15 +1,16 @@
 //! Live sessions: the registry of omp processes, each session's event log, and the pump that fills it.
 
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use alvin_omp_host::Session;
 use alvin_protocol::{Event, EventBody, EventId, LiveSessionId, LiveSessionSummary};
 use jiff::Timestamp;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{Notify, broadcast, mpsc};
 
 use crate::telemetry::Metrics;
 use crate::{Error, Result};
@@ -19,6 +20,35 @@ const BROADCAST_CAPACITY: usize = 1024;
 
 /// How long closing waits for a command in flight to return after aborting it.
 const IDLE_GRACE: Duration = Duration::from_secs(5);
+/// A request's hold on a live session. Dropping it wakes [`close`], which waits to be the session's only owner.
+pub(crate) struct Handle {
+  live: Arc<Live>,
+  /// Declared after `live`, so it fires once `live` is released.
+  _wake: Wake,
+}
+
+impl Handle {
+  fn new(live: Arc<Live>) -> Self {
+    let wake = Wake(Arc::clone(&live.idle));
+    Self { live, _wake: wake }
+  }
+}
+
+impl Deref for Handle {
+  type Target = Live;
+
+  fn deref(&self) -> &Live {
+    &self.live
+  }
+}
+
+struct Wake(Arc<Notify>);
+
+impl Drop for Wake {
+  fn drop(&mut self) {
+    self.0.notify_waiters();
+  }
+}
 
 /// One live session: an omp process, where it runs, the file it writes, and its event log.
 #[derive(Debug)]
@@ -29,6 +59,8 @@ pub(crate) struct Live {
   file: Mutex<PathBuf>,
   pub(crate) session: Session,
   pub(crate) log: Arc<EventLog>,
+  /// Notified whenever a request lets go of the session.
+  idle: Arc<Notify>,
 }
 
 impl Live {
@@ -39,6 +71,7 @@ impl Live {
       file: Mutex::new(file),
       session,
       log,
+      idle: Arc::default(),
     }
   }
 
@@ -77,18 +110,24 @@ impl LiveSessions {
     self.registry.lock().unwrap_or_else(PoisonError::into_inner)
   }
 
-  pub(crate) fn get(&self, id: LiveSessionId) -> Result<Arc<Live>> {
+  pub(crate) fn get(&self, id: LiveSessionId) -> Result<Handle> {
     self
       .registry()
       .by_id
       .get(&id)
       .cloned()
+      .map(Handle::new)
       .ok_or(Error::UnknownLiveSession { live: id })
   }
 
-  pub(crate) fn by_file(&self, file: &Path) -> Option<Arc<Live>> {
+  pub(crate) fn by_file(&self, file: &Path) -> Option<Handle> {
     let registry = self.registry();
-    registry.by_file.get(file).and_then(|id| registry.by_id.get(id)).cloned()
+    registry
+      .by_file
+      .get(file)
+      .and_then(|id| registry.by_id.get(id))
+      .cloned()
+      .map(Handle::new)
   }
 
   pub(crate) fn list(&self) -> Vec<LiveSessionSummary> {
@@ -230,17 +269,25 @@ pub(crate) async fn close(live: Arc<Live>) -> Result<()> {
     tracing::debug!(%error, "aborting the command in flight before close");
   }
   let id = live.id;
-  let deadline = Instant::now() + IDLE_GRACE;
-  let mut shared = live;
-  loop {
-    shared = match Arc::try_unwrap(shared) {
-      Ok(live) => return live.session.close().await.map_err(Error::from),
-      Err(shared) => shared,
-    };
-    if Instant::now() >= deadline {
-      return Err(Error::StillRunning { live: id });
+  let idle = Arc::clone(&live.idle);
+  // Each request that lets go of the session wakes this wait. The deadline only ends the wait for a command that never returns.
+  let sole_owner = tokio::time::timeout(IDLE_GRACE, async move {
+    let mut shared = live;
+    loop {
+      let released = idle.notified();
+      tokio::pin!(released);
+      released.as_mut().enable();
+      shared = match Arc::try_unwrap(shared) {
+        Ok(live) => return live,
+        Err(shared) => shared,
+      };
+      released.await;
     }
-    tokio::time::sleep(Duration::from_millis(10)).await;
+  })
+  .await;
+  match sole_owner {
+    Ok(live) => live.session.close().await.map_err(Error::from),
+    Err(_) => Err(Error::StillRunning { live: id }),
   }
 }
 

@@ -125,7 +125,7 @@ pub enum Error {
 ## Testing Strategy
 
 - Runner: `cargo nextest` via `mise run test`, whole workspace.
-- Real services, no mocks or fakes. Integration tests start real `omp --mode rpc-ui` with model `zai/glm-5.3-flash`, using the machine's existing omp configuration.
+- Real services, no mocks or fakes. Integration tests start real `omp --mode rpc-ui` with model `openrouter/inclusionai/ling-3.0-flash`, using the machine's existing omp configuration.
 - `session-index`: tests over real JSONL session files written by omp in a temporary project, plus git worktree and jj workspace layouts.
 - `gateway` and `client`: every API method round-tripped over both the channel transport and a WebSocket on `127.0.0.1:0`. A test pins the declared method list.
 - `conversation`: plain `#[test]` on the state model.

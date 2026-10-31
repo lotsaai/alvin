@@ -17,8 +17,7 @@ use alvin_protocol::{
 };
 use eyre::{Result, eyre};
 
-const MODEL: &str = "zai/glm-5.3-flash";
-const PATIENCE: Duration = Duration::from_secs(180);
+const MODEL: &str = "openrouter/inclusionai/ling-3.0-flash";
 /// The records of one real omp run, used only so the temporary repository is a listed project.
 const SEED_RECORDS: &str = include_str!("../fixtures/session-records.jsonl");
 const SEED_CWD: &str = "/tmp/alvin-probe.hnBA/proj";
@@ -237,10 +236,7 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
   let seed = SEED_RECORDS.replace(SEED_CWD, &repo.display().to_string());
   std::fs::write(session_dir.join("2026-01-01T00-00-00-000Z_seed.jsonl"), seed)?;
 
-  let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
-    .map(PathBuf::from)
-    .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".omp/agent")))
-    .ok_or_else(|| eyre!("cannot find omp's agent directory"))?;
+  // omp gets the scenario's own home and agent directory, and the model key from the environment this runs in.
   let mut args: Vec<OsString> = [
     "--no-skills",
     "--no-rules",
@@ -255,10 +251,18 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
   let omp = HostConfig::builder()
     .omp(PathBuf::from("omp"))
     .extra_args(args)
-    .env(vec![
-      (OsString::from("HOME"), home.into_os_string()),
-      (OsString::from("PI_CODING_AGENT_DIR"), agent_dir.into_os_string()),
-    ])
+    .env(
+      [
+        (OsString::from("HOME"), home.clone().into_os_string()),
+        (OsString::from("PI_CODING_AGENT_DIR"), home.join("agent").into_os_string()),
+      ]
+      .into_iter()
+      .chain([(
+        OsString::from("OPENROUTER_API_KEY"),
+        std::env::var_os("OPENROUTER_API_KEY").ok_or_else(|| eyre!("OPENROUTER_API_KEY is not set"))?,
+      )])
+      .collect(),
+    )
     .build();
   let gateway = Gateway::new(
     GatewayConfig::builder()
@@ -307,9 +311,7 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
   let wanted = 1 + usize::from(scenario.second_prompt.is_some());
   let mut entries_before = None;
   loop {
-    let event = tokio::time::timeout(PATIENCE, stream.next())
-      .await?
-      .ok_or_else(|| eyre!("the event stream ended"))??;
+    let event = stream.next().await.ok_or_else(|| eyre!("the event stream ended"))??;
     let settled = match &event.body {
       EventBody::SessionSettled(_) => true,
       EventBody::PromptResult(result) => result.session_settled,

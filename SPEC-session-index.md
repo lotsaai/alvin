@@ -68,7 +68,7 @@ crates/alvin-session-index/src/grouping.rs   projects and checkouts from cwds
 
 ## Testing Strategy
 
-- Real omp output: tests start real `omp` (model `zai/glm-5.3-flash`) in a temporary project to write session files, then index them. Temporary directories are removed by the test.
+- Real omp output: tests start real `omp` (model `openrouter/inclusionai/ling-3.0-flash`) in a temporary project to write session files, then index them. Temporary directories are removed by the test.
 - Real layouts: tests create a real git repository with worktrees and a real jj repository with workspaces using the actual `git` and `jj` binaries, then assert the grouping.
 - Torn writes: a test appends a partial record to a real session file and reads it.
 - Large files: a test writes a multi-megabyte real session file and asserts the scan finishes with bounded memory and reads only the head and tail windows, measured through the file handle's reported read offsets.

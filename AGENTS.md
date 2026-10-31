@@ -16,11 +16,11 @@ alvin is a desktop client for the `omp` coding agent. A gateway owns one `omp --
 |---|---|---|
 | `alvin-protocol` | **Wire contract**: `#[rpc]` traits (client half by default, server half behind the `server` feature), request/response/event types, UUIDv7 id newtypes, error codes. No IO, no async runtime. Builds for wasm32. | `jsonrpsee` (`client-core`, `macros`; `server-core` only behind `server`), `serde`, `uuid`, `jiff`, `thiserror` |
 | `alvin-session-index` | **Module**: read-only scan of omp JSONL session files; groups sessions by repository with git worktrees and jj workspaces as sub-groups. | `alvin-protocol`, `code-workspace`, `serde_json`, async/runtime utilities, `alvin-workspace-hack` |
-| `alvin-omp-host` | **Infrastructure**: spawns and supervises one `omp --mode rpc-ui` process per live session through `omp-rpc`, bridges its blocking client into async, turns omp frames into protocol events. Windows Job Object teardown. | `alvin-protocol`, `omp-rpc`, `tokio`, `tracing`, `thiserror`, `typed-builder`, `serde`, `serde_json`, platform crates for process control, `alvin-workspace-hack` |
+| `alvin-omp-host` | **Infrastructure**: spawns and supervises one `omp --mode rpc-ui` process per live session over its own async transport (JSON lines on the process's stdio, requests matched to responses by id), turns omp frames into protocol events. Process-group teardown on Unix, Job Object teardown on Windows. | `alvin-protocol`, `omp-rpc` (wire types only), `tokio` (`process`, `io-util`, `sync`, `time`, `rt`), `tracing`, `thiserror`, `typed-builder`, `serde`, `serde_json`, `rustix` (unix), `win32job` (windows), `alvin-workspace-hack` |
 | `alvin-gateway` | **Application boundary**: implements the protocol server traits over `alvin-session-index` and `alvin-omp-host`; semantic validation; live-session registry and in-memory event logs; mounts the same methods on the channel transport and a WebSocket listener; exports telemetry over OTLP. Binary target `alvind` (face). | `alvin-protocol` (`server`), `alvin-session-index`, `alvin-omp-host`, `jsonrpsee` server, `tokio`, `jiff`, OpenTelemetry and `tracing` crates (`init-tracing-opentelemetry`, `opentelemetry`, `opentelemetry_sdk`, `opentelemetry-appender-tracing`, `tracing-opentelemetry`, `tracing-subscriber`), for the `alvind` target `clap`, `confique`, `dirs`, `eyre`, `alvin-workspace-hack` |
 | `alvin-client` | **Typed client**: one client type; the transport (channel, `ws://`, `wss://`) is an implementation detail picked by endpoint. Builds for wasm32. | `alvin-protocol`, `jsonrpsee` client transports, `tokio`, `jiff`, `tracing`, `url`, `gloo-timers` and `wasm-bindgen-futures` (wasm only) |
 | `alvin-conversation` | **UI state**: projects, sessions, live turns, queue, history tree, folded from protocol events. No IO. Builds for wasm32. | `alvin-protocol`, `serde_json` |
-| `alvin-conversation-ui` | **UI views**: gpui-kit components rendering `alvin-conversation` state and issuing commands through `alvin-client`. | `alvin-conversation`, `alvin-client`, `alvin-protocol`, `gpui-kit`, `serde_json` |
+| `alvin-conversation-ui` | **UI views**: gpui-kit components rendering `alvin-conversation` state and issuing commands through `alvin-client`. The composer is a markdown editor highlighted through verdant's tree-sitter grammars and completes omp's slash commands. | `alvin-conversation`, `alvin-client`, `alvin-protocol`, `gpui-kit`, `lsp-types` (the version gpui-kit uses, for its completion types), `serde_json`, `tracing`, `verdant` and `verdant-parsers-git` (git, branch `main-git-deploy`, only the `markdown` and `markdown_inline` grammars) |
 | `alvin-app` | **Face**: desktop binary. Owns config and argument parsing; embeds the gateway over the channel transport or connects to a `ws(s)://` URL. | `alvin-conversation-ui`, `alvin-client`, `alvin-gateway`, `gpui-kit`, `tokio`, `clap`, `confique`, `dirs`, `url`, `tracing`, `eyre`, `alvin-workspace-hack` |
 | `alvin-workspace-hack` | **Build-only**: `cargo-hakari` feature unification. | Managed by hakari only. |
 
@@ -29,7 +29,7 @@ alvin is a desktop client for the `omp` coding agent. A gateway owns one `omp --
 1. **Faces own wiring only.** `alvin-app` and the `alvind` target compose crates and parse config; no protocol, session, or agent logic lives in them.
 2. **`alvin-protocol` is a leaf.** It depends on no alvin crate, has no IO and no async runtime, and must build for `wasm32-unknown-unknown`. Server-only jsonrpsee features stay behind its `server` feature.
 3. **`alvin-gateway` is the only consumer of `alvin-omp-host` and `alvin-session-index`.** No UI crate, client, or face reaches them directly (the app reaches them only through an embedded `alvin-gateway`).
-4. **`alvin-omp-host` is the only crate that depends on `omp-rpc` or spawns omp.** One omp process per live session; omp holds one active session per process.
+4. **`alvin-omp-host` is the only crate that depends on `omp-rpc` or spawns omp.** One omp process per live session; omp holds one active session per process. `omp-rpc` supplies the wire types only; the transport is `alvin-omp-host`'s own, adapted from `omp-rpc`'s client.
 5. **`alvin-session-index` is the only crate that reads omp session files and the only consumer of `code-workspace`.** It opens them read-only and never writes, renames, or deletes them.
 6. **`alvin-omp-host` and `alvin-session-index` do not depend on each other** or on `alvin-gateway`.
 7. **UI crates see the gateway only through `alvin-client`.** `alvin-conversation` and `alvin-conversation-ui` never depend on `alvin-gateway`, `alvin-omp-host`, or `alvin-session-index`. One exception: `alvin-conversation-ui` takes `alvin-gateway` as a dev-dependency so its in-module UI tests run against an embedded gateway; production code never sees it.
@@ -61,7 +61,7 @@ alvin is a desktop client for the `omp` coding agent. A gateway owns one `omp --
 
 - omp session files are read-only to alvin. Never write, rename, or delete them.
 - Support only what omp-rpc supports. `!cmd` maps to the `bash` command; `prompt` expands `/` commands, skills, templates, and `^model` on the omp side. Do not invent composer conventions.
-- `wire.rs` in `omp-rpc` is generated; never fork or hand-edit `omp-rpc`.
+- `wire.rs` in `omp-rpc` is generated; never hand-edit it. The transport is ours: it keeps omp's protocol semantics (ids correlate requests and responses, `bash` and `prompt` complete concurrently) and adds no limits omp does not have: no per-call deadline, no worker pool, no queue bound.
 - No access controls: no tokens, no auth, no protective defaults. Users are competent.
 
 ### Wire Errors Keep Their Codes
@@ -128,7 +128,7 @@ Banned domain vocabulary with required replacements: "birth"/"born" → "join"/"
   - Errors live in a root `error.rs`.
   - Libraries use `thiserror`; `main`/faces use `eyre`/`color-eyre` at the edge only.
   - `#[from]` for transparent conversions, `#[source]` for contextual variants. Variants carry typed context from the boundary that knows the entity (session id, cwd, session file path). No stringly wrappers (`Other(String)` and kin fail review); never `to_string()` a source. No swallowed errors (`map_err(|_| ..)`, `.ok()`, `let _ =` on a `Result`).
-  - `omp_rpc::Error` stays the `#[source]` of `alvin-omp-host` variants; gateway errors carry the protocol error code they map to.
+  - The transport's `RpcError` stays the `#[source]` of `alvin-omp-host` variants; gateway errors carry the protocol error code they map to.
 - **Builders**: use `typed-builder` for non-trivial request/configuration types. No long constructor arg lists.
 - **Dependencies**: always the latest stable release when added or updated; never pin to an old version to match another repository or dodge a breaking change. A new dependency needs approval.
 - **Configuration**: faces load config with `confique` (schema with `#[config(layer_attr(derive(clap::Args)))]`, CLI layer preloaded, then env, then files), as tin and crumbs do.
@@ -137,7 +137,7 @@ Banned domain vocabulary with required replacements: "birth"/"born" → "join"/"
 - **Modules**: `foo.rs` beside `foo/`, never `mod.rs`; thin `main.rs` and `lib.rs`; one module per feature; `use` type names at the module top.
 - **Naming**: `UpperCamelCase` types and variants, `snake_case` fns/modules/variables, `SCREAMING_SNAKE_CASE` consts. Crates are `alvin-<role>`. JSON-RPC methods are `<area>/<camelCaseVerb>` (for example `sessions/list`, `live/prompt`).
 - **Testing**:
-  - Real services, no mocks, fakes, or stubs. Tests that need omp start real `omp --mode rpc-ui` with model `zai/glm-5.3-flash`, using the machine's existing omp configuration. Never look for, read, or print secrets.
+  - Real services, no mocks, fakes, or stubs. Tests that need omp start real `omp --mode rpc-ui` with model `openrouter/inclusionai/ling-3.0-flash`, using the machine's existing omp configuration. Never look for, read, or print secrets.
   - `alvin-session-index` tests run over real session files that omp writes in a temporary project, plus real git worktree and jj workspace layouts.
   - Every gateway method round-trips through `alvin-client` over both the channel transport and a WebSocket on `127.0.0.1:0`. A test pins the declared method list.
   - UI tests use `#[gpui_kit::test]` headless with real views against an embedded gateway; `#[tokio::test]` stacked above `#[gpui_kit::test]` supplies the tokio context. Assert structure and state, not pixels. Never `use gpui_kit::*` or `use super::*` in a module containing `#[gpui_kit::test]`.
@@ -175,16 +175,19 @@ Use jj for every repository mutation; never git mutations.
 - **Do** emit every live-session event with a fresh UUIDv7 id from the gateway.
 - **When adding a gateway method**: add it to the `#[rpc]` trait in `alvin-protocol`, implement it in `alvin-gateway`, add it to the pinned method list, and round-trip it over both transports.
 - **When adding a transport**: implement it in `alvin-client` (and the matching listener in `alvin-gateway`) behind endpoint selection; ask first.
+- **Never write a test that relies on timing or a clock.** No `sleep`, no polling loop with a delay, no in-test `timeout` or deadline, no fixed wait. A test waits on a real event or signal: an event stream, a state watch, a channel, a process exit. The only exception is a test that verifies a timeout condition in the code under test. A hung test is caught by nextest's `slow-timeout`, never by a deadline inside the test. A test that depends on timing is rewritten, not tuned.
+- **Per-test fixtures are `test-context` `AsyncTestContext` types**: `setup()` creates the temporary directories, environment and gateway, and `teardown()` closes every gateway and process the test started.
 
 ## Before Committing Checklist
 
 - [ ] `mise format` passes (each step read, not just the exit code)
 - [ ] `mise run --force test` passes (if Rust changed)
+- [ ] **No timing in tests**: no `sleep`, polling delay, in-test `timeout`, or fixed wait outside a test of a timeout condition
 - [ ] **No `allow` attributes**: all lint warnings fixed, not suppressed
 - [ ] No `.unwrap()` or `.expect()` in production paths
 - [ ] **Error boundary**: one `Error` + `Result` at root per boundary crate, children import from root, `eyre` only at the edge
 - [ ] **Dependency Check**: the table above holds; `alvin-protocol` and `alvin-client` still build for wasm32
-- [ ] **omp Boundary**: no writes to omp session files; `omp-rpc` untouched
+- [ ] **omp Boundary**: no writes to omp session files; `wire.rs` of `omp-rpc` untouched; no blocking calls and no `spawn_blocking` for omp traffic
 - [ ] **Ids**: new events and entities use UUIDv7 newtypes; no `seq` fields
 - [ ] **Transports**: new gateway methods are in the pinned list and round-trip over channel and WebSocket
 - [ ] All public items have doc comments; no debug `println!` or `dbg!`

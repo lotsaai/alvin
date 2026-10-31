@@ -93,7 +93,7 @@ crates/alvin-gateway/tests/              acceptance tests: the wire contract thr
 
 ## Testing Strategy
 
-- Every method round-trips through `alvin-client` over both the channel transport and `ws://127.0.0.1:0`, against real omp (`--mode rpc-ui`, model `zai/glm-5.3-flash`) and real session files in a temporary project.
+- Every method round-trips through `alvin-client` over both the channel transport and `ws://127.0.0.1:0`, against real omp (`--mode rpc-ui`, model `openrouter/inclusionai/ling-3.0-flash`) and real session files in a temporary project.
 - A test asserts the merged module's method names equal the pinned list.
 - Resume: subscribe, drop the client mid-turn, reconnect with the last event id, assert the full ordered sequence with no duplicates.
 - Stale cursor: subscribe with an `after` older than retention, assert the stale-cursor code.
