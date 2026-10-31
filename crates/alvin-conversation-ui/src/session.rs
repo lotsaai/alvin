@@ -228,10 +228,30 @@ impl Render for SessionView {
     }
     let live = self.live;
     let toggle_view = cx.entity();
+    let banner = model.conversation().live(live).and_then(status::banner).map(|banner| {
+      let close_model = self.model.clone();
+      h_flex()
+        .id("session-banner")
+        .px_4()
+        .py_1()
+        .gap_2()
+        .bg(cx.theme().warning)
+        .text_color(cx.theme().warning_foreground)
+        .role(gpui_kit::Role::Status)
+        .aria_label(banner.text())
+        .child(div().flex_1().child(banner.text()))
+        .children((banner == status::Banner::Exited).then(|| {
+          Button::new(ElementId::from("session-banner-close"))
+            .small()
+            .label("Close session")
+            .on_click(move |_, _, cx| close_model.update(cx, |model, cx| model.close(live, cx)))
+        }))
+    });
     let column = v_flex()
       .flex_1()
       .min_w_0()
       .h_full()
+      .children(banner)
       .child(transcript::transcript(&self.model, self.live, &self.scroller))
       .children(
         self

@@ -307,12 +307,16 @@ impl Model {
                 return;
               }
             }
-            Some(Err(Error::Resync(reason))) => break Some(reason),
+            Some(Err(Error::Resync(reason))) => {
+              break Some(reason);
+            }
             Some(Err(error)) => {
               fail(&this, cx, &error);
               return;
             }
-            None => break None,
+            None => {
+              break None;
+            }
           }
         };
         match resync {

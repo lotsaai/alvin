@@ -231,7 +231,7 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 
 #### Task 20: Failure states in the UI
 **Description:** `ConnectionBanner` (`Reconnecting { attempt }`, `Lost`) and `SessionBanner` (reload-needed after `Resync`, process exited with a close action). Typed errors become Notifications naming the error code.
-**Acceptance criteria:** [ ] killing omp shows the exited banner; [ ] dropping the channel shows `Lost`; [ ] a rejected command shows its error code; [ ] no stale content stays visible after `Resync`.
+**Acceptance criteria:** [x] killing omp shows the exited banner; [x] dropping the channel shows `Lost`; [x] a rejected command shows its error code; [x] no stale content stays visible after `Resync`.
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 9, 13. **Files:** `alvin-conversation-ui/src/{status,session,workspace}.rs`. **Scope:** S.
 
 #### Task 21: Built-in tool renderers

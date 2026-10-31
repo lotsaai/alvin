@@ -1,14 +1,14 @@
 //! The window's root view: the sidebar, the open sessions as tabs, and the active session.
 
 use alvin_client::Client;
-use alvin_conversation::Level;
-use alvin_protocol::LiveSessionId;
+use alvin_conversation::{Connection, Level};
+use alvin_protocol::{ErrorCode, LiveSessionId};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
-  AppContext as _, Context, ElementId, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
-  Subscription, Window, div, prelude::FluentBuilder as _,
+  AppContext as _, Context, ElementId, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
+  StatefulInteractiveElement as _, Styled as _, Subscription, Window, div, prelude::FluentBuilder as _,
 };
 
 use crate::actions::{ToggleSidebar, WORKSPACE_CONTEXT};
@@ -72,6 +72,11 @@ impl Workspace {
           self.active = self.tabs.last().map(|(tab, _)| *tab);
         }
       }
+      // The banners say that omp exited and that the stream must be read again; a notification would say it twice.
+      ModelEvent::Failed {
+        code: Some(ErrorCode::OmpProcessExited | ErrorCode::StaleCursor),
+        ..
+      } => {}
       ModelEvent::Failed { code, message } => {
         let title = code.map_or_else(|| "Error".to_owned(), |code| format!("{code:?}"));
         window.push_notification(Notification::error(message.clone()).title(SharedString::from(title)), cx);
@@ -93,6 +98,31 @@ impl Workspace {
     }
     cx.notify();
   }
+}
+
+/// What the connection banner says, or nothing while the connection works.
+fn connection_text(connection: Connection) -> Option<String> {
+  match connection {
+    Connection::Connected => None,
+    Connection::Reconnecting { attempt } => Some(format!("Connection to the gateway dropped; reconnecting (attempt {attempt})")),
+    Connection::Lost => Some("Connection to the gateway lost".to_owned()),
+  }
+}
+
+/// What the connection to the gateway says when it is not working.
+fn connection_banner(model: &Entity<Model>, cx: &Context<Workspace>) -> Option<impl IntoElement> {
+  let text = connection_text(model.read(cx).conversation().connection())?;
+  Some(
+    div()
+      .id("connection-banner")
+      .px_4()
+      .py_1()
+      .bg(cx.theme().danger)
+      .text_color(cx.theme().danger_foreground)
+      .role(gpui_kit::Role::Status)
+      .aria_label(SharedString::from(text.clone()))
+      .child(SharedString::from(text)),
+  )
 }
 
 impl Render for Workspace {
@@ -138,6 +168,7 @@ impl Render for Workspace {
         v_flex()
           .flex_1()
           .min_w_0()
+          .children(connection_banner(&self.model, cx))
           .child(h_flex().gap_2().p_2().children(tabs))
           .child(match active {
             Some(view) => div().flex_1().min_h_0().child(view).into_any_element(),
@@ -180,7 +211,7 @@ mod tests {
   use gpui_kit::test::{TestQueryExt as _, TestWindowExt as _};
   use gpui_kit::{AnyWindowHandle, AppContext as _, Bounds, Entity, TestAppContext, WindowBounds, WindowOptions, px, size};
 
-  use super::Workspace;
+  use super::{Workspace, connection_text};
   use crate::test_support::{Fixture, until};
 
   fn open_window(cx: &mut TestAppContext, client: Client) -> (AnyWindowHandle, Entity<Workspace>) {
@@ -958,6 +989,109 @@ mod tests {
       })
       .unwrap_or(false)
     });
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn a_killed_omp_shows_the_exited_banner_and_closing_it_removes_the_tab(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let client = fixture.client().await;
+    let (window, workspace) = open_window(cx, client.clone());
+    open_new_session(cx, window, &workspace);
+    let live = active(cx, &workspace).expect("a session is open");
+    // The view reads the session's state first; a command run meanwhile would make omp refuse it.
+    until(cx, "the session's state to load", |cx| {
+      with_active(cx, &workspace, |view| view.thinking.is_some()).unwrap_or(false)
+    });
+    let result = LiveApiClient::bash(
+      &client,
+      alvin_protocol::BashRequest {
+        live,
+        command: "echo pid=$$".to_owned(),
+      },
+    )
+    .await
+    .unwrap();
+    let pid = result.output.trim().strip_prefix("pid=").unwrap().to_owned();
+
+    assert!(std::process::Command::new("kill").args(["-9", &pid]).status().unwrap().success());
+
+    until(cx, "the session to be marked exited", |cx| {
+      with_active(cx, &workspace, |view| view.exited).unwrap_or(false)
+    });
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert!(window.find("session-banner-close").visible());
+      window.click("session-banner-close", cx);
+    })
+    .unwrap();
+    until(cx, "the tab to close", |cx| active(cx, &workspace).is_none());
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn losing_the_gateway_shows_the_connection_banner(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    // A client whose gateway end is already gone: the in-process channel closed, which the client treats as lost for good.
+    let (to_gateway, gateway_inbox) = tokio::sync::mpsc::channel(4);
+    let (gateway_outbox, from_gateway) = tokio::sync::mpsc::channel(4);
+    let client = Client::connect(alvin_client::Endpoint::Channel(alvin_client::ChannelPair::from((
+      to_gateway,
+      from_gateway,
+    ))))
+    .await
+    .unwrap();
+    let (window, workspace) = open_window(cx, client);
+    drop((gateway_inbox, gateway_outbox));
+
+    until(cx, "the connection to be lost", |cx| {
+      cx.read(|cx| workspace.read(cx).model().read(cx).conversation().connection() == alvin_conversation::Connection::Lost)
+    });
+    cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
+    let said = cx.read(|cx| connection_text(workspace.read(cx).model().read(cx).conversation().connection()));
+    assert_eq!(said.as_deref(), Some("Connection to the gateway lost"));
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn a_command_omp_rejects_is_reported_with_its_error_code(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    let live = active(cx, &workspace).expect("a session is open");
+    let failures = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    cx.update(|cx| {
+      let model = workspace.read(cx).model().clone();
+      let failures = failures.clone();
+      cx.subscribe(&model, move |_, event: &crate::model::ModelEvent, _| {
+        if let crate::model::ModelEvent::Failed { code, message } = event {
+          failures.borrow_mut().push((*code, message.to_string()));
+        }
+      })
+      .detach();
+    });
+
+    cx.update(|cx| {
+      let model = workspace.read(cx).model().clone();
+      model.update(cx, |model, cx| {
+        model.navigate_tree(
+          live,
+          alvin_protocol::EntryId::from("no-such-entry".to_owned()),
+          false,
+          String::new(),
+          cx,
+        );
+      });
+    });
+
+    until(cx, "the failure to be reported", |_| !failures.borrow().is_empty());
+    let (code, message) = failures.borrow()[0].clone();
+    assert_eq!(code, Some(alvin_protocol::ErrorCode::OmpCommandFailed));
+    assert!(message.contains("navigate_tree"), "{message}");
     fixture.finish().await;
   }
 }
