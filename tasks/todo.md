@@ -13,10 +13,10 @@ Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mis
 - [x] Task 3: Scan session headers and group projects
 - [x] Task 4: `projects/list` end to end over channel and `ws://`
 - [x] Task 5: `sessions/list` with status and paging
-- [ ] Task 6: `alvind` face with telemetry and `wss://`
+- [x] Task 6: `alvind` face with telemetry
 
 ### Checkpoint 2a: Read path
-- [ ] Projects and sessions over channel, ws, and wss; pinned list matches; human reviews protocol shapes
+- [ ] Projects and sessions over channel and ws; pinned list matches; human reviews protocol shapes
 
 ## Phase 3: Live sessions (CLI-proven)
 - [ ] Task 7: omp-host core: start, events, prompt, abort, bash, teardown

@@ -4,18 +4,23 @@ use std::sync::Arc;
 
 use alvin_protocol::{ListSessions, ProjectSummary, SessionPage};
 
+use crate::telemetry::Metrics;
 use crate::{Error, GatewayConfig, Result};
 
 /// The application boundary. Cheap to clone; every transport serves the same methods from one instance.
 #[derive(Debug, Clone)]
 pub struct Gateway {
   config: Arc<GatewayConfig>,
+  pub(crate) metrics: Metrics,
 }
 
 impl Gateway {
-  /// Creates a gateway from its configuration.
+  /// Creates a gateway from its configuration. Create it after [`crate::Telemetry::init`] so its metrics are exported.
   pub fn new(config: GatewayConfig) -> Self {
-    Self { config: Arc::new(config) }
+    Self {
+      config: Arc::new(config),
+      metrics: Metrics::new(),
+    }
   }
 
   /// Every project with sessions. A session file that cannot be read fails the listing.

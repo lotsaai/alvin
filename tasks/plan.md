@@ -112,16 +112,16 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 **Verification:** `mise format`; `mise run --force test`.
 **Dependencies:** 4. **Files:** `crates/alvin-session-index/src/{status,scan,header}.rs`, `crates/alvin-protocol/src/sessions.rs`, `crates/alvin-gateway/src/rpc/*`, gateway tests. **Scope:** M.
 
-#### Task 6: `alvind` face with telemetry and `wss://`
-**Description:** Add the `alvind` binary target: confique + clap config (`alvind.toml`), telemetry (`telemetry.rs`, OTLP via `init-tracing-opentelemetry`, `ALVIN_LOG`), a TLS acceptor, graceful shutdown that closes live sessions and flushes telemetry, and RPC method spans plus the `alvin.rpc.duration` metric.
+#### Task 6: `alvind` face with telemetry
+**Description:** Add the `alvind` binary target: confique + clap config (`alvind.toml`), telemetry (`telemetry.rs`, OTLP via `init-tracing-opentelemetry`, `ALVIN_LOG`), graceful shutdown that flushes telemetry (and closes live sessions once Task 7 adds them), the sessions-directory resolution from omp's rules, and RPC method spans plus the `alvin.rpc.duration` metric.
 **Acceptance criteria:**
-- [ ] `alvind` serves `projects/list` on `ws://`, and on `wss://` with a test-generated certificate.
-- [ ] Ctrl-C exits cleanly and the flush runs. A flush error is logged, not dropped.
+- [x] `alvind` serves `projects/list` on `ws://`. (`wss://` is dropped: no TLS in the gateway.)
+- [x] Ctrl-C exits cleanly and the flush runs. A flush error is logged, not dropped.
 **Verification:** `mise format`; `mise run --force test`; manual: run `alvind`, connect with `websocat`, call `projects/list`, then send SIGINT.
-**Dependencies:** 4. **Files:** `crates/alvin-gateway/src/{main,telemetry,listener}.rs`, `Cargo.toml` (bin target). **Scope:** M.
+**Dependencies:** 4. **Files:** `crates/alvin-gateway/src/{main,settings,telemetry,omp_dirs}.rs`, `Cargo.toml` (bin target). **Scope:** M.
 
 ### Checkpoint 2a: Read path
-- [ ] Projects and sessions list over channel, `ws://`, and `wss://`. The pinned list matches.
+- [ ] Projects and sessions list over channel and `ws://`. The pinned list matches.
 - [ ] Human review of the protocol shapes before live methods build on them.
 
 ### Phase 3: Live sessions (CLI-proven)

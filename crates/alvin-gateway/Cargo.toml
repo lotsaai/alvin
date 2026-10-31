@@ -5,16 +5,29 @@ edition.workspace = true
 publish.workspace = true
 description = "Application boundary: serves the alvin protocol over a channel transport and WebSocket"
 
+[[bin]]
+name = "alvind"
+path = "src/main.rs"
+
 [dependencies]
 alvin-protocol = { version = "0.1.0", path = "../alvin-protocol", features = ["server"] }
 alvin-session-index = { version = "0.1.0", path = "../alvin-session-index" }
 alvin-workspace-hack = { version = "0.1.0", path = "../alvin-workspace-hack", default-features = false }
+clap = { version = "4.6.7", features = ["derive"] }
+confique = { version = "0.4.0", features = ["toml"] }
+dirs = "7.0.0"
+eyre = "0.6.14"
+init-tracing-opentelemetry = { version = "0.44.0", features = ["otlp", "tracer", "logs", "metrics"] }
 jsonrpsee = { version = "0.26.1", default-features = false, features = ["server", "macros"] }
+opentelemetry = { version = "0.33.1", features = ["metrics"] }
+opentelemetry-appender-tracing = "0.33.1"
+opentelemetry_sdk = { version = "0.33.1", features = ["rt-tokio", "trace", "logs", "metrics"] }
 thiserror = "2.0.21"
-tokio = { version = "1.54.1", features = ["rt", "net", "sync", "macros"] }
+tokio = { version = "1.54.1", features = ["rt", "net", "sync", "macros", "rt-multi-thread", "signal"] }
 tracing = "0.1.44"
+tracing-opentelemetry = { version = "0.34.0", features = ["metrics"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt", "json"] }
 typed-builder = "0.23.2"
 
 [dev-dependencies]
 alvin-client = { path = "../alvin-client" }
-tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }

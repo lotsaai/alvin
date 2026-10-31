@@ -16,7 +16,7 @@ Success:
 
 ## Configuration
 
-`GatewayConfig` (typed-builder), built by the faces: omp executable path, omp sessions directory (resolved by the face, see `SPEC-session-index.md`), optional default model (`provider/id`, passed to omp as `--model`). `alvind` adds a listen address and optional TLS certificate and key paths. No environment reads, no defaults chosen here.
+`GatewayConfig` (typed-builder), built by the faces: omp executable path, omp sessions directory (resolved by the face, see `SPEC-session-index.md`), optional default model (`provider/id`, passed to omp as `--model`). `alvind` adds a listen address. No environment reads, no defaults chosen here.
 
 ## Live Sessions
 
@@ -45,7 +45,7 @@ One `Error` in `error.rs`; variants wrap `alvin_session_index::Error` and `alvin
 
 - Methods: every trait's `into_rpc()` merged into one `RpcModule`; its `Methods` serve both transports.
 - Channel: the gateway provides the server half. `Gateway::connect_channel(capacity)` mints a connection, spawns a task that answers each request with `Methods::raw_json_request` and forwards subscription items, and returns a pair of `tokio::sync::mpsc` string channels. `alvin-client` wraps that pair in its channel transport; it does not depend on `alvin-gateway` or on jsonrpsee server crates. Pattern taken from tin `crates/tin-harnessd/src/rpc/memory.rs:38-98`.
-- WebSocket: `alvind` accepts TCP connections and serves the `Methods` with `jsonrpsee_server::utils::serve_with_graceful_shutdown`, which takes any `AsyncRead + AsyncWrite`. For `wss://` each stream is wrapped by a `tokio-rustls` acceptor built from the configured certificate and key. Binding to `127.0.0.1:0` reports the bound address for tests.
+- WebSocket: `alvind` accepts TCP connections and serves the `Methods` with `jsonrpsee_server::utils::serve_with_graceful_shutdown`, which takes any `AsyncRead + AsyncWrite`. There is no TLS in the gateway: `wss://` is a reverse proxy's job. Binding to `127.0.0.1:0` reports the bound address for tests.
 
 ## Telemetry
 
@@ -68,11 +68,11 @@ OpenTelemetry for logs, traces, and metrics, exported over OTLP. Ported from `~/
 
 ## alvind
 
-Binary target of this crate. `main.rs` is thin: telemetry setup, configuration loaded with `confique` and its clap layer into `GatewayConfig` plus listen settings (same sources and precedence as `alvin-app`, files under `dirs::config_dir()/alvin/alvind.toml`; `SPEC-app.md`, Configuration), `eyre` at the edge, run until a shutdown signal, then close all live sessions and flush telemetry.
+Binary target of this crate. `main.rs` is thin: telemetry setup, configuration loaded with `confique` and its clap layer into `GatewayConfig` plus listen settings (same sources and precedence as `alvin-app`, files under `dirs::config_dir()/alvin/alvind.toml`; `SPEC-app.md`, Configuration), `eyre` at the edge, `listen` defaulting to `127.0.0.1:7410`, the sessions directory from `alvin_gateway::sessions_dir` (omp's rules, a pure function the app reuses) when not configured, telemetry initialised before the async runtime starts (the OTLP HTTP exporter builds a blocking client), run until a shutdown signal, then close all live sessions and flush telemetry.
 
 ## Dependencies
 
-`alvin-protocol` (`server`), `alvin-session-index`, `alvin-omp-host`, `jsonrpsee` (`server`), `tokio`, `tokio-rustls`, `rustls`, `uuid` (v7), `jiff`, `blake3`, `tracing`, `opentelemetry` (metrics API), `init-tracing-opentelemetry` (`otlp`, `tracer`, `logs`, `metrics`), `opentelemetry_sdk`, `tracing-opentelemetry`, `tracing-subscriber`, `thiserror`, `typed-builder`, `alvin-workspace-hack`; for `alvind` only: `clap`, `confique` (`toml`), `dirs`, `eyre`. `alvin-omp-host` and `alvin-session-index` use `tracing` only. All approved. Every dependency at latest stable when added.
+`alvin-protocol` (`server`), `alvin-session-index`, `alvin-omp-host`, `jsonrpsee` (`server`), `tokio`, `uuid` (v7), `jiff`, `blake3`, `tracing`, `opentelemetry` (metrics API), `init-tracing-opentelemetry` (`otlp`, `tracer`, `logs`, `metrics`: its OTLP provider builders only, not its `Guard`), `opentelemetry_sdk`, `opentelemetry-appender-tracing` (the `tracing` to OTLP logs bridge), `tracing-opentelemetry`, `tracing-subscriber`, `thiserror`, `typed-builder`, `alvin-workspace-hack`; for `alvind` only: `clap`, `confique` (`toml`), `dirs`, `eyre`. `alvin-omp-host` and `alvin-session-index` use `tracing` only. All approved. Every dependency at latest stable when added.
 
 ## Project Structure
 
@@ -85,7 +85,7 @@ crates/alvin-gateway/src/live.rs         live session entry, pump, event log
 crates/alvin-gateway/src/rpc.rs          server trait impls, merged module
 crates/alvin-gateway/src/rpc/            one file per protocol area
 crates/alvin-gateway/src/channel.rs      channel transport server half
-crates/alvin-gateway/src/listener.rs     ws and wss listener
+crates/alvin-gateway/src/listener.rs     ws listener
 crates/alvin-gateway/src/telemetry.rs    logs, traces, metrics setup for both faces
 crates/alvin-gateway/src/main.rs         alvind
 crates/alvin-gateway/tests/              acceptance tests: the wire contract through alvin-client
@@ -100,7 +100,6 @@ crates/alvin-gateway/tests/              acceptance tests: the wire contract thr
 - Idempotent open: two `live/open` calls on one session file return one `LiveSessionId` and one omp process.
 - Process death: kill omp, assert the process-exited event and error code.
 - Shutdown: after gateway shutdown no omp process remains.
-- `wss://`: one round trip over TLS with a certificate generated by the test.
 
 ## Boundaries
 
@@ -110,4 +109,4 @@ crates/alvin-gateway/tests/              acceptance tests: the wire contract thr
 
 ## Open Questions
 
-None. Dependencies approved: `tokio-rustls`, `rustls`, `clap`, `init-tracing-opentelemetry`, `opentelemetry`, `opentelemetry_sdk`, `tracing-opentelemetry`.
+None. Dependencies approved: `clap`, `init-tracing-opentelemetry`, `opentelemetry`, `opentelemetry_sdk`, `opentelemetry-appender-tracing`, `tracing-opentelemetry`. `wss://` on the server side is out of scope (decided with Task 6).
