@@ -387,6 +387,18 @@ impl Model {
     .detach();
   }
 
+  /// Aborts the running turn and sends `text` in its place. Messages queued behind the turn are not touched.
+  pub fn interrupt_and_send(&mut self, live: LiveSessionId, text: String, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      let request = PromptRequest { live, message: text };
+      if let Err(error) = LiveApiClient::abort_and_prompt(&client, request).await.map_err(Error::from) {
+        fail(&this, cx, &error);
+      }
+    })
+    .detach();
+  }
+
   /// Aborts what is running: the `!` command when there is one, else the turn. Queued messages the abort withdraws come back
   /// as [`ModelEvent::ComposerText`].
   pub fn abort(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {

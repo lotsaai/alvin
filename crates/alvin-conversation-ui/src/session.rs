@@ -37,6 +37,40 @@ pub(crate) struct SessionView {
 }
 
 impl SessionView {
+  /// While a turn runs, a button that aborts it and sends what the composer holds in its place.
+  fn interrupt_button(&self, cx: &mut Context<Self>) -> Option<gpui_kit::AnyElement> {
+    let live = self.live;
+    let running = self
+      .model
+      .read(cx)
+      .conversation()
+      .live(live)
+      .is_some_and(|view| view.run == alvin_conversation::Run::Running);
+    if !running {
+      return None;
+    }
+    let (model, composer) = (self.model.clone(), self.composer.clone());
+    Some(
+      h_flex()
+        .px_4()
+        .child(
+          Button::new(ElementId::from("session-interrupt"))
+            .small()
+            .ghost()
+            .label("Interrupt and send")
+            .on_click(move |_, window, cx| {
+              let text = composer.read(cx).value().trim().to_owned();
+              if text.is_empty() {
+                return;
+              }
+              composer.update(cx, |composer, cx| composer.set_value("", window, cx));
+              model.update(cx, |model, cx| model.interrupt_and_send(live, text, cx));
+            }),
+        )
+        .into_any_element(),
+    )
+  }
+
   /// The session menu: rename, compact, export, and the counts omp gives.
   fn session_menu(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
     let live = self.live;
@@ -310,6 +344,7 @@ impl Render for SessionView {
               }),
           ),
       )
+      .children(self.interrupt_button(cx))
       .children(self.menu_open.then(|| self.session_menu(cx)))
       .children(self.command_completion(cx))
       .child(self.pickers.view(&self.model, live))
@@ -342,6 +377,14 @@ impl Render for SessionView {
 }
 
 impl SessionView {
+  /// Types into the composer.
+  #[cfg(test)]
+  pub(crate) fn type_composer(&self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+    self
+      .composer
+      .update(cx, |composer, cx| composer.set_value(text.to_owned(), window, cx));
+  }
+
   /// Types into the session menu's name field.
   #[cfg(test)]
   pub(crate) fn type_session_name(&self, text: &str, window: &mut Window, cx: &mut Context<Self>) {

@@ -1094,4 +1094,33 @@ mod tests {
     assert!(message.contains("navigate_tree"), "{message}");
     fixture.finish().await;
   }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn interrupting_a_running_turn_sends_the_composer_text_in_its_place(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    start_long_turn(cx, window, &workspace);
+
+    with_active_session(cx, window, &workspace, |session, window, cx| {
+      session.type_composer("Reply with the single word swapped.", window, cx);
+    });
+    click(cx, window, "session-interrupt");
+
+    // The long turn was cut off and the new text went to omp as its own prompt.
+    until(cx, "the replacement prompt to reach the transcript", |cx| {
+      with_active(cx, &workspace, |view| {
+        view.last_prompt == Some(PromptStatus::Aborted)
+          && view
+            .transcript
+            .iter()
+            .any(|message| matches!(message, AgentMessage::User(user) if format!("{user:?}").contains("single word swapped")))
+      })
+      .unwrap_or(false)
+    });
+    assert_eq!(composer_text(cx, window), "");
+    fixture.finish().await;
+  }
 }

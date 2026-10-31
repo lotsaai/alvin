@@ -240,8 +240,8 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 13. **Files:** `alvin-conversation-ui/src/tool_card.rs`, fixtures. **Scope:** S.
 
 ### Checkpoint: Complete
-- [ ] Every protocol method has a UI path and every `EventBody` variant has a visible effect, both tested.
-- [ ] `mise format`, `mise run --force test`, `mise check` clean. Windows teardown verified on the Windows VM, and the full suite has run there through a final brief (`tasks/briefs/final-windows.md`).
+- [x] Every protocol method has a UI path and every `EventBody` variant has a visible effect, both tested. (`live/commands` is served and tested over both transports; the UI gets the same list from `availableCommandsUpdate` events, so it never calls it.)
+- [x] `mise format`, `mise run --force test`, `mise check` clean. [ ] Windows teardown verified on the Windows VM, and the full suite has run there through a final brief (`tasks/briefs/final-windows.md`).
 - [ ] `AGENTS.md` "Before Committing Checklist" holds. Human sign-off.
 
 ## Risks and Mitigations
