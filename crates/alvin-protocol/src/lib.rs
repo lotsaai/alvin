@@ -9,6 +9,26 @@ mod error;
 pub use error::{Error, Result};
 pub use ids::{EventId, LiveSessionId};
 
+#[cfg(test)]
+mod client_tests {
+  use jsonrpsee::core::client::Error as ClientError;
+  use jsonrpsee::types::ErrorObjectOwned;
+
+  use crate::error_codes::STALE_CURSOR;
+
+  /// The client half (default features) surfaces a gateway error with its stable code intact.
+  #[test]
+  fn client_half_keeps_the_wire_error_code() {
+    let wire = ErrorObjectOwned::owned(STALE_CURSOR, "cursor too old", None::<()>);
+    let json = serde_json::to_string(&wire).unwrap();
+    let received: ErrorObjectOwned = serde_json::from_str(&json).unwrap();
+    match ClientError::Call(received) {
+      ClientError::Call(error) => assert_eq!(error.code(), STALE_CURSOR),
+      other => panic!("unexpected client error: {other}"),
+    }
+  }
+}
+
 #[cfg(all(test, feature = "server"))]
 mod server_tests {
   use jsonrpsee::RpcModule;

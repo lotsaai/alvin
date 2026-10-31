@@ -8,5 +8,6 @@ cd "$proj_dir" || exit 1
 
 set -euo pipefail
 
-# alvin-protocol's `server` half is part of the contract, so its tests run with it enabled.
+# alvin-protocol has two halves: the default client half and the `server` half. Test each as shipped.
+cargo nextest run --cargo-quiet --show-progress=bar --status-level=slow "$@"
 cargo nextest run --cargo-quiet --show-progress=bar --status-level=slow --features alvin-protocol/server "$@"
