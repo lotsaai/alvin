@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
-use alvin_client::{ChannelPair, Client, Endpoint, Error, EventStream};
+use tokio::sync::watch;
+
+use alvin_client::{ChannelPair, Client, ConnectionState, Endpoint, Error, EventStream, ResyncReason};
 use alvin_gateway::{Gateway, GatewayConfig, WsServer};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
@@ -693,4 +695,175 @@ async fn live_requests_are_validated_in_the_gateway() {
     ),
     "{no_subscription:?}"
   );
+}
+
+/// Waits until the client's connection state satisfies `wanted`.
+async fn wait_for_state(state: &mut watch::Receiver<ConnectionState>, wanted: impl Fn(ConnectionState) -> bool) {
+  tokio::time::timeout(PATIENCE, state.wait_for(|state| wanted(*state)))
+    .await
+    .unwrap()
+    .unwrap();
+}
+
+fn reconnecting(state: ConnectionState) -> bool {
+  matches!(state, ConnectionState::Reconnecting { .. })
+}
+
+fn connected(state: ConnectionState) -> bool {
+  state == ConnectionState::Connected
+}
+
+async fn serve_at(gateway: &Gateway, addr: std::net::SocketAddr) -> WsServer {
+  gateway.serve_ws(addr).await.unwrap()
+}
+
+async fn ws_client_at(addr: std::net::SocketAddr) -> Client {
+  Client::connect(format!("ws://{addr}").parse::<Endpoint>().unwrap()).await.unwrap()
+}
+
+#[tokio::test]
+async fn a_stream_continues_across_a_listener_restart_without_gap_or_duplicate() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let server = gateway.serve_ws(([127, 0, 0, 1], 0).into()).await.unwrap();
+  let addr = server.local_addr();
+  let ws = ws_client_at(addr).await;
+  let channel = channel_client(&gateway).await;
+  let opened = open_new(&channel).await;
+  let mut states = ws.watch_connection();
+  // Two subscribers from the start: one over the connection that will drop, one over the channel as the reference.
+  let mut stream = subscribe(&ws, opened.live, None).await.unwrap();
+  let mut reference = subscribe(&channel, opened.live, None).await.unwrap();
+  prompt(
+    &channel,
+    opened.live,
+    "Write the numbers from 1 to 300, one per line, nothing else.",
+  )
+  .await;
+  let mut got = Vec::new();
+  for _ in 0..4 {
+    got.push(next_event(&mut stream).await);
+  }
+
+  server.shutdown().await.unwrap();
+  wait_for_state(&mut states, reconnecting).await;
+  // While reconnecting, a call fails at once and is not queued.
+  let error = Error::from(LiveApiClient::list(&ws).await.unwrap_err());
+  assert!(matches!(error, Error::Disconnected(_)), "{error:?}");
+  let server = serve_at(&gateway, addr).await;
+  wait_for_state(&mut states, connected).await;
+  until_settled(&mut stream, &mut got).await;
+
+  let mut want = Vec::new();
+  until_settled(&mut reference, &mut want).await;
+  assert_eq!(got, want);
+  assert!(strictly_increasing(&got));
+  drop((stream, reference, ws, channel));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_restarted_gateway_ends_the_stream_with_one_resync() {
+  let project = Project::new(1);
+  let first = project.live_gateway();
+  let server = first.serve_ws(([127, 0, 0, 1], 0).into()).await.unwrap();
+  let addr = server.local_addr();
+  let ws = ws_client_at(addr).await;
+  let opened = open_new(&ws).await;
+  let mut states = ws.watch_connection();
+  let mut stream = subscribe(&ws, opened.live, None).await.unwrap();
+
+  server.shutdown().await.unwrap();
+  first.shutdown().await.unwrap();
+  wait_for_state(&mut states, reconnecting).await;
+  // A new gateway has an empty registry: the live session is gone.
+  let second = project.live_gateway();
+  let server = serve_at(&second, addr).await;
+  wait_for_state(&mut states, connected).await;
+
+  // Events published before the drop may still be buffered; the resync follows them, once, and ends the stream.
+  let resyncs = tokio::time::timeout(PATIENCE, async {
+    let mut resyncs = Vec::new();
+    while let Some(item) = stream.next().await {
+      if let Err(Error::Resync(reason)) = item {
+        resyncs.push(reason);
+      }
+    }
+    resyncs
+  })
+  .await
+  .unwrap();
+  assert_eq!(resyncs, [ResyncReason::UnknownLiveSession]);
+  drop((stream, ws));
+  server.shutdown().await.unwrap();
+  second.shutdown().await.unwrap();
+}
+
+/// A TCP forwarder in front of a listener. Dropping it closes its listener and every connection it carries, abruptly,
+/// like a network failure: unlike a listener shutdown, which lets requests in flight finish.
+struct Proxy {
+  _tasks: tokio::task::JoinSet<()>,
+}
+
+impl Proxy {
+  async fn start(listen: std::net::SocketAddr, upstream: std::net::SocketAddr) -> (Self, std::net::SocketAddr) {
+    let listener = tokio::net::TcpListener::bind(listen).await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let mut tasks = tokio::task::JoinSet::new();
+    tasks.spawn(async move {
+      let mut connections = tokio::task::JoinSet::new();
+      while let Ok((mut client, _)) = listener.accept().await {
+        connections.spawn(async move {
+          if let Ok(mut gateway) = tokio::net::TcpStream::connect(upstream).await {
+            drop(tokio::io::copy_bidirectional(&mut client, &mut gateway).await);
+          }
+        });
+      }
+    });
+    (Self { _tasks: tasks }, addr)
+  }
+}
+
+#[tokio::test]
+async fn a_call_in_flight_during_a_drop_fails_and_is_not_sent_again() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let server = gateway.serve_ws(([127, 0, 0, 1], 0).into()).await.unwrap();
+  let (proxy, addr) = Proxy::start(([127, 0, 0, 1], 0).into(), server.local_addr()).await;
+  let ws = ws_client_at(addr).await;
+  let opened = open_new(&ws).await;
+  let mut states = ws.watch_connection();
+  let marker = project.root.join("ran.txt");
+  let command = format!("echo ran >> {} && sleep 3", marker.display());
+  let call = {
+    let ws = ws.clone();
+    tokio::spawn(async move {
+      LiveApiClient::bash(
+        &ws,
+        BashRequest {
+          live: opened.live,
+          command,
+        },
+      )
+      .await
+    })
+  };
+  while !marker.exists() {
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+
+  drop(proxy);
+  let error = Error::from(call.await.unwrap().unwrap_err());
+  assert!(matches!(error, Error::Disconnected(_)), "{error:?}");
+  wait_for_state(&mut states, reconnecting).await;
+  let (proxy, _) = Proxy::start(addr, server.local_addr()).await;
+  wait_for_state(&mut states, connected).await;
+
+  // The command ran once on the gateway; a client retry would have appended a second line. Give one time to appear.
+  tokio::time::sleep(Duration::from_secs(4)).await;
+  assert_eq!(std::fs::read_to_string(&marker).unwrap(), "ran\n");
+  drop((ws, proxy));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
 }

@@ -147,11 +147,11 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 #### Task 9: Client reconnect and `Resync`
 **Description:** `reconnect.rs`: a state machine (`Connecting`/`Connected`/`Reconnecting`/`Lost`) driven by `on_disconnect`, with backoff from 250 ms to 30 s plus jitter (`jiff::SignedDuration`). `gloo-timers` provides timers on wasm. The event stream resumes from the last id. A second stale cursor or an unknown live session yields one `Resync`. A closed channel goes straight to `Lost`. Calls never retry.
 **Acceptance criteria:**
-- [ ] Stop and restart the ws listener mid-turn: the state goes `Reconnecting` → `Connected`, and the stream continues with no gap and no duplicate.
-- [ ] Restart with an empty log: exactly one `Resync`.
-- [ ] A call in flight during the drop fails with `Disconnected` and is not re-sent.
+- [x] Stop and restart the ws listener mid-turn: the state goes `Reconnecting` → `Connected`, and the stream continues with no gap and no duplicate (checked against a second subscriber over the channel).
+- [x] Restart with an empty registry: exactly one `Resync`.
+- [x] A call in flight during an abrupt drop fails with `Disconnected` and is not re-sent. A call made while reconnecting fails at once.
 **Verification:** `mise format`; `mise run --force test`; `mise check` (wasm).
-**Dependencies:** 8. **Files:** `crates/alvin-client/src/{reconnect,events,client,error}.rs`, gateway tests. **Scope:** M.
+**Dependencies:** 8. **Files:** `crates/alvin-client/src/{reconnect,events,client,error}.rs`, `crates/alvin-gateway/tests/wire.rs`. **Scope:** M.
 
 #### Task 10: Windows Job Object teardown
 **Description:** `job.rs` (`cfg(windows)`, `windows-sys`): spawn suspended, assign to the kill-on-close job, resume, then `Client::from_io`. The unsafe boundary is documented with `# Safety` / `// SAFETY:`.

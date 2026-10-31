@@ -25,7 +25,7 @@ opentelemetry = { version = "0.33.1", features = ["metrics"] }
 opentelemetry-appender-tracing = "0.33.1"
 opentelemetry_sdk = { version = "0.33.1", features = ["rt-tokio", "trace", "logs", "metrics"] }
 thiserror = "2.0.21"
-tokio = { version = "1.54.1", features = ["rt", "net", "sync", "macros", "rt-multi-thread", "signal", "time", "fs"] }
+tokio = { version = "1.54.1", features = ["rt", "net", "sync", "macros", "rt-multi-thread", "signal", "time", "fs", "io-util"] }
 tracing = "0.1.44"
 tracing-opentelemetry = { version = "0.34.0", features = ["metrics"] }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt", "json"] }

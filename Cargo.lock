@@ -16,12 +16,16 @@ name = "alvin-client"
 version = "0.1.0"
 dependencies = [
  "alvin-protocol",
+ "gloo-timers",
+ "jiff",
  "jsonrpsee",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
+ "tracing",
  "url",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

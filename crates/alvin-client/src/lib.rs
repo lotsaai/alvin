@@ -6,6 +6,7 @@ mod client;
 mod endpoint;
 mod error;
 mod events;
+mod reconnect;
 mod ws;
 
 pub use client::Client;
@@ -13,4 +14,5 @@ pub use client::Client;
 pub use endpoint::ChannelPair;
 pub use endpoint::Endpoint;
 pub use error::{Error, Result};
-pub use events::EventStream;
+pub use events::{EventStream, ResyncReason};
+pub use reconnect::ConnectionState;

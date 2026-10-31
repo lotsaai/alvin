@@ -5,6 +5,8 @@ use std::sync::Arc;
 use alvin_protocol::{ErrorCode, ErrorData};
 use jsonrpsee::core::client::Error as RpcError;
 
+use crate::events::ResyncReason;
+
 /// Errors a client call or connection can fail with.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -37,6 +39,11 @@ pub enum Error {
     #[source]
     source: serde_json::Error,
   },
+
+  /// An event stream cannot continue without a gap and has ended; it is the stream's last item. Reload the transcript with
+  /// `live/messages` and subscribe again.
+  #[error("the event stream must resync: {0:?}")]
+  Resync(ResyncReason),
 
   /// The connection to the gateway is gone.
   #[error("disconnected from the gateway")]
@@ -105,6 +112,7 @@ mod tests {
 
   use alvin_protocol::{ErrorCode, ErrorData};
   use jsonrpsee::core::client::Error as RpcError;
+
   use jsonrpsee::types::ErrorObjectOwned;
 
   use super::Error;

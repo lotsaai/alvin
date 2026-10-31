@@ -50,17 +50,17 @@ jsonrpsee 0.26.1 itself does not reconnect: none of its features add it, and `as
 
 What the crate would save is the backoff loop below; the resumable event stream would still be ours. The design below keeps the typed client and puts reconnect beside it.
 
-- State: `Client::state()` returns a watch of `Connecting`, `Connected`, `Reconnecting { attempt }`, `Lost { error }` (heyday's states). The UI renders it; it does not drive reconnects.
+- State: `Client::connection_state()` and `Client::watch_connection()` (a `tokio::sync::watch` receiver) report `Connected`, `Reconnecting { attempt }` or `Lost`. There is no `Connecting` state: the first connect is `Client::connect` itself, so a client that exists was connected once. The UI renders the state; it does not drive reconnects. `Client` is cheap to clone; clones share one connection.
 - Detection: a task awaits `on_disconnect()` on the current jsonrpsee client (`jsonrpsee_core::client::async_client::Client::on_disconnect`, read on docs.rs).
 - Reconnect: `ws(s)://` only. The client reconnects to the same URL with exponential backoff from 250 ms doubling to a 30 s limit, plus jitter, forever, until the `Client` is dropped. Constants are named and documented; no settings. Durations are `jiff::SignedDuration`. On success the new jsonrpsee client replaces the old one; later calls go to it.
 - Channel: an in-process gateway does not drop a live connection; the channel closing means the gateway shut down, so the state goes `Lost` with no retry.
 - Calls: a call in flight when the connection drops fails with `Error::Disconnected`. Calls are never retried by the client: `live/prompt`, `live/bash` and others are not idempotent, and a retry could run them twice. Calls made while `Reconnecting` fail at once with `Error::Disconnected`.
-- Events: `Client::events(live)` returns a stream that survives reconnects. It records the last `EventId` it delivered; after a reconnect it calls `events/subscribe { live, after: last }`, and the gateway replays from there (`SPEC-gateway.md`), so no event is lost or repeated. If the gateway answers with the stale-cursor code, or the live session is unknown after a gateway restart, the stream yields one `Resync` item carrying that reason and stops; the UI reloads with `live/messages` and opens a new stream.
-- The same stream handles a subscription the gateway ended for falling behind (stale cursor): it resubscribes with its last id once; a second stale cursor yields `Resync`.
+- Events: `Client::events(request)` returns an `EventStream` that survives reconnects. It records the last `EventId` it delivered; after a reconnect it calls `events/subscribe { live, after: last }`, and the gateway replays from there (`SPEC-gateway.md`), so no event is lost or repeated. If the gateway answers with the stale-cursor code, or the live session is unknown after a gateway restart or a `live/close`, the stream's last item is `Err(Error::Resync(reason))` (`ResyncReason::StaleCursor` or `UnknownLiveSession`) and it then ends; the UI reloads with `live/messages` and opens a new stream. The stream ends with `None` when the client is `Lost`.
+- The same stream handles a subscription the gateway ended for falling behind: it resubscribes from its last id. A subscription that ends twice in a row while connected without delivering an event yields `Resync(StaleCursor)`, so a gateway that keeps ending subscriptions cannot make the stream spin.
 
 ## Dependencies
 
-`alvin-protocol` (no `server`), `jsonrpsee` (`client-core`, `async-client`, `macros`; native: `client-ws-transport-tls`; wasm: `wasm-client`, `async-wasm-client`), `tokio` (`sync`; `time` native only), `gloo-timers` (wasm only, `futures` feature, for the backoff delay where tokio's timer does not run; approved), `url`, `jiff`, `thiserror`, `tracing`, `alvin-workspace-hack`.
+`alvin-protocol` (no `server`), `jsonrpsee` (`client-core`, `async-client`, `macros`; native: `client-ws-transport-tls`; wasm: `wasm-client`, `async-wasm-client`), `tokio` (`sync`, `macros`; `time` native only), `gloo-timers` (wasm only, `futures` feature, for the backoff delay where tokio's timer does not run; approved), `wasm-bindgen-futures` (wasm only, spawns the reconnect supervisor in the browser, where there is no tokio runtime), `url`, `jiff`, `thiserror`, `tracing`, `alvin-workspace-hack`.
 
 ## Project Structure
 
