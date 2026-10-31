@@ -27,6 +27,8 @@ pub struct SessionHead {
   pub modified: Timestamp,
   /// The session file this session branched from.
   pub parent: Option<PathBuf>,
+  /// Whether the head window shows an assistant message, which makes the session not empty.
+  pub assistant_in_head: bool,
 }
 
 /// A record that can open a session file.
@@ -86,6 +88,13 @@ fn text_of(content: &serde_json::Value) -> String {
       .join(" "),
     _ => String::new(),
   }
+}
+
+/// Whether raw bytes carry an assistant role marker. omp counts these in the windows it reads, so a message
+/// whose record is cut off by a window still counts.
+pub(crate) fn has_assistant_marker(bytes: &[u8]) -> bool {
+  const MARKER: &[u8] = br#""role":"assistant""#;
+  bytes.windows(MARKER.len()).any(|window| window == MARKER)
 }
 
 /// The first line of `text` without control characters, trimmed; `None` when nothing is left.
@@ -162,13 +171,16 @@ pub(crate) fn parse(path: &Path, head: &[u8], modified: Timestamp) -> Result<Ses
 
   let mut summary = None;
   let mut first_message = None;
+  let mut assistant_in_head = false;
   for chunk in chunks {
     let Some(line) = chunk.strip_suffix(b"\n") else {
       first_message = first_message.or_else(|| torn_user_text(chunk));
+      assistant_in_head |= has_assistant_marker(chunk);
       break;
     };
     match serde_json::from_slice(line).map_err(|source| decode(source, offset))? {
       Entry::Compaction { short_summary: Some(text) } => summary = Some(text),
+      Entry::Message { message } if message.role == "assistant" => assistant_in_head = true,
       Entry::Message { message } if message.role == "user" && first_message.is_none() => {
         first_message = Some(text_of(&message.content));
       }
@@ -195,6 +207,7 @@ pub(crate) fn parse(path: &Path, head: &[u8], modified: Timestamp) -> Result<Ses
     created: header.timestamp,
     modified,
     parent: header.parent_session,
+    assistant_in_head,
   })
 }
 

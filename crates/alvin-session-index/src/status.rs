@@ -60,6 +60,14 @@ pub(crate) fn status_of(tail: &[u8]) -> SessionStatus {
   }
 }
 
+/// Whether `line` is a complete record of an assistant message. A line that is not JSON is not one.
+pub(crate) fn is_assistant_message(line: &[u8]) -> bool {
+  line.first() == Some(&b'{')
+    && serde_json::from_slice::<Record>(line)
+      .ok()
+      .is_some_and(|record| record.kind == "message" && record.message.is_some_and(|message| message.role == "assistant"))
+}
+
 fn has_tool_call(content: Option<&serde_json::Value>) -> bool {
   content.and_then(serde_json::Value::as_array).is_some_and(|blocks| {
     blocks
