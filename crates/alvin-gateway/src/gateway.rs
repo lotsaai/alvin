@@ -6,8 +6,9 @@ use std::time::Instant;
 
 use alvin_omp_host::{Host, StartRequest};
 use alvin_protocol::{
-  BashRequest, BashResult, ListSessions, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest, OpenRequest, OpenTarget,
-  ProjectSummary, PromptRequest, SessionPage, SessionState, SubscribeRequest,
+  AbortAndRestoreQueueResult, BashRequest, BashResult, ListSessions, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
+  OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, RemoveQueuedMessageResult,
+  RemoveQueuedRequest, SessionPage, SessionState, SubscribeRequest,
 };
 use tokio::sync::broadcast;
 
@@ -189,6 +190,40 @@ impl Gateway {
   pub(crate) async fn prompt(&self, request: PromptRequest) -> Result<()> {
     let live = self.live.get(request.live)?;
     self.timed("prompt", live.session.prompt(request.message)).await.map(drop)
+  }
+
+  pub(crate) async fn steer(&self, request: PromptRequest) -> Result<()> {
+    let live = self.live.get(request.live)?;
+    self.timed("steer", live.session.steer(request.message)).await
+  }
+
+  pub(crate) async fn follow_up(&self, request: PromptRequest) -> Result<()> {
+    let live = self.live.get(request.live)?;
+    self.timed("follow_up", live.session.follow_up(request.message)).await
+  }
+
+  pub(crate) async fn abort_and_prompt(&self, request: PromptRequest) -> Result<()> {
+    let live = self.live.get(request.live)?;
+    self.timed("abort_and_prompt", live.session.abort_and_prompt(request.message)).await
+  }
+
+  pub(crate) async fn remove_queued(&self, request: RemoveQueuedRequest) -> Result<RemoveQueuedMessageResult> {
+    let live = self.live.get(request.live)?;
+    self
+      .timed("remove_queued_message", live.session.remove_queued(request.message, request.queue))
+      .await
+  }
+
+  pub(crate) async fn promote_queued(&self, request: PromoteQueuedRequest) -> Result<PromoteQueuedMessageResult> {
+    let live = self.live.get(request.live)?;
+    self
+      .timed("promote_queued_message", live.session.promote_queued(request.message))
+      .await
+  }
+
+  pub(crate) async fn restore_queue(&self, id: LiveSessionId) -> Result<AbortAndRestoreQueueResult> {
+    let live = self.live.get(id)?;
+    self.timed("abort_and_restore_queue", live.session.restore_queue()).await
   }
 
   pub(crate) async fn abort(&self, id: LiveSessionId) -> Result<()> {

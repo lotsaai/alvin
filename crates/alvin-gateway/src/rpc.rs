@@ -3,8 +3,10 @@
 use std::time::Instant;
 
 use alvin_protocol::{
-  BashRequest, BashResult, EventsApiServer, ListSessions, LiveApiServer, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
-  OpenRequest, ProjectSummary, ProjectsApiServer, PromptRequest, SessionPage, SessionState, SessionsApiServer, SubscribeRequest,
+  AbortAndRestoreQueueResult, BashRequest, BashResult, EventsApiServer, ListSessions, LiveApiServer, LiveSessionId, LiveSessionSummary,
+  MessagesPage, MessagesRequest, OpenRequest, ProjectSummary, ProjectsApiServer, PromoteQueuedMessageResult, PromoteQueuedRequest,
+  PromptRequest, QueueApiServer, RemoveQueuedMessageResult, RemoveQueuedRequest, SessionPage, SessionState, SessionsApiServer,
+  SubscribeRequest,
 };
 use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
 use jsonrpsee::server::{Methods, PendingSubscriptionSink, SubscriptionMessage};
@@ -54,6 +56,18 @@ impl LiveApiServer for Gateway {
     self.traced("live/prompt", Gateway::prompt(self, request)).await
   }
 
+  async fn steer(&self, request: PromptRequest) -> RpcResult<()> {
+    self.traced("live/steer", Gateway::steer(self, request)).await
+  }
+
+  async fn follow_up(&self, request: PromptRequest) -> RpcResult<()> {
+    self.traced("live/followUp", Gateway::follow_up(self, request)).await
+  }
+
+  async fn abort_and_prompt(&self, request: PromptRequest) -> RpcResult<()> {
+    self.traced("live/abortAndPrompt", Gateway::abort_and_prompt(self, request)).await
+  }
+
   async fn abort(&self, live: LiveSessionId) -> RpcResult<()> {
     self.traced("live/abort", Gateway::abort(self, live)).await
   }
@@ -64,6 +78,21 @@ impl LiveApiServer for Gateway {
 
   async fn abort_bash(&self, live: LiveSessionId) -> RpcResult<()> {
     self.traced("live/abortBash", Gateway::abort_bash(self, live)).await
+  }
+}
+
+#[async_trait]
+impl QueueApiServer for Gateway {
+  async fn remove(&self, request: RemoveQueuedRequest) -> RpcResult<RemoveQueuedMessageResult> {
+    self.traced("queue/remove", self.remove_queued(request)).await
+  }
+
+  async fn promote(&self, request: PromoteQueuedRequest) -> RpcResult<PromoteQueuedMessageResult> {
+    self.traced("queue/promote", self.promote_queued(request)).await
+  }
+
+  async fn restore(&self, live: LiveSessionId) -> RpcResult<AbortAndRestoreQueueResult> {
+    self.traced("queue/restore", self.restore_queue(live)).await
   }
 }
 
@@ -116,6 +145,7 @@ impl Gateway {
     let mut methods = Methods::from(ProjectsApiServer::into_rpc(self.clone()));
     methods.merge(SessionsApiServer::into_rpc(self.clone()))?;
     methods.merge(LiveApiServer::into_rpc(self.clone()))?;
+    methods.merge(QueueApiServer::into_rpc(self.clone()))?;
     methods.merge(EventsApiServer::into_rpc(self.clone()))?;
     Ok(methods)
   }
@@ -159,15 +189,21 @@ mod tests {
         "events/subscribe",
         "events/unsubscribe",
         "live/abort",
+        "live/abortAndPrompt",
         "live/abortBash",
         "live/bash",
         "live/close",
+        "live/followUp",
         "live/list",
         "live/messages",
         "live/open",
         "live/prompt",
         "live/state",
+        "live/steer",
         "projects/list",
+        "queue/promote",
+        "queue/remove",
+        "queue/restore",
         "sessions/list",
       ]
     );

@@ -201,7 +201,7 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 
 #### Task 14: Queue: steer, follow-up, and queue edits
 **Description:** Methods: `live/steer`, `followUp`, `abortAndPrompt`, `queue/remove|promote|restore`. Add the `queue_update` fold, `QueueView`, and the composer's streaming behavior.
-**Acceptance criteria:** [ ] steering while running shows the queue update, and removing an entry takes it out of the queue; [ ] `live_steered` entries show without actions; [ ] after an abort, `queue/restore` puts the withdrawn text back in the composer.
+**Acceptance criteria:** [x] steering while running shows the queue update, and removing an entry takes it out of the queue; [x] `live_steered` entries show without actions; [x] after an abort, `queue/restore` puts the withdrawn text back in the composer.
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 13. **Files:** `alvin-protocol/src/queue.rs`, `alvin-omp-host/src/session.rs`, gateway rpc + tests, `alvin-conversation/src/queue.rs`, `alvin-conversation-ui/src/{queue,composer}.rs`. **Scope:** M.
 
 #### Task 15: Model and thinking pickers

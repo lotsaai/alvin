@@ -4,6 +4,7 @@
 mod actions;
 mod composer;
 mod model;
+mod queue;
 mod session;
 mod sidebar;
 #[cfg(test)]

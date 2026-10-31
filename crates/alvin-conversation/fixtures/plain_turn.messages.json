@@ -1,54 +1,54 @@
 {
   "messages": [
     {
-      "attribution": "user",
       "content": [
         {
           "text": "Reply with the single word ok.",
           "type": "text"
         }
       ],
-      "role": "user",
-      "timestamp": 1793432207240.0
+      "timestamp": 1793435092610.0,
+      "attribution": "user",
+      "role": "user"
     },
     {
-      "api": "openai-completions",
-      "completedAt": 1793432209600.0,
+      "role": "assistant",
       "content": [
         {
           "text": "ok",
           "type": "text"
         }
       ],
-      "contextSnapshot": {
-        "compactionEpoch": 0,
-        "nonMessageTokens": 3112,
-        "promptTokens": 3546,
-        "toolSchemaTokens": 850
-      },
-      "credentialId": 1,
-      "duration": 1270.6078749999997,
-      "errorId": 0.0,
-      "model": "glm-5.3-flash",
+      "api": "openai-completions",
       "provider": "zai",
-      "responseId": "20261031153648662660445b0b4cc5",
-      "role": "assistant",
-      "stopReason": "stop",
-      "timestamp": 1793432208329.0,
-      "ttft": 1262.465792,
+      "model": "glm-5.3-flash",
       "usage": {
-        "cacheRead": 0,
-        "cacheWrite": 0,
-        "cost": {
-          "cacheRead": 0.0,
-          "cacheWrite": 0.0,
-          "input": 0.0005319,
-          "output": 1.5e-6,
-          "total": 0.0005334
-        },
-        "input": 3546,
+        "input": 94,
         "output": 3,
-        "totalTokens": 3549
+        "cacheRead": 3456,
+        "cacheWrite": 0,
+        "totalTokens": 3553,
+        "cost": {
+          "input": 0.0000141,
+          "output": 1.5e-6,
+          "cacheRead": 0.00010368,
+          "cacheWrite": 0.0,
+          "total": 0.00011928
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1793435093372.0,
+      "responseId": "20261031162453add8a2d96cb649c7",
+      "errorId": 0.0,
+      "duration": 1074.336083,
+      "ttft": 1069.2904170000002,
+      "completedAt": 1793435094448.0,
+      "credentialId": 1,
+      "contextSnapshot": {
+        "promptTokens": 3550,
+        "nonMessageTokens": 3112,
+        "toolSchemaTokens": 850,
+        "compactionEpoch": 0
       }
     }
   ],

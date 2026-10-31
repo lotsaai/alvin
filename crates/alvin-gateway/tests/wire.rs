@@ -12,8 +12,9 @@ use alvin_gateway::{Gateway, GatewayConfig, WsServer};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
   BashRequest, CheckoutId, ErrorCode, ErrorData, Event, EventBody, EventId, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary,
-  MessagesRequest, OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromptRequest, SessionCursor, SessionId,
-  SessionPage, SessionStatus, SessionsApiClient, SubscribeRequest,
+  MessagesRequest, OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromoteQueuedRequest, PromptRequest,
+  QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage, SessionStatus,
+  SessionsApiClient, SubscribeRequest,
 };
 
 /// Session files written by real omp (the first two records of one run).
@@ -864,6 +865,98 @@ async fn a_call_in_flight_during_a_drop_fails_and_is_not_sent_again() {
   tokio::time::sleep(Duration::from_secs(4)).await;
   assert_eq!(std::fs::read_to_string(&marker).unwrap(), "ran\n");
   drop((ws, proxy));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+/// Reads events until the queue holds exactly these steering and follow-up messages, and returns that update.
+async fn until_queue(stream: &mut EventStream, steering: &[&str], follow_up: &[&str]) -> alvin_protocol::QueueUpdateEvent {
+  loop {
+    if let EventBody::Agent(RpcAgentEvent::QueueUpdate(update)) = next_event(stream).await.body
+      && update.steering == steering
+      && update.follow_up == follow_up
+    {
+      return update;
+    }
+  }
+}
+
+fn message(live: LiveSessionId, text: &str) -> PromptRequest {
+  PromptRequest {
+    live,
+    message: text.to_owned(),
+  }
+}
+
+#[tokio::test]
+async fn the_queue_is_edited_while_a_turn_runs_over_both_transports() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let ([channel, ws], server) = both_transports(&gateway).await;
+  let opened = open_new(&channel).await;
+  let mut stream = subscribe(&channel, opened.live, None).await.unwrap();
+  prompt(
+    &channel,
+    opened.live,
+    "Write the numbers from 1 to 400, one per line, nothing else.",
+  )
+  .await;
+  loop {
+    if matches!(
+      next_event(&mut stream).await.body,
+      EventBody::Agent(RpcAgentEvent::MessageUpdate(_))
+    ) {
+      break;
+    }
+  }
+
+  // A follow-up waits for the turn to end; it is queued and visible.
+  LiveApiClient::follow_up(&channel, message(opened.live, "queued one"))
+    .await
+    .unwrap();
+  until_queue(&mut stream, &[], &["queued one"]).await;
+
+  // Promoting it moves it to the steering queue.
+  let promoted = QueueApiClient::promote(
+    &ws,
+    PromoteQueuedRequest {
+      live: opened.live,
+      message: "queued one".to_owned(),
+    },
+  )
+  .await
+  .unwrap();
+  assert!(promoted.promoted);
+  until_queue(&mut stream, &["queued one"], &[]).await;
+
+  // A second follow-up can be taken out again.
+  LiveApiClient::follow_up(&ws, message(opened.live, "queued two")).await.unwrap();
+  until_queue(&mut stream, &["queued one"], &["queued two"]).await;
+  let removed = QueueApiClient::remove(
+    &channel,
+    RemoveQueuedRequest {
+      live: opened.live,
+      message: "queued two".to_owned(),
+      queue: QueuedMessageQueue::FollowUp,
+    },
+  )
+  .await
+  .unwrap();
+  assert!(removed.removed);
+  until_queue(&mut stream, &["queued one"], &[]).await;
+
+  // Restoring aborts the turn and hands back what was queued and not yet sent.
+  LiveApiClient::follow_up(&channel, message(opened.live, "queued three"))
+    .await
+    .unwrap();
+  until_queue(&mut stream, &["queued one"], &["queued three"]).await;
+  let restored = QueueApiClient::restore(&ws, opened.live).await.unwrap();
+  assert_eq!(
+    restored.follow_up.iter().map(|message| message.text.as_str()).collect::<Vec<_>>(),
+    ["queued three"]
+  );
+
+  drop((stream, channel, ws));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
 }

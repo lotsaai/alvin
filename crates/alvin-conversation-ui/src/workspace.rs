@@ -75,6 +75,8 @@ impl Workspace {
         let title = code.map_or_else(|| "Error".to_owned(), |code| format!("{code:?}"));
         window.push_notification(Notification::error(message.clone()).title(SharedString::from(title)), cx);
       }
+      // The session's own view puts the text back in its composer.
+      ModelEvent::Restored { .. } => {}
     }
     cx.notify();
   }
@@ -358,6 +360,118 @@ mod tests {
       with_active(cx, &workspace, |view| view.streaming.is_some() && view.run == Run::Running).unwrap_or(false)
     });
     cx.update_window(window, |_, window, cx| window.press("escape", cx)).unwrap();
+    until(cx, "the turn to be aborted", |cx| {
+      with_active(cx, &workspace, |view| view.last_prompt == Some(PromptStatus::Aborted)).unwrap_or(false)
+    });
+    fixture.finish().await;
+  }
+
+  /// Enter with the platform's secondary key queues a follow-up instead of steering.
+  #[cfg(target_os = "macos")]
+  const SECONDARY_ENTER: &str = "cmd-enter";
+  #[cfg(not(target_os = "macos"))]
+  const SECONDARY_ENTER: &str = "ctrl-enter";
+
+  fn type_and_press(cx: &mut TestAppContext, window: AnyWindowHandle, text: &str, key: &str) {
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      let composer = window
+        .find_by_label("Message")
+        .path()
+        .last()
+        .cloned()
+        .expect("the composer has an element id");
+      window.click(composer, cx);
+      window.input(text, cx);
+      window.press(key, cx);
+    })
+    .unwrap();
+  }
+
+  fn composer_text(cx: &mut TestAppContext, window: AnyWindowHandle) -> String {
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      window.find_by_label("Message").value().unwrap_or_default().to_owned()
+    })
+    .unwrap()
+  }
+
+  /// Starts a long turn so there is something to queue behind.
+  fn start_long_turn(cx: &mut TestAppContext, window: AnyWindowHandle, workspace: &Entity<Workspace>) {
+    type_and_send(cx, window, "Write the numbers from 1 to 400, one per line, nothing else.");
+    until(cx, "the reply to start streaming", |cx| {
+      with_active(cx, workspace, |view| view.streaming.is_some() && view.run == Run::Running).unwrap_or(false)
+    });
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn a_queued_follow_up_shows_in_the_queue_and_can_be_removed(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    start_long_turn(cx, window, &workspace);
+
+    type_and_press(cx, window, "queued note", SECONDARY_ENTER);
+    until(cx, "the follow-up to be queued", |cx| {
+      with_active(cx, &workspace, |view| view.queue.follow_up == ["queued note"]).unwrap_or(false)
+    });
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert!(window.find("queue-remove-follow-up-0").visible() && window.find("queue-promote-0").visible());
+      window.click("queue-remove-follow-up-0", cx);
+    })
+    .unwrap();
+
+    until(cx, "the entry to leave the queue", |cx| {
+      with_active(cx, &workspace, |view| view.queue.follow_up.is_empty()).unwrap_or(false)
+    });
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn only_steering_entries_not_yet_sent_have_a_remove_action(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    start_long_turn(cx, window, &workspace);
+
+    type_and_press(cx, window, "steer note", "enter");
+    until(cx, "the steering message to be queued", |cx| {
+      with_active(cx, &workspace, |view| view.queue.steering == ["steer note"]).unwrap_or(false)
+    });
+
+    let sent = with_active(cx, &workspace, |view| view.queue.live_steered).unwrap();
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      // The entry is removable exactly when omp has not yet sent it into the response.
+      assert_eq!(window.try_find("queue-remove-steering-0").is_some(), sent == 0);
+    })
+    .unwrap();
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn escape_restores_withdrawn_queue_text_into_the_composer(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    start_long_turn(cx, window, &workspace);
+
+    type_and_press(cx, window, "queued note", SECONDARY_ENTER);
+    until(cx, "the follow-up to be queued", |cx| {
+      with_active(cx, &workspace, |view| view.queue.follow_up == ["queued note"]).unwrap_or(false)
+    });
+    cx.update_window(window, |_, window, cx| window.press("escape", cx)).unwrap();
+
+    until(cx, "the text to return to the composer", |cx| {
+      composer_text(cx, window) == "queued note"
+    });
     until(cx, "the turn to be aborted", |cx| {
       with_active(cx, &workspace, |view| view.last_prompt == Some(PromptStatus::Aborted)).unwrap_or(false)
     });

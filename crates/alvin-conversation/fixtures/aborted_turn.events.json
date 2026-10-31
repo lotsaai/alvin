@@ -1,22 +1,22 @@
 [
   {
-    "id": "01a190e3-eb3e-7463-b69e-954a32c9fd42",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:36:58.430523Z",
+    "id": "01a19110-0e7f-7016-96df-41cdea60eebd",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:11.039208Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb864ec36af1b0",
-        "method": "setWidget",
+        "id": "15bb9157963a27e7",
+        "widgetKey": "autoresearch",
         "type": "extension_ui_request",
-        "widgetKey": "autoresearch"
+        "method": "setWidget"
       }
     }
   },
   {
-    "id": "01a190e3-eb3e-7463-b69e-954b1097d39f",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:36:58.43053Z",
+    "id": "01a19110-0e7f-7016-96df-41ce906c334c",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:11.039216Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -25,9 +25,9 @@
     }
   },
   {
-    "id": "01a190e3-eb3e-7463-b69e-954ca734042e",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:36:58.430532Z",
+    "id": "01a19110-0e7f-7016-96df-41cfcf96b06c",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:11.039218Z",
     "body": {
       "kind": "availableCommandsUpdate",
       "frame": {
@@ -990,23 +990,23 @@
     }
   },
   {
-    "id": "01a190e3-f405-766f-ae21-2b799dffcf45",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:00.677215Z",
+    "id": "01a19110-11b5-76bf-8b74-29499ac5a7fd",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:11.861352Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "thinkingLevel": "low",
         "configured": "auto",
         "resolved": "low",
-        "thinkingLevel": "low",
         "type": "thinking_level_changed"
       }
     }
   },
   {
-    "id": "01a190e3-f405-766f-ae21-2b7a5fe73ffe",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:00.677817Z",
+    "id": "01a19110-11b6-7468-a9c6-ac057fadb224",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:11.862155Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1015,9 +1015,9 @@
     }
   },
   {
-    "id": "01a190e3-f406-753b-b388-80261fb6d1ad",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:00.678579Z",
+    "id": "01a19110-11b7-7695-a97d-31f0bdcd771a",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:11.863136Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1026,22 +1026,22 @@
     }
   },
   {
-    "id": "01a190e3-f406-753b-b388-8027fdd2b2d2",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:00.67871Z",
+    "id": "01a19110-11b7-7695-a97d-31f16abb6e7e",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:11.863358Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "attribution": "user",
           "content": [
             {
               "text": "Write the numbers from 1 to 400, one per line, nothing else.",
               "type": "text"
             }
           ],
-          "role": "user",
-          "timestamp": 1793432218431.0
+          "timestamp": 1793435111039.0,
+          "attribution": "user",
+          "role": "user"
         },
         "messageId": "msg-1",
         "type": "message_start"
@@ -1049,22 +1049,22 @@
     }
   },
   {
-    "id": "01a190e3-f406-753b-b388-8028f149a6f8",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:00.678741Z",
+    "id": "01a19110-11b7-7695-a97d-31f2523e31cb",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:11.86342Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "attribution": "user",
           "content": [
             {
               "text": "Write the numbers from 1 to 400, one per line, nothing else.",
               "type": "text"
             }
           ],
-          "role": "user",
-          "timestamp": 1793432218431.0
+          "timestamp": 1793435111039.0,
+          "attribution": "user",
+          "role": "user"
         },
         "messageId": "msg-1",
         "type": "message_end"
@@ -1072,43 +1072,41 @@
     }
   },
   {
-    "id": "01a190e3-f818-71f9-932c-3e7108ba7f6a",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:01.720732Z",
+    "id": "01a19110-164f-7146-884b-20426a25b45f",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:13.039826Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
-              "summary": false,
-              "thinking": "Output",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking"
+              "text": "1\n",
+              "type": "text"
             }
           ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153700586228aabc6f4cb5",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432220679.0,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
             "input": 0,
             "output": 0,
-            "totalTokens": 0
-          }
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435111864.0,
+          "responseId": "20261031162512af6db1768c2742e9",
+          "credentialId": 1
         },
         "messageId": "msg-2",
         "type": "message_start"
@@ -1116,79 +1114,75 @@
     }
   },
   {
-    "id": "01a190e3-f819-77d8-b14f-8ea6f357ccdf",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:01.721387Z",
+    "id": "01a19110-1650-71b8-a59f-b47b301897be",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:13.04025Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "1\n",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435111864.0,
+          "responseId": "20261031162512af6db1768c2742e9",
+          "credentialId": 1
+        },
         "assistantMessageEvent": {
           "contentIndex": 0,
           "partial": {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
-                "summary": false,
-                "thinking": "Output",
-                "thinkingSignature": "reasoning_content",
-                "type": "thinking"
+                "text": "1\n",
+                "type": "text"
               }
             ],
-            "credentialId": 1,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "20261031153700586228aabc6f4cb5",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432220679.0,
+            "model": "glm-5.3-flash",
             "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.0,
-                "output": 0.0,
-                "total": 0.0
-              },
               "input": 0,
               "output": 0,
-              "totalTokens": 0
-            }
-          },
-          "type": "thinking_start"
-        },
-        "message": {
-          "api": "openai-completions",
-          "content": [
-            {
-              "summary": false,
-              "thinking": "Output",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking"
-            }
-          ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
-          "provider": "zai",
-          "responseId": "20261031153700586228aabc6f4cb5",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432220679.0,
-          "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
             },
-            "input": 0,
-            "output": 0,
-            "totalTokens": 0
-          }
+            "stopReason": "stop",
+            "timestamp": 1793435111864.0,
+            "responseId": "20261031162512af6db1768c2742e9",
+            "credentialId": 1
+          },
+          "type": "text_start"
         },
         "messageId": "msg-2",
         "type": "message_update"
@@ -1196,80 +1190,76 @@
     }
   },
   {
-    "id": "01a190e3-f819-77d8-b14f-8ea7f6685af7",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:01.721861Z",
+    "id": "01a19110-1650-71b8-a59f-b47c5f3623bd",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:13.040567Z",
     "body": {
       "kind": "agent",
       "frame": {
-        "assistantMessageEvent": {
-          "contentIndex": 0,
-          "delta": "Output",
-          "partial": {
-            "api": "openai-completions",
-            "content": [
-              {
-                "summary": false,
-                "thinking": "Output",
-                "thinkingSignature": "reasoning_content",
-                "type": "thinking"
-              }
-            ],
-            "credentialId": 1,
-            "model": "glm-5.3-flash",
-            "provider": "zai",
-            "responseId": "20261031153700586228aabc6f4cb5",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432220679.0,
-            "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.0,
-                "output": 0.0,
-                "total": 0.0
-              },
-              "input": 0,
-              "output": 0,
-              "totalTokens": 0
-            }
-          },
-          "type": "thinking_delta"
-        },
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
-              "summary": false,
-              "thinking": "Output",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking"
+              "text": "1\n",
+              "type": "text"
             }
           ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153700586228aabc6f4cb5",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432220679.0,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
             "input": 0,
             "output": 0,
-            "totalTokens": 0
-          }
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435111864.0,
+          "responseId": "20261031162512af6db1768c2742e9",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "1",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "1\n",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435111864.0,
+            "responseId": "20261031162512af6db1768c2742e9",
+            "credentialId": 1
+          },
+          "type": "text_delta"
         },
         "messageId": "msg-2",
         "type": "message_update"
@@ -1277,46 +1267,121 @@
     }
   },
   {
-    "id": "01a190e3-f81d-7785-ad1a-18cc089f6244",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:01.725434Z",
+    "id": "01a19110-1650-71b8-a59f-b47d04273c75",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:13.040886Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
-          "completedAt": 1793432221724.0,
+          "role": "assistant",
           "content": [
             {
-              "summary": false,
-              "thinking": "Output",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking"
+              "text": "1\n",
+              "type": "text"
             }
           ],
-          "credentialId": 1,
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435111864.0,
+          "responseId": "20261031162512af6db1768c2742e9",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "\n",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "1\n",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435111864.0,
+            "responseId": "20261031162512af6db1768c2742e9",
+            "credentialId": 1
+          },
+          "type": "text_delta"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a19110-1652-7289-ae77-7634cd649a8b",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:13.042173Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "1\n",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "aborted",
+          "timestamp": 1793435111864.0,
+          "responseId": "20261031162512af6db1768c2742e9",
+          "errorMessage": "Interrupted by user",
           "errorId": 67112960.0,
-          "errorMessage": "Interrupted by user",
-          "model": "glm-5.3-flash",
-          "provider": "zai",
-          "responseId": "20261031153700586228aabc6f4cb5",
-          "role": "assistant",
-          "stopReason": "aborted",
-          "timestamp": 1793432220679.0,
-          "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
-            "input": 0,
-            "output": 0,
-            "totalTokens": 0
-          }
+          "completedAt": 1793435113041.0,
+          "credentialId": 1
         },
         "messageId": "msg-2",
         "type": "message_end"
@@ -1324,44 +1389,42 @@
     }
   },
   {
-    "id": "01a190e3-f820-73ca-8a47-7ce08fc86e38",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:01.728152Z",
+    "id": "01a19110-1653-73a6-b28d-d48717ad2422",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:13.043535Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
-              "summary": false,
-              "thinking": "Output",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking"
+              "text": "1\n",
+              "type": "text"
             }
           ],
-          "credentialId": 1,
-          "errorMessage": "Interrupted by user",
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153700586228aabc6f4cb5",
-          "role": "assistant",
-          "stopReason": "aborted",
-          "timestamp": 1793432220679.0,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
             "input": 0,
             "output": 0,
-            "totalTokens": 0
-          }
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "aborted",
+          "timestamp": 1793435111864.0,
+          "responseId": "20261031162512af6db1768c2742e9",
+          "errorMessage": "Interrupted by user",
+          "credentialId": 1
         },
         "toolResults": [],
         "type": "turn_end"
@@ -1369,82 +1432,80 @@
     }
   },
   {
-    "id": "01a190e3-f821-74e6-80b0-9c3ca9933d49",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:01.729057Z",
+    "id": "01a19110-1654-7247-9de0-62a8fd1719f3",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:13.044119Z",
     "body": {
       "kind": "agent",
       "frame": {
-        "isTerminal": true,
         "messages": [
           {
-            "attribution": "user",
             "content": [
               {
                 "text": "Write the numbers from 1 to 400, one per line, nothing else.",
                 "type": "text"
               }
             ],
-            "role": "user",
-            "timestamp": 1793432218431.0
+            "timestamp": 1793435111039.0,
+            "attribution": "user",
+            "role": "user"
           },
           {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
-                "summary": false,
-                "thinking": "Output",
-                "thinkingSignature": "reasoning_content",
-                "type": "thinking"
+                "text": "1\n",
+                "type": "text"
               }
             ],
-            "credentialId": 1,
-            "errorMessage": "Interrupted by user",
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "20261031153700586228aabc6f4cb5",
-            "role": "assistant",
-            "stopReason": "aborted",
-            "timestamp": 1793432220679.0,
+            "model": "glm-5.3-flash",
             "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.0,
-                "output": 0.0,
-                "total": 0.0
-              },
               "input": 0,
               "output": 0,
-              "totalTokens": 0
-            }
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "aborted",
+            "timestamp": 1793435111864.0,
+            "responseId": "20261031162512af6db1768c2742e9",
+            "errorMessage": "Interrupted by user",
+            "credentialId": 1
           }
         ],
-        "type": "agent_end",
-        "yielded": true
+        "isTerminal": true,
+        "yielded": true,
+        "type": "agent_end"
       }
     }
   },
   {
-    "id": "01a190e3-f821-74e6-80b0-9c3de830102b",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:01.72907Z",
+    "id": "01a19110-1654-7247-9de0-62a9f1a5ffe7",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:13.044128Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb8652082af1b2",
-        "method": "setWidget",
+        "id": "15bb915994fa27e9",
+        "widgetKey": "autoresearch",
         "type": "extension_ui_request",
-        "widgetKey": "autoresearch"
+        "method": "setWidget"
       }
     }
   },
   {
-    "id": "01a190e3-f821-74e6-80b0-9c3ebe302c57",
-    "live": "01a190e3-eb3e-7463-b69e-954997f29f6a",
-    "at": "2026-10-31T07:37:01.729104Z",
+    "id": "01a19110-1654-7247-9de0-62aab30b2ca1",
+    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
+    "at": "2026-10-31T08:25:13.044146Z",
     "body": {
       "kind": "promptResult",
       "frame": {

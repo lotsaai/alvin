@@ -10,8 +10,8 @@ use gpui_kit::{
 };
 
 use crate::actions::{Abort, SESSION_CONTEXT};
-use crate::model::Model;
-use crate::{composer, transcript};
+use crate::model::{Model, ModelEvent};
+use crate::{composer, queue, transcript};
 
 /// A live session's view. Holds only what is local to the view: the scroll state, the composer and how many rows the
 /// scroller was last told about. Everything else is read from the model.
@@ -34,9 +34,20 @@ impl SessionView {
         this.sync_rows(cx);
         cx.notify();
       }),
+      cx.subscribe_in(&model, window, |this, _, event: &ModelEvent, window, cx| {
+        if let ModelEvent::Restored { live, text } = event
+          && *live == this.live
+        {
+          this
+            .composer
+            .update(cx, |composer, cx| composer.set_value(text.clone(), window, cx));
+        }
+      }),
       cx.subscribe_in(&composer, window, |this, state, event: &InputEvent, window, cx| {
-        if let Some(text) = composer::submitted(event, state, cx) {
-          this.model.update(cx, |model, cx| model.send(this.live, &text, cx));
+        if let Some(submission) = composer::submitted(event, state, cx) {
+          this
+            .model
+            .update(cx, |model, cx| model.send(this.live, &submission.text, submission.follow_up, cx));
           state.update(cx, |state, cx| state.set_value("", window, cx));
         }
       }),
@@ -97,6 +108,14 @@ impl Render for SessionView {
       }))
       .size_full()
       .child(transcript::transcript(&self.model, self.live, &self.scroller))
+      .children(
+        self
+          .model
+          .read(cx)
+          .conversation()
+          .live(self.live)
+          .and_then(|view| queue::view(&self.model, self.live, &view.queue, cx)),
+      )
       .child(
         div()
           .id("session-status")

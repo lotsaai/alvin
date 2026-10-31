@@ -1,119 +1,119 @@
 {
   "messages": [
     {
-      "attribution": "user",
       "content": [
         {
           "text": "Use your bash tool to run `echo alvin-tool-ok`, then reply with the single word done.",
           "type": "text"
         }
       ],
-      "role": "user",
-      "timestamp": 1793432210734.0
+      "timestamp": 1793435095572.0,
+      "attribution": "user",
+      "role": "user"
     },
     {
-      "api": "openai-completions",
-      "completedAt": 1793432216161.0,
+      "role": "assistant",
       "content": [
         {
+          "type": "toolCall",
+          "id": "call_80aa9075e1bb4d699256fd47",
+          "name": "bash",
           "arguments": {
             "command": "echo alvin-tool-ok",
-            "i": "Running echo check"
+            "i": "Running echo smoke test"
           },
-          "id": "call_61df0b10614742a5afa32a5f",
-          "intent": "Running echo check",
-          "name": "bash",
-          "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
-          "streamIndex": 0,
-          "type": "toolCall"
+          "intent": "Running echo smoke test",
+          "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}",
+          "streamIndex": 0
         }
       ],
-      "contextSnapshot": {
-        "compactionEpoch": 0,
-        "nonMessageTokens": 8323,
-        "promptTokens": 9663,
-        "toolSchemaTokens": 5154
-      },
-      "credentialId": 1,
-      "duration": 4751.247584000001,
-      "model": "glm-5.3-flash",
+      "api": "openai-completions",
       "provider": "zai",
-      "responseId": "202610311536516dd2ccb4c4e64ae2",
-      "role": "assistant",
-      "stopReason": "toolUse",
-      "timestamp": 1793432211406.0,
-      "ttft": 4748.818792,
+      "model": "glm-5.3-flash",
       "usage": {
+        "input": 9662,
+        "output": 24,
         "cacheRead": 0,
         "cacheWrite": 0,
+        "totalTokens": 9686,
         "cost": {
+          "input": 0.0014493,
+          "output": 0.000012,
           "cacheRead": 0.0,
           "cacheWrite": 0.0,
-          "input": 0.00144945,
-          "output": 0.0000115,
-          "total": 0.00146095
-        },
-        "input": 9663,
-        "output": 23,
-        "totalTokens": 9686
-      }
+          "total": 0.0014613
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793435096069.0,
+      "responseId": "2026103116245697e2c1965bde48ee",
+      "duration": 4504.484082999999,
+      "ttft": 4501.949042,
+      "completedAt": 1793435100582.0,
+      "contextSnapshot": {
+        "promptTokens": 9662,
+        "nonMessageTokens": 8323,
+        "toolSchemaTokens": 5154,
+        "compactionEpoch": 0
+      },
+      "credentialId": 1
     },
     {
+      "role": "toolResult",
+      "toolCallId": "call_80aa9075e1bb4d699256fd47",
+      "toolName": "bash",
       "content": [
         {
           "text": "alvin-tool-ok\n",
           "type": "text"
         }
       ],
-      "details": {
-        "timeoutSeconds": 300,
-        "wallTimeMs": 25.781458999999813,
-        "wallTimeNoticeEmitted": false
-      },
       "isError": false,
-      "role": "toolResult",
-      "timestamp": 1793432216196.0,
-      "toolCallId": "call_61df0b10614742a5afa32a5f",
-      "toolName": "bash"
+      "timestamp": 1793435100621.0,
+      "details": {
+        "wallTimeNoticeEmitted": false,
+        "timeoutSeconds": 300,
+        "wallTimeMs": 22.985749999999825
+      }
     },
     {
-      "api": "openai-completions",
-      "completedAt": 1793432217335.0,
+      "role": "assistant",
       "content": [
         {
           "text": "done",
           "type": "text"
         }
       ],
-      "contextSnapshot": {
-        "compactionEpoch": 0,
-        "nonMessageTokens": 8323,
-        "promptTokens": 9695,
-        "toolSchemaTokens": 5154
-      },
-      "credentialId": 1,
-      "duration": 1135.5029999999997,
-      "errorId": 0.0,
-      "model": "glm-5.3-flash",
+      "api": "openai-completions",
       "provider": "zai",
-      "responseId": "20261031153656d5826e3fd59a437c",
-      "role": "assistant",
-      "stopReason": "stop",
-      "timestamp": 1793432216199.0,
-      "ttft": 1127.106334,
+      "model": "glm-5.3-flash",
       "usage": {
-        "cacheRead": 9600,
-        "cacheWrite": 0,
-        "cost": {
-          "cacheRead": 0.00028799999999999995,
-          "cacheWrite": 0.0,
-          "input": 0.00001425,
-          "output": 1.5e-6,
-          "total": 0.00030374999999999993
-        },
         "input": 95,
         "output": 3,
-        "totalTokens": 9698
+        "cacheRead": 9600,
+        "cacheWrite": 0,
+        "totalTokens": 9698,
+        "cost": {
+          "input": 0.00001425,
+          "output": 1.5e-6,
+          "cacheRead": 0.00028799999999999995,
+          "cacheWrite": 0.0,
+          "total": 0.00030374999999999993
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1793435100624.0,
+      "responseId": "2026103116250042e8fd9315ac41e4",
+      "errorId": 0.0,
+      "duration": 9277.883417,
+      "ttft": 9268.187834,
+      "completedAt": 1793435109903.0,
+      "credentialId": 1,
+      "contextSnapshot": {
+        "promptTokens": 9695,
+        "nonMessageTokens": 8323,
+        "toolSchemaTokens": 5154,
+        "compactionEpoch": 0
       }
     }
   ],

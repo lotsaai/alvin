@@ -1,22 +1,22 @@
 [
   {
-    "id": "01a190e3-bf87-76fd-9d92-76b225a53e92",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:47.239776Z",
+    "id": "01a1910f-c681-73d4-9fb9-707b857efaa1",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:52.60947Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb8643d823f246",
-        "method": "setWidget",
+        "id": "15bb914595ae8189",
+        "widgetKey": "autoresearch",
         "type": "extension_ui_request",
-        "widgetKey": "autoresearch"
+        "method": "setWidget"
       }
     }
   },
   {
-    "id": "01a190e3-bf87-76fd-9d92-76b3b09fd35e",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:47.239784Z",
+    "id": "01a1910f-c681-73d4-9fb9-707c56a3076a",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:52.609492Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -25,9 +25,9 @@
     }
   },
   {
-    "id": "01a190e3-bf87-76fd-9d92-76b42fde2fd1",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:47.2398Z",
+    "id": "01a1910f-c681-73d4-9fb9-707de4d7ec43",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:52.609494Z",
     "body": {
       "kind": "availableCommandsUpdate",
       "frame": {
@@ -990,23 +990,23 @@
     }
   },
   {
-    "id": "01a190e3-c3bc-72cf-bca0-29fb13f67a75",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:48.316945Z",
+    "id": "01a1910f-c97a-7352-a536-b28d04df415d",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:53.370288Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "thinkingLevel": "low",
         "configured": "auto",
         "resolved": "low",
-        "thinkingLevel": "low",
         "type": "thinking_level_changed"
       }
     }
   },
   {
-    "id": "01a190e3-c3bf-7379-8c4c-1e37de852866",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:48.319193Z",
+    "id": "01a1910f-c97a-7352-a536-b28e7f28eca2",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:53.37097Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1015,9 +1015,9 @@
     }
   },
   {
-    "id": "01a190e3-c3c6-7168-9877-a02c9f5c10a8",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:48.326398Z",
+    "id": "01a1910f-c97b-75e7-a363-c0f30ba98ca7",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:53.371787Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1026,22 +1026,22 @@
     }
   },
   {
-    "id": "01a190e3-c3c6-7168-9877-a02de933fba9",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:48.32642Z",
+    "id": "01a1910f-c97c-7655-bd13-d90be672e571",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:53.372041Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "attribution": "user",
           "content": [
             {
               "text": "Reply with the single word ok.",
               "type": "text"
             }
           ],
-          "role": "user",
-          "timestamp": 1793432207240.0
+          "timestamp": 1793435092610.0,
+          "attribution": "user",
+          "role": "user"
         },
         "messageId": "msg-1",
         "type": "message_start"
@@ -1049,22 +1049,22 @@
     }
   },
   {
-    "id": "01a190e3-c3c6-7168-9877-a02e9a2695b2",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:48.326759Z",
+    "id": "01a1910f-c97c-7655-bd13-d90c81ada894",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:53.372135Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "attribution": "user",
           "content": [
             {
               "text": "Reply with the single word ok.",
               "type": "text"
             }
           ],
-          "role": "user",
-          "timestamp": 1793432207240.0
+          "timestamp": 1793435092610.0,
+          "attribution": "user",
+          "role": "user"
         },
         "messageId": "msg-1",
         "type": "message_end"
@@ -1072,41 +1072,41 @@
     }
   },
   {
-    "id": "01a190e3-c8b9-74fb-81a0-615706a55f63",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:49.593523Z",
+    "id": "01a1910f-cdab-7637-9f04-fc158736395c",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:54.443896Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
               "text": "ok",
               "type": "text"
             }
           ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153648662660445b0b4cc5",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432208329.0,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
             "input": 0,
             "output": 0,
-            "totalTokens": 0
-          }
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435093372.0,
+          "responseId": "20261031162453add8a2d96cb649c7",
+          "credentialId": 1
         },
         "messageId": "msg-2",
         "type": "message_start"
@@ -1114,75 +1114,75 @@
     }
   },
   {
-    "id": "01a190e3-c8ba-75f4-a8a3-b78326e12a6c",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:49.594103Z",
+    "id": "01a1910f-cdad-765b-9667-88aae69aefc6",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:54.445081Z",
     "body": {
       "kind": "agent",
       "frame": {
-        "assistantMessageEvent": {
-          "contentIndex": 0,
-          "partial": {
-            "api": "openai-completions",
-            "content": [
-              {
-                "text": "ok",
-                "type": "text"
-              }
-            ],
-            "credentialId": 1,
-            "model": "glm-5.3-flash",
-            "provider": "zai",
-            "responseId": "20261031153648662660445b0b4cc5",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432208329.0,
-            "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.0,
-                "output": 0.0,
-                "total": 0.0
-              },
-              "input": 0,
-              "output": 0,
-              "totalTokens": 0
-            }
-          },
-          "type": "text_start"
-        },
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
               "text": "ok",
               "type": "text"
             }
           ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153648662660445b0b4cc5",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432208329.0,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
             "input": 0,
             "output": 0,
-            "totalTokens": 0
-          }
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435093372.0,
+          "responseId": "20261031162453add8a2d96cb649c7",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435093372.0,
+            "responseId": "20261031162453add8a2d96cb649c7",
+            "credentialId": 1
+          },
+          "type": "text_start"
         },
         "messageId": "msg-2",
         "type": "message_update"
@@ -1190,157 +1190,157 @@
     }
   },
   {
-    "id": "01a190e3-c8ba-75f4-a8a3-b784c23602f6",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:49.594455Z",
+    "id": "01a1910f-cdad-765b-9667-88ab15395eda",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:54.445798Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435093372.0,
+          "responseId": "20261031162453add8a2d96cb649c7",
+          "credentialId": 1
+        },
         "assistantMessageEvent": {
           "contentIndex": 0,
           "delta": "ok",
           "partial": {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
                 "text": "ok",
                 "type": "text"
               }
             ],
-            "credentialId": 1,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "20261031153648662660445b0b4cc5",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432208329.0,
+            "model": "glm-5.3-flash",
             "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.0,
-                "output": 0.0,
-                "total": 0.0
-              },
               "input": 0,
               "output": 0,
-              "totalTokens": 0
-            }
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435093372.0,
+            "responseId": "20261031162453add8a2d96cb649c7",
+            "credentialId": 1
           },
           "type": "text_delta"
         },
-        "message": {
-          "api": "openai-completions",
-          "content": [
-            {
-              "text": "ok",
-              "type": "text"
-            }
-          ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
-          "provider": "zai",
-          "responseId": "20261031153648662660445b0b4cc5",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432208329.0,
-          "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
-            "input": 0,
-            "output": 0,
-            "totalTokens": 0
-          }
-        },
         "messageId": "msg-2",
         "type": "message_update"
       }
     }
   },
   {
-    "id": "01a190e3-c8c1-70ca-ab13-e26b68491166",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:49.601165Z",
+    "id": "01a1910f-cdb1-7588-871b-1a1ee149698e",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:54.449267Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 94,
+            "output": 3,
+            "cacheRead": 3456,
+            "cacheWrite": 0,
+            "totalTokens": 3553,
+            "cost": {
+              "input": 0.0000141,
+              "output": 1.5e-6,
+              "cacheRead": 0.00010368,
+              "cacheWrite": 0.0,
+              "total": 0.00011928
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435093372.0,
+          "responseId": "20261031162453add8a2d96cb649c7",
+          "duration": 1074.336083,
+          "ttft": 1069.2904170000002,
+          "credentialId": 1
+        },
         "assistantMessageEvent": {
-          "content": "ok",
           "contentIndex": 0,
+          "content": "ok",
           "partial": {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
                 "text": "ok",
                 "type": "text"
               }
             ],
-            "credentialId": 1,
-            "duration": 1270.6078749999997,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "20261031153648662660445b0b4cc5",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432208329.0,
-            "ttft": 1262.465792,
+            "model": "glm-5.3-flash",
             "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.0005319,
-                "output": 1.5e-6,
-                "total": 0.0005334
-              },
-              "input": 3546,
+              "input": 94,
               "output": 3,
-              "totalTokens": 3549
-            }
+              "cacheRead": 3456,
+              "cacheWrite": 0,
+              "totalTokens": 3553,
+              "cost": {
+                "input": 0.0000141,
+                "output": 1.5e-6,
+                "cacheRead": 0.00010368,
+                "cacheWrite": 0.0,
+                "total": 0.00011928
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435093372.0,
+            "responseId": "20261031162453add8a2d96cb649c7",
+            "duration": 1074.336083,
+            "ttft": 1069.2904170000002,
+            "credentialId": 1
           },
           "type": "text_end"
-        },
-        "message": {
-          "api": "openai-completions",
-          "content": [
-            {
-              "text": "ok",
-              "type": "text"
-            }
-          ],
-          "credentialId": 1,
-          "duration": 1270.6078749999997,
-          "model": "glm-5.3-flash",
-          "provider": "zai",
-          "responseId": "20261031153648662660445b0b4cc5",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432208329.0,
-          "ttft": 1262.465792,
-          "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0005319,
-              "output": 1.5e-6,
-              "total": 0.0005334
-            },
-            "input": 3546,
-            "output": 3,
-            "totalTokens": 3549
-          }
         },
         "messageId": "msg-2",
         "type": "message_update"
@@ -1348,44 +1348,44 @@
     }
   },
   {
-    "id": "01a190e3-c8c1-70ca-ab13-e26c79932a8c",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:49.601335Z",
+    "id": "01a1910f-cdb1-7588-871b-1a1f9f0b0e1c",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:54.449657Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
-          "completedAt": 1793432209600.0,
+          "role": "assistant",
           "content": [
             {
               "text": "ok",
               "type": "text"
             }
           ],
-          "credentialId": 1,
-          "duration": 1270.6078749999997,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153648662660445b0b4cc5",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432208329.0,
-          "ttft": 1262.465792,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0005319,
-              "output": 1.5e-6,
-              "total": 0.0005334
-            },
-            "input": 3546,
+            "input": 94,
             "output": 3,
-            "totalTokens": 3549
-          }
+            "cacheRead": 3456,
+            "cacheWrite": 0,
+            "totalTokens": 3553,
+            "cost": {
+              "input": 0.0000141,
+              "output": 1.5e-6,
+              "cacheRead": 0.00010368,
+              "cacheWrite": 0.0,
+              "total": 0.00011928
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435093372.0,
+          "responseId": "20261031162453add8a2d96cb649c7",
+          "duration": 1074.336083,
+          "ttft": 1069.2904170000002,
+          "completedAt": 1793435094448.0,
+          "credentialId": 1
         },
         "messageId": "msg-2",
         "type": "message_end"
@@ -1393,43 +1393,43 @@
     }
   },
   {
-    "id": "01a190e3-c8c3-7584-bfc7-b991c4e320da",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:49.603413Z",
+    "id": "01a1910f-cdb8-75fa-a34d-ff24361d2f94",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:54.456343Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
               "text": "ok",
               "type": "text"
             }
           ],
-          "credentialId": 1,
-          "duration": 1270.6078749999997,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153648662660445b0b4cc5",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432208329.0,
-          "ttft": 1262.465792,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0005319,
-              "output": 1.5e-6,
-              "total": 0.0005334
-            },
-            "input": 3546,
+            "input": 94,
             "output": 3,
-            "totalTokens": 3549
-          }
+            "cacheRead": 3456,
+            "cacheWrite": 0,
+            "totalTokens": 3553,
+            "cost": {
+              "input": 0.0000141,
+              "output": 1.5e-6,
+              "cacheRead": 0.00010368,
+              "cacheWrite": 0.0,
+              "total": 0.00011928
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435093372.0,
+          "responseId": "20261031162453add8a2d96cb649c7",
+          "duration": 1074.336083,
+          "ttft": 1069.2904170000002,
+          "credentialId": 1
         },
         "toolResults": [],
         "type": "turn_end"
@@ -1437,81 +1437,81 @@
     }
   },
   {
-    "id": "01a190e3-c8c4-7462-87c1-9b97e0753d34",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:49.60445Z",
+    "id": "01a1910f-cdba-76b1-8fc3-bc1188615b58",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:54.45827Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb86463123f248",
-        "method": "setWidget",
+        "id": "15bb91476eae818b",
+        "widgetKey": "autoresearch",
         "type": "extension_ui_request",
-        "widgetKey": "autoresearch"
+        "method": "setWidget"
       }
     }
   },
   {
-    "id": "01a190e3-c8c5-726b-8cf5-c32f46f93733",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:49.605147Z",
+    "id": "01a1910f-cdbb-73e5-a6a2-5421764193bc",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:54.459616Z",
     "body": {
       "kind": "agent",
       "frame": {
-        "isTerminal": true,
         "messages": [
           {
-            "attribution": "user",
             "content": [
               {
                 "text": "Reply with the single word ok.",
                 "type": "text"
               }
             ],
-            "role": "user",
-            "timestamp": 1793432207240.0
+            "timestamp": 1793435092610.0,
+            "attribution": "user",
+            "role": "user"
           },
           {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
                 "text": "ok",
                 "type": "text"
               }
             ],
-            "credentialId": 1,
-            "duration": 1270.6078749999997,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "20261031153648662660445b0b4cc5",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432208329.0,
-            "ttft": 1262.465792,
+            "model": "glm-5.3-flash",
             "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.0005319,
-                "output": 1.5e-6,
-                "total": 0.0005334
-              },
-              "input": 3546,
+              "input": 94,
               "output": 3,
-              "totalTokens": 3549
-            }
+              "cacheRead": 3456,
+              "cacheWrite": 0,
+              "totalTokens": 3553,
+              "cost": {
+                "input": 0.0000141,
+                "output": 1.5e-6,
+                "cacheRead": 0.00010368,
+                "cacheWrite": 0.0,
+                "total": 0.00011928
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435093372.0,
+            "responseId": "20261031162453add8a2d96cb649c7",
+            "duration": 1074.336083,
+            "ttft": 1069.2904170000002,
+            "credentialId": 1
           }
         ],
-        "type": "agent_end",
-        "yielded": true
+        "isTerminal": true,
+        "yielded": true,
+        "type": "agent_end"
       }
     }
   },
   {
-    "id": "01a190e3-c8c5-726b-8cf5-c33045997060",
-    "live": "01a190e3-bf87-76fd-9d92-76b14518d078",
-    "at": "2026-10-31T07:36:49.60516Z",
+    "id": "01a1910f-cdbb-73e5-a6a2-5422a777ef38",
+    "live": "01a1910f-c681-73d4-9fb9-707a9cf40df5",
+    "at": "2026-10-31T08:24:54.459643Z",
     "body": {
       "kind": "promptResult",
       "frame": {

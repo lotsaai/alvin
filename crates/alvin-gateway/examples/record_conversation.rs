@@ -29,26 +29,38 @@ struct Scenario {
   prompt: &'static str,
   /// Abort the turn once the assistant starts streaming.
   abort: bool,
+  /// A follow-up queued once the assistant starts streaming.
+  follow_up: Option<&'static str>,
 }
 
-const SCENARIOS: [Scenario; 3] = [
+const SCENARIOS: [Scenario; 4] = [
   Scenario {
     name: "plain_turn",
     flags: &["--no-tools"],
     prompt: "Reply with the single word ok.",
     abort: false,
+    follow_up: None,
   },
   Scenario {
     name: "tool_turn",
     flags: &["--approval-mode", "yolo"],
     prompt: "Use your bash tool to run `echo alvin-tool-ok`, then reply with the single word done.",
     abort: false,
+    follow_up: None,
   },
   Scenario {
     name: "aborted_turn",
     flags: &["--no-tools"],
     prompt: "Write the numbers from 1 to 400, one per line, nothing else.",
     abort: true,
+    follow_up: None,
+  },
+  Scenario {
+    name: "queue_turn",
+    flags: &["--no-tools"],
+    prompt: "Write the numbers from 1 to 40, one per line, nothing else.",
+    abort: false,
+    follow_up: Some("Now reply with the single word done."),
   },
 ];
 
@@ -154,6 +166,7 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
 
   let mut events: Vec<Event> = Vec::new();
   let mut aborted = false;
+  let mut queued = false;
   loop {
     let event = tokio::time::timeout(PATIENCE, stream.next())
       .await?
@@ -165,6 +178,20 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
     };
     let streaming = matches!(&event.body, EventBody::Agent(RpcAgentEvent::MessageUpdate(_)));
     events.push(event);
+    if let Some(message) = scenario.follow_up
+      && streaming
+      && !queued
+    {
+      queued = true;
+      LiveApiClient::follow_up(
+        &client,
+        PromptRequest {
+          live: opened.live,
+          message: message.to_owned(),
+        },
+      )
+      .await?;
+    }
     if scenario.abort && streaming && !aborted {
       aborted = true;
       LiveApiClient::abort(&client, opened.live).await?;

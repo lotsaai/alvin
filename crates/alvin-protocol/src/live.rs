@@ -129,6 +129,18 @@ pub trait LiveApi {
   #[method(name = "abort")]
   async fn abort(&self, live: LiveSessionId) -> jsonrpsee::core::RpcResult<()>;
 
+  /// Queues a message that interrupts the running turn.
+  #[method(name = "steer")]
+  async fn steer(&self, request: PromptRequest) -> jsonrpsee::core::RpcResult<()>;
+
+  /// Queues a message that is sent when the running turn finishes.
+  #[method(name = "followUp")]
+  async fn follow_up(&self, request: PromptRequest) -> jsonrpsee::core::RpcResult<()>;
+
+  /// Aborts the running turn and sends a message in its place.
+  #[method(name = "abortAndPrompt")]
+  async fn abort_and_prompt(&self, request: PromptRequest) -> jsonrpsee::core::RpcResult<()>;
+
   /// Runs a shell command in the session and returns its output.
   #[method(name = "bash")]
   async fn bash(&self, request: BashRequest) -> jsonrpsee::core::RpcResult<BashResult>;

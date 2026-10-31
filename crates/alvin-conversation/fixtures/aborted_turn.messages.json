@@ -1,50 +1,48 @@
 {
   "messages": [
     {
-      "attribution": "user",
       "content": [
         {
           "text": "Write the numbers from 1 to 400, one per line, nothing else.",
           "type": "text"
         }
       ],
-      "role": "user",
-      "timestamp": 1793432218431.0
+      "timestamp": 1793435111039.0,
+      "attribution": "user",
+      "role": "user"
     },
     {
-      "api": "openai-completions",
-      "completedAt": 1793432221724.0,
+      "role": "assistant",
       "content": [
         {
-          "summary": false,
-          "thinking": "Output",
-          "thinkingSignature": "reasoning_content",
-          "type": "thinking"
+          "text": "1\n",
+          "type": "text"
         }
       ],
-      "credentialId": 1,
-      "errorId": 67112960.0,
-      "errorMessage": "Interrupted by user",
-      "model": "glm-5.3-flash",
+      "api": "openai-completions",
       "provider": "zai",
-      "responseId": "20261031153700586228aabc6f4cb5",
-      "role": "assistant",
-      "stopReason": "aborted",
-      "timestamp": 1793432220679.0,
+      "model": "glm-5.3-flash",
       "usage": {
-        "cacheRead": 0,
-        "cacheWrite": 0,
-        "cost": {
-          "cacheRead": 0.0,
-          "cacheWrite": 0.0,
-          "input": 0.0,
-          "output": 0.0,
-          "total": 0.0
-        },
         "input": 0,
         "output": 0,
-        "totalTokens": 0
-      }
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0.0,
+          "output": 0.0,
+          "cacheRead": 0.0,
+          "cacheWrite": 0.0,
+          "total": 0.0
+        }
+      },
+      "stopReason": "aborted",
+      "timestamp": 1793435111864.0,
+      "responseId": "20261031162512af6db1768c2742e9",
+      "errorMessage": "Interrupted by user",
+      "errorId": 67112960.0,
+      "completedAt": 1793435113041.0,
+      "credentialId": 1
     }
   ],
   "totalMessages": 2

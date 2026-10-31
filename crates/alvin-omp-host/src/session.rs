@@ -5,8 +5,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use alvin_protocol::{BashResult, MessagesPage, PromptAck, SessionState};
-use omp_rpc::{AbortBashCommand, AbortCommand, BashCommand, Client, Command, GetMessagesPageCommand, GetStateCommand, PromptCommand};
+use alvin_protocol::{
+  AbortAndRestoreQueueResult, BashResult, MessagesPage, PromoteQueuedMessageResult, PromptAck, QueuedMessageQueue,
+  RemoveQueuedMessageResult, SessionState,
+};
+use omp_rpc::{
+  AbortAndPromptCommand, AbortAndRestoreQueueCommand, AbortBashCommand, AbortCommand, BashCommand, Client, Command, FollowUpCommand,
+  GetMessagesPageCommand, GetStateCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, SteerCommand,
+};
 
 use crate::translate::convert;
 use crate::{Error, Result};
@@ -66,6 +72,40 @@ impl Session {
       })
       .await?;
     convert("prompt acknowledgement", &ack)
+  }
+
+  /// Queues a message that interrupts the running turn.
+  pub async fn steer(&self, message: String) -> Result<()> {
+    self.call(SteerCommand { message, images: None }).await
+  }
+
+  /// Queues a message that is sent when the running turn finishes.
+  pub async fn follow_up(&self, message: String) -> Result<()> {
+    self.call(FollowUpCommand { message, images: None }).await
+  }
+
+  /// Aborts the running turn and sends `message` in its place. Its outcome arrives as a `PromptResult` event.
+  pub async fn abort_and_prompt(&self, message: String) -> Result<()> {
+    self.call(AbortAndPromptCommand { message, images: None }).await
+  }
+
+  /// Takes a message out of a queue; omp identifies it by its text.
+  pub async fn remove_queued(&self, message: String, queue: QueuedMessageQueue) -> Result<RemoveQueuedMessageResult> {
+    let queue = convert("queue name", &queue)?;
+    let result = self.call(RemoveQueuedMessageCommand { message, queue }).await?;
+    convert("remove result", &result)
+  }
+
+  /// Moves a queued follow-up to the steering queue.
+  pub async fn promote_queued(&self, message: String) -> Result<PromoteQueuedMessageResult> {
+    let result = self.call(PromoteQueuedMessageCommand { message }).await?;
+    convert("promote result", &result)
+  }
+
+  /// Aborts the running turn and returns the queued messages that were withdrawn.
+  pub async fn restore_queue(&self) -> Result<AbortAndRestoreQueueResult> {
+    let result = self.call(AbortAndRestoreQueueCommand::default()).await?;
+    convert("restored queue", &result)
   }
 
   /// Aborts the running turn.

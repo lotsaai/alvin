@@ -16,14 +16,24 @@ pub(crate) fn state<T: 'static>(window: &mut Window, cx: &mut Context<T>) -> Ent
   })
 }
 
-/// What the user asked for when the composer reported an event: the text to send, if Enter without Shift was pressed on
-/// something other than whitespace.
-pub(crate) fn submitted(event: &InputEvent, state: &Entity<TextareaState>, cx: &App) -> Option<String> {
+/// What the user sent: the text, and whether it was sent with the secondary key (Cmd or Ctrl), which queues it as a follow-up
+/// instead of steering a running turn.
+pub(crate) struct Submission {
+  pub(crate) text: String,
+  pub(crate) follow_up: bool,
+}
+
+/// What the user asked for when the composer reported an event: Enter, with or without the secondary key, on something other
+/// than whitespace. Shift+Enter inserts a newline and sends nothing.
+pub(crate) fn submitted(event: &InputEvent, state: &Entity<TextareaState>, cx: &App) -> Option<Submission> {
   match event {
-    InputEvent::PressEnter { shift: false, .. } => {
+    InputEvent::PressEnter { shift: false, secondary } => {
       let text = state.read(cx).value();
       let text = text.trim_end();
-      (!text.trim().is_empty()).then(|| text.to_owned())
+      (!text.trim().is_empty()).then(|| Submission {
+        text: text.to_owned(),
+        follow_up: *secondary,
+      })
     }
     _ => None,
   }

@@ -142,6 +142,13 @@ mod tests {
     }
   }
 
+  fn queued() -> Recorded {
+    Recorded {
+      events: serde_json::from_str(include_str!("../fixtures/queue_turn.events.json")).unwrap(),
+      messages: serde_json::from_str(include_str!("../fixtures/queue_turn.messages.json")).unwrap(),
+    }
+  }
+
   fn aborted() -> Recorded {
     Recorded {
       events: serde_json::from_str(include_str!("../fixtures/aborted_turn.events.json")).unwrap(),
@@ -411,5 +418,32 @@ mod tests {
       origins,
       [Origin::CommandOutput, Origin::FrameDropped(Some("message_update".to_owned()))]
     );
+  }
+
+  #[test]
+  fn the_queue_follows_queue_updates_through_a_recorded_turn() {
+    let recorded = queued();
+    let live = summary(&recorded).live;
+    let mut conversation = Conversation::default();
+    conversation.open(&summary(&recorded));
+
+    let mut waiting = Vec::new();
+    for event in &recorded.events {
+      conversation.apply(event);
+      if matches!(&event.body, EventBody::Agent(RpcAgentEvent::QueueUpdate(_))) {
+        waiting.push(conversation.live(live).unwrap().queue.follow_up.clone());
+      }
+    }
+
+    // The follow-up was queued while the first turn ran, then sent when it ended.
+    assert_eq!(
+      waiting,
+      [vec!["Now reply with the single word done.".to_owned()], Vec::<String>::new()]
+    );
+    let view = conversation.live(live).unwrap();
+    assert_eq!(view.queue.steering, Vec::<String>::new());
+    assert_eq!(view.queue.live_steered, 0);
+    assert_eq!(comparable(&view.transcript), comparable(&recorded.messages.messages));
+    assert_eq!(view.run, Run::Settled);
   }
 }

@@ -4,10 +4,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alvin_client::{Client, ConnectionState, Error, ResyncReason};
-use alvin_conversation::{Connection, Conversation, SessionsKey};
+use alvin_conversation::{Connection, Conversation, Run, SessionsKey};
 use alvin_protocol::{
   BashRequest, CheckoutId, ErrorCode, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
-  OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromptRequest, SessionCursor, SessionId, SessionsApiClient, SubscribeRequest,
+  OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient, QueuedMessageQueue,
+  RemoveQueuedRequest, SessionCursor, SessionId, SessionsApiClient, SubscribeRequest,
 };
 use gpui_kit::{AsyncApp, Context, EventEmitter, SharedString, Task, WeakEntity};
 
@@ -28,6 +29,13 @@ pub enum ModelEvent {
   Opened(LiveSessionId),
   /// A live session was closed.
   Closed(LiveSessionId),
+  /// Aborting withdrew queued messages. They are the user's text: put them back in the composer.
+  Restored {
+    /// The live session.
+    live: LiveSessionId,
+    /// The withdrawn messages, oldest first, one per line.
+    text: String,
+  },
 }
 
 /// Projects, sessions and live sessions, and the commands that change them.
@@ -252,8 +260,9 @@ impl Model {
     })
   }
 
-  /// Sends what the user typed: text starting with `!` runs as a shell command, anything else is a prompt, unchanged.
-  pub fn send(&mut self, live: LiveSessionId, text: &str, cx: &mut Context<Self>) {
+  /// Sends what the user typed. A leading `!` runs the rest as a shell command; anything else goes to omp unchanged. While a
+  /// turn runs, a message is queued instead: it steers the turn, or with `follow_up` waits for it to end.
+  pub fn send(&mut self, live: LiveSessionId, text: &str, follow_up: bool, cx: &mut Context<Self>) {
     let client = self.client.clone();
     if let Some(command) = text.strip_prefix('!') {
       let command = command.to_owned();
@@ -280,31 +289,84 @@ impl Model {
         }));
       })
       .detach();
-    } else {
-      let message = text.to_owned();
-      cx.spawn(async move |this, cx| {
-        if let Err(error) = LiveApiClient::prompt(&client, PromptRequest { live, message })
-          .await
-          .map_err(Error::from)
-        {
-          fail(&this, cx, &error);
-        }
-      })
-      .detach();
+      return;
     }
+    let running = self.conversation.live(live).is_some_and(|view| view.run == Run::Running);
+    let request = PromptRequest {
+      live,
+      message: text.to_owned(),
+    };
+    cx.spawn(async move |this, cx| {
+      let result = match (running, follow_up) {
+        (false, _) => LiveApiClient::prompt(&client, request).await,
+        (true, false) => LiveApiClient::steer(&client, request).await,
+        (true, true) => LiveApiClient::follow_up(&client, request).await,
+      };
+      if let Err(error) = result.map_err(Error::from) {
+        fail(&this, cx, &error);
+      }
+    })
+    .detach();
   }
 
-  /// Aborts what is running: the `!` command when there is one, else the turn.
+  /// Aborts what is running: the `!` command when there is one, else the turn. Queued messages the abort withdraws come back
+  /// as [`ModelEvent::Restored`].
   pub fn abort(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
     let client = self.client.clone();
     let bash = self.bash_running.contains(&live);
+    let queued = self
+      .conversation
+      .live(live)
+      .is_some_and(|view| !view.queue.steering.is_empty() || !view.queue.follow_up.is_empty());
     cx.spawn(async move |this, cx| {
+      if queued && !bash {
+        match QueueApiClient::restore(&client, live).await.map_err(Error::from) {
+          Ok(restored) => {
+            let text = restored
+              .steering
+              .iter()
+              .chain(&restored.follow_up)
+              .map(|message| message.text.as_str())
+              .collect::<Vec<_>>()
+              .join("\n");
+            drop(this.update(cx, |_, cx| cx.emit(ModelEvent::Restored { live, text })));
+          }
+          Err(error) => fail(&this, cx, &error),
+        }
+        return;
+      }
       let result = if bash {
         LiveApiClient::abort_bash(&client, live).await
       } else {
         LiveApiClient::abort(&client, live).await
       };
       if let Err(error) = result.map_err(Error::from) {
+        fail(&this, cx, &error);
+      }
+    })
+    .detach();
+  }
+
+  /// Takes a queued message out of its queue.
+  pub fn remove_queued(&mut self, live: LiveSessionId, message: String, queue: QueuedMessageQueue, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      let request = RemoveQueuedRequest { live, message, queue };
+      if let Err(error) = QueueApiClient::remove(&client, request).await.map_err(Error::from) {
+        fail(&this, cx, &error);
+      }
+    })
+    .detach();
+  }
+
+  /// Moves a queued follow-up to the steering queue.
+  pub fn promote_queued(&mut self, live: LiveSessionId, message: String, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      if let Err(error) = QueueApiClient::promote(&client, PromoteQueuedRequest { live, message })
+        .await
+        .map_err(Error::from)
+      {
         fail(&this, cx, &error);
       }
     })

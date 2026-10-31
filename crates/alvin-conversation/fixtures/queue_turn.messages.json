@@ -1,0 +1,106 @@
+{
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Write the numbers from 1 to 40, one per line, nothing else.",
+          "type": "text"
+        }
+      ],
+      "timestamp": 1793435114097.0,
+      "attribution": "user",
+      "role": "user"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40",
+          "type": "text"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 100,
+        "output": 81,
+        "cacheRead": 3456,
+        "cacheWrite": 0,
+        "totalTokens": 3637,
+        "cost": {
+          "input": 0.000015,
+          "output": 0.000040499999999999995,
+          "cacheRead": 0.00010368,
+          "cacheWrite": 0.0,
+          "total": 0.00015917999999999998
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1793435114743.0,
+      "responseId": "20261031162515638f6c8e34554b51",
+      "duration": 2838.1220839999996,
+      "ttft": 1779.693584,
+      "completedAt": 1793435117583.0,
+      "contextSnapshot": {
+        "promptTokens": 3556,
+        "nonMessageTokens": 3112,
+        "toolSchemaTokens": 850,
+        "compactionEpoch": 0
+      },
+      "credentialId": 1
+    },
+    {
+      "content": [
+        {
+          "text": "Now reply with the single word done.",
+          "type": "text"
+        }
+      ],
+      "timestamp": 1793435116532.0,
+      "attribution": "user",
+      "role": "user"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "done",
+          "type": "text"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 127,
+        "output": 3,
+        "cacheRead": 3520,
+        "cacheWrite": 0,
+        "totalTokens": 3650,
+        "cost": {
+          "input": 0.00001905,
+          "output": 1.5e-6,
+          "cacheRead": 0.0001056,
+          "cacheWrite": 0.0,
+          "total": 0.00012615
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1793435117601.0,
+      "responseId": "20261031162517baa03fc844874a80",
+      "errorId": 0.0,
+      "duration": 1621.3636659999993,
+      "ttft": 1618.9101249999994,
+      "completedAt": 1793435119223.0,
+      "credentialId": 1,
+      "contextSnapshot": {
+        "promptTokens": 3647,
+        "nonMessageTokens": 3112,
+        "toolSchemaTokens": 850,
+        "compactionEpoch": 0
+      }
+    }
+  ],
+  "totalMessages": 4
+}

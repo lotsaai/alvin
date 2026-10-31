@@ -1,22 +1,22 @@
 [
   {
-    "id": "01a190e3-cd2d-70ea-b0dd-4a57002295f5",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:50.733528Z",
+    "id": "01a1910f-d213-75c4-bc46-8ccdc65134b4",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:24:55.571745Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb86474141be4a",
-        "method": "setWidget",
+        "id": "15bb91487a201756",
+        "widgetKey": "autoresearch",
         "type": "extension_ui_request",
-        "widgetKey": "autoresearch"
+        "method": "setWidget"
       }
     }
   },
   {
-    "id": "01a190e3-cd2d-70ea-b0dd-4a58ac723110",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:50.733535Z",
+    "id": "01a1910f-d213-75c4-bc46-8ccea605041b",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:24:55.571751Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -25,9 +25,9 @@
     }
   },
   {
-    "id": "01a190e3-cd2d-70ea-b0dd-4a59f5f3da42",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:50.733538Z",
+    "id": "01a1910f-d213-75c4-bc46-8ccfe49702fb",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:24:55.571754Z",
     "body": {
       "kind": "availableCommandsUpdate",
       "frame": {
@@ -990,23 +990,23 @@
     }
   },
   {
-    "id": "01a190e3-cfca-7594-aaeb-1ff5efdc9b4b",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:51.402226Z",
+    "id": "01a1910f-d401-72fb-bf23-c904dd1b2a08",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:24:56.0655Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "thinkingLevel": "low",
         "configured": "auto",
         "resolved": "low",
-        "thinkingLevel": "low",
         "type": "thinking_level_changed"
       }
     }
   },
   {
-    "id": "01a190e3-cfcb-7439-99a5-57ba285a8872",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:51.403496Z",
+    "id": "01a1910f-d402-7047-97a2-87894470af41",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:24:56.066843Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1015,9 +1015,9 @@
     }
   },
   {
-    "id": "01a190e3-cfcc-7137-abc3-f92db5e79807",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:51.40477Z",
+    "id": "01a1910f-d404-7436-869d-2a54e67a81e6",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:24:56.0683Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1026,22 +1026,22 @@
     }
   },
   {
-    "id": "01a190e3-cfcc-7137-abc3-f92e181afae8",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:51.404915Z",
+    "id": "01a1910f-d404-7436-869d-2a55964489ca",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:24:56.068464Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "attribution": "user",
           "content": [
             {
               "text": "Use your bash tool to run `echo alvin-tool-ok`, then reply with the single word done.",
               "type": "text"
             }
           ],
-          "role": "user",
-          "timestamp": 1793432210734.0
+          "timestamp": 1793435095572.0,
+          "attribution": "user",
+          "role": "user"
         },
         "messageId": "msg-1",
         "type": "message_start"
@@ -1049,22 +1049,22 @@
     }
   },
   {
-    "id": "01a190e3-cfcc-7137-abc3-f92ff95c0511",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:51.404946Z",
+    "id": "01a1910f-d404-7436-869d-2a56846ee9e5",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:24:56.068511Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "attribution": "user",
           "content": [
             {
               "text": "Use your bash tool to run `echo alvin-tool-ok`, then reply with the single word done.",
               "type": "text"
             }
           ],
-          "role": "user",
-          "timestamp": 1793432210734.0
+          "timestamp": 1793435095572.0,
+          "attribution": "user",
+          "role": "user"
         },
         "messageId": "msg-1",
         "type": "message_end"
@@ -1072,48 +1072,48 @@
     }
   },
   {
-    "id": "01a190e3-e25e-71bd-865f-f9db7bb87c5c",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.158673Z",
+    "id": "01a1910f-e5a6-75eb-b592-28ed083a804a",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.58277Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
+              "type": "toolCall",
+              "id": "call_80aa9075e1bb4d699256fd47",
+              "name": "bash",
               "arguments": {
                 "command": "echo alvin-tool-ok",
-                "i": "Running echo check"
+                "i": "Running echo smoke test"
               },
-              "id": "call_61df0b10614742a5afa32a5f",
-              "name": "bash",
-              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
               "streamIndex": 0,
-              "type": "toolCall"
+              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}"
             }
           ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "202610311536516dd2ccb4c4e64ae2",
-          "role": "assistant",
-          "stopReason": "toolUse",
-          "timestamp": 1793432211406.0,
+          "model": "glm-5.3-flash",
           "usage": {
+            "input": 9662,
+            "output": 24,
             "cacheRead": 0,
             "cacheWrite": 0,
+            "totalTokens": 9686,
             "cost": {
+              "input": 0.0014493,
+              "output": 0.000012,
               "cacheRead": 0.0,
               "cacheWrite": 0.0,
-              "input": 0.00144945,
-              "output": 0.0000115,
-              "total": 0.00146095
-            },
-            "input": 9663,
-            "output": 23,
-            "totalTokens": 9686
-          }
+              "total": 0.0014613
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793435096069.0,
+          "responseId": "2026103116245697e2c1965bde48ee",
+          "credentialId": 1
         },
         "messageId": "msg-2",
         "type": "message_start"
@@ -1121,338 +1121,338 @@
     }
   },
   {
-    "id": "01a190e3-e260-7347-ab14-37015a672faf",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.160465Z",
+    "id": "01a1910f-e5a6-75eb-b592-28ee833c2c5c",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.582902Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_80aa9075e1bb4d699256fd47",
+              "name": "bash",
+              "arguments": {
+                "command": "echo alvin-tool-ok",
+                "i": "Running echo smoke test"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 9662,
+            "output": 24,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 9686,
+            "cost": {
+              "input": 0.0014493,
+              "output": 0.000012,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0014613
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793435096069.0,
+          "responseId": "2026103116245697e2c1965bde48ee",
+          "credentialId": 1
+        },
         "assistantMessageEvent": {
           "contentIndex": 0,
           "partial": {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
+                "type": "toolCall",
+                "id": "call_80aa9075e1bb4d699256fd47",
+                "name": "bash",
                 "arguments": {
                   "command": "echo alvin-tool-ok",
-                  "i": "Running echo check"
+                  "i": "Running echo smoke test"
                 },
-                "id": "call_61df0b10614742a5afa32a5f",
-                "name": "bash",
-                "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
                 "streamIndex": 0,
-                "type": "toolCall"
+                "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}"
               }
             ],
-            "credentialId": 1,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "202610311536516dd2ccb4c4e64ae2",
-            "role": "assistant",
-            "stopReason": "toolUse",
-            "timestamp": 1793432211406.0,
+            "model": "glm-5.3-flash",
             "usage": {
+              "input": 9662,
+              "output": 24,
               "cacheRead": 0,
               "cacheWrite": 0,
+              "totalTokens": 9686,
               "cost": {
+                "input": 0.0014493,
+                "output": 0.000012,
                 "cacheRead": 0.0,
                 "cacheWrite": 0.0,
-                "input": 0.00144945,
-                "output": 0.0000115,
-                "total": 0.00146095
-              },
-              "input": 9663,
-              "output": 23,
-              "totalTokens": 9686
-            }
+                "total": 0.0014613
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793435096069.0,
+            "responseId": "2026103116245697e2c1965bde48ee",
+            "credentialId": 1
           },
           "type": "toolcall_start"
         },
-        "message": {
-          "api": "openai-completions",
-          "content": [
-            {
-              "arguments": {
-                "command": "echo alvin-tool-ok",
-                "i": "Running echo check"
-              },
-              "id": "call_61df0b10614742a5afa32a5f",
-              "name": "bash",
-              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
-              "streamIndex": 0,
-              "type": "toolCall"
-            }
-          ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
-          "provider": "zai",
-          "responseId": "202610311536516dd2ccb4c4e64ae2",
-          "role": "assistant",
-          "stopReason": "toolUse",
-          "timestamp": 1793432211406.0,
-          "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.00144945,
-              "output": 0.0000115,
-              "total": 0.00146095
-            },
-            "input": 9663,
-            "output": 23,
-            "totalTokens": 9686
-          }
-        },
         "messageId": "msg-2",
         "type": "message_update"
       }
     }
   },
   {
-    "id": "01a190e3-e261-7444-b66d-154c7c4c0c80",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.161018Z",
+    "id": "01a1910f-e5a8-765a-b3cc-396246347301",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.584539Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_80aa9075e1bb4d699256fd47",
+              "name": "bash",
+              "arguments": {
+                "command": "echo alvin-tool-ok",
+                "i": "Running echo smoke test"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 9662,
+            "output": 24,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 9686,
+            "cost": {
+              "input": 0.0014493,
+              "output": 0.000012,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0014613
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793435096069.0,
+          "responseId": "2026103116245697e2c1965bde48ee",
+          "credentialId": 1
+        },
         "assistantMessageEvent": {
           "contentIndex": 0,
-          "delta": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
+          "delta": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}",
           "partial": {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
+                "type": "toolCall",
+                "id": "call_80aa9075e1bb4d699256fd47",
+                "name": "bash",
                 "arguments": {
                   "command": "echo alvin-tool-ok",
-                  "i": "Running echo check"
+                  "i": "Running echo smoke test"
                 },
-                "id": "call_61df0b10614742a5afa32a5f",
-                "name": "bash",
-                "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
                 "streamIndex": 0,
-                "type": "toolCall"
+                "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}"
               }
             ],
-            "credentialId": 1,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "202610311536516dd2ccb4c4e64ae2",
-            "role": "assistant",
-            "stopReason": "toolUse",
-            "timestamp": 1793432211406.0,
+            "model": "glm-5.3-flash",
             "usage": {
+              "input": 9662,
+              "output": 24,
               "cacheRead": 0,
               "cacheWrite": 0,
+              "totalTokens": 9686,
               "cost": {
+                "input": 0.0014493,
+                "output": 0.000012,
                 "cacheRead": 0.0,
                 "cacheWrite": 0.0,
-                "input": 0.00144945,
-                "output": 0.0000115,
-                "total": 0.00146095
-              },
-              "input": 9663,
-              "output": 23,
-              "totalTokens": 9686
-            }
+                "total": 0.0014613
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793435096069.0,
+            "responseId": "2026103116245697e2c1965bde48ee",
+            "credentialId": 1
           },
           "type": "toolcall_delta"
         },
-        "message": {
-          "api": "openai-completions",
-          "content": [
-            {
-              "arguments": {
-                "command": "echo alvin-tool-ok",
-                "i": "Running echo check"
-              },
-              "id": "call_61df0b10614742a5afa32a5f",
-              "name": "bash",
-              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
-              "streamIndex": 0,
-              "type": "toolCall"
-            }
-          ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
-          "provider": "zai",
-          "responseId": "202610311536516dd2ccb4c4e64ae2",
-          "role": "assistant",
-          "stopReason": "toolUse",
-          "timestamp": 1793432211406.0,
-          "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.00144945,
-              "output": 0.0000115,
-              "total": 0.00146095
-            },
-            "input": 9663,
-            "output": 23,
-            "totalTokens": 9686
-          }
-        },
         "messageId": "msg-2",
         "type": "message_update"
       }
     }
   },
   {
-    "id": "01a190e3-e261-7444-b66d-154dd32b5d56",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.161914Z",
+    "id": "01a1910f-e5aa-72df-983f-c1a1c0c29154",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.586558Z",
     "body": {
       "kind": "agent",
       "frame": {
-        "assistantMessageEvent": {
-          "contentIndex": 0,
-          "partial": {
-            "api": "openai-completions",
-            "content": [
-              {
-                "arguments": {
-                  "command": "echo alvin-tool-ok",
-                  "i": "Running echo check"
-                },
-                "id": "call_61df0b10614742a5afa32a5f",
-                "name": "bash",
-                "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
-                "streamIndex": 0,
-                "type": "toolCall"
-              }
-            ],
-            "credentialId": 1,
-            "duration": 4751.247584000001,
-            "model": "glm-5.3-flash",
-            "provider": "zai",
-            "responseId": "202610311536516dd2ccb4c4e64ae2",
-            "role": "assistant",
-            "stopReason": "toolUse",
-            "timestamp": 1793432211406.0,
-            "ttft": 4748.818792,
-            "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.00144945,
-                "output": 0.0000115,
-                "total": 0.00146095
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_80aa9075e1bb4d699256fd47",
+              "name": "bash",
+              "arguments": {
+                "command": "echo alvin-tool-ok",
+                "i": "Running echo smoke test"
               },
-              "input": 9663,
-              "output": 23,
-              "totalTokens": 9686
+              "streamIndex": 0,
+              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 9662,
+            "output": 24,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 9686,
+            "cost": {
+              "input": 0.0014493,
+              "output": 0.000012,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0014613
             }
           },
+          "stopReason": "toolUse",
+          "timestamp": 1793435096069.0,
+          "responseId": "2026103116245697e2c1965bde48ee",
+          "duration": 4504.484082999999,
+          "ttft": 4501.949042,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
           "toolCall": {
+            "type": "toolCall",
+            "id": "call_80aa9075e1bb4d699256fd47",
+            "name": "bash",
             "arguments": {
               "command": "echo alvin-tool-ok",
-              "i": "Running echo check"
+              "i": "Running echo smoke test"
             },
-            "id": "call_61df0b10614742a5afa32a5f",
-            "name": "bash",
-            "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
             "streamIndex": 0,
-            "type": "toolCall"
+            "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}"
+          },
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_80aa9075e1bb4d699256fd47",
+                "name": "bash",
+                "arguments": {
+                  "command": "echo alvin-tool-ok",
+                  "i": "Running echo smoke test"
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 9662,
+              "output": 24,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 9686,
+              "cost": {
+                "input": 0.0014493,
+                "output": 0.000012,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0014613
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793435096069.0,
+            "responseId": "2026103116245697e2c1965bde48ee",
+            "duration": 4504.484082999999,
+            "ttft": 4501.949042,
+            "credentialId": 1
           },
           "type": "toolcall_end"
         },
-        "message": {
-          "api": "openai-completions",
-          "content": [
-            {
-              "arguments": {
-                "command": "echo alvin-tool-ok",
-                "i": "Running echo check"
-              },
-              "id": "call_61df0b10614742a5afa32a5f",
-              "name": "bash",
-              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
-              "streamIndex": 0,
-              "type": "toolCall"
-            }
-          ],
-          "credentialId": 1,
-          "duration": 4751.247584000001,
-          "model": "glm-5.3-flash",
-          "provider": "zai",
-          "responseId": "202610311536516dd2ccb4c4e64ae2",
-          "role": "assistant",
-          "stopReason": "toolUse",
-          "timestamp": 1793432211406.0,
-          "ttft": 4748.818792,
-          "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.00144945,
-              "output": 0.0000115,
-              "total": 0.00146095
-            },
-            "input": 9663,
-            "output": 23,
-            "totalTokens": 9686
-          }
-        },
         "messageId": "msg-2",
         "type": "message_update"
       }
     }
   },
   {
-    "id": "01a190e3-e262-752a-979f-a477539d4978",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.162682Z",
+    "id": "01a1910f-e5ae-71bc-bbec-35eeaa61b139",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.590907Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
-          "completedAt": 1793432216161.0,
+          "role": "assistant",
           "content": [
             {
+              "type": "toolCall",
+              "id": "call_80aa9075e1bb4d699256fd47",
+              "name": "bash",
               "arguments": {
                 "command": "echo alvin-tool-ok",
-                "i": "Running echo check"
+                "i": "Running echo smoke test"
               },
-              "id": "call_61df0b10614742a5afa32a5f",
-              "intent": "Running echo check",
-              "name": "bash",
-              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
-              "streamIndex": 0,
-              "type": "toolCall"
+              "intent": "Running echo smoke test",
+              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}",
+              "streamIndex": 0
             }
           ],
-          "credentialId": 1,
-          "duration": 4751.247584000001,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "202610311536516dd2ccb4c4e64ae2",
-          "role": "assistant",
-          "stopReason": "toolUse",
-          "timestamp": 1793432211406.0,
-          "ttft": 4748.818792,
+          "model": "glm-5.3-flash",
           "usage": {
+            "input": 9662,
+            "output": 24,
             "cacheRead": 0,
             "cacheWrite": 0,
+            "totalTokens": 9686,
             "cost": {
+              "input": 0.0014493,
+              "output": 0.000012,
               "cacheRead": 0.0,
               "cacheWrite": 0.0,
-              "input": 0.00144945,
-              "output": 0.0000115,
-              "total": 0.00146095
-            },
-            "input": 9663,
-            "output": 23,
-            "totalTokens": 9686
-          }
+              "total": 0.0014613
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793435096069.0,
+          "responseId": "2026103116245697e2c1965bde48ee",
+          "duration": 4504.484082999999,
+          "ttft": 4501.949042,
+          "completedAt": 1793435100582.0,
+          "credentialId": 1
         },
         "messageId": "msg-2",
         "type": "message_end"
@@ -1460,127 +1460,127 @@
     }
   },
   {
-    "id": "01a190e3-e269-7630-a310-59483cb97ae8",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.169326Z",
+    "id": "01a1910f-e5b5-70ca-acf5-e84857efcab5",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.597699Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "toolCallId": "call_80aa9075e1bb4d699256fd47",
+        "toolName": "bash",
         "args": {
           "command": "echo alvin-tool-ok"
         },
-        "intent": "Running echo check",
-        "toolCallId": "call_61df0b10614742a5afa32a5f",
-        "toolName": "bash",
+        "intent": "Running echo smoke test",
         "type": "tool_execution_start"
       }
     }
   },
   {
-    "id": "01a190e3-e283-7142-bc23-9437a7a1e355",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.195957Z",
+    "id": "01a1910f-e5cd-777e-8f4a-889f0eb40915",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.621532Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "toolCallId": "call_80aa9075e1bb4d699256fd47",
+        "toolName": "bash",
         "args": {
           "command": "echo alvin-tool-ok"
         },
         "partialResult": {
           "content": [
             {
-              "text": "alvin-tool-ok\n",
-              "type": "text"
+              "type": "text",
+              "text": "alvin-tool-ok\n"
             }
           ],
           "details": {}
         },
-        "toolCallId": "call_61df0b10614742a5afa32a5f",
-        "toolName": "bash",
         "type": "tool_execution_update"
       }
     }
   },
   {
-    "id": "01a190e3-e284-771a-8cd9-f9235b4c90fe",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.196535Z",
+    "id": "01a1910f-e5ce-771b-be55-bbed3b236bec",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.622016Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "toolCallId": "call_80aa9075e1bb4d699256fd47",
+        "toolName": "bash",
         "args": {
           "command": "echo alvin-tool-ok"
         },
         "partialResult": {
           "content": [
             {
-              "text": "alvin-tool-ok\n",
-              "type": "text"
+              "type": "text",
+              "text": "alvin-tool-ok\n"
             }
           ],
           "details": {
+            "wallTimeNoticeEmitted": false,
             "timeoutSeconds": 300,
-            "wallTimeMs": 25.781458999999813,
-            "wallTimeNoticeEmitted": false
+            "wallTimeMs": 22.985749999999825
           }
         },
-        "toolCallId": "call_61df0b10614742a5afa32a5f",
-        "toolName": "bash",
         "type": "tool_execution_update"
       }
     }
   },
   {
-    "id": "01a190e3-e284-771a-8cd9-f9244f0d55c9",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.196682Z",
+    "id": "01a1910f-e5ce-771b-be55-bbee809c44ce",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.622173Z",
     "body": {
       "kind": "agent",
       "frame": {
-        "isError": false,
+        "toolCallId": "call_80aa9075e1bb4d699256fd47",
+        "toolName": "bash",
         "result": {
           "content": [
             {
-              "text": "alvin-tool-ok\n",
-              "type": "text"
+              "type": "text",
+              "text": "alvin-tool-ok\n"
             }
           ],
           "details": {
+            "wallTimeNoticeEmitted": false,
             "timeoutSeconds": 300,
-            "wallTimeMs": 25.781458999999813,
-            "wallTimeNoticeEmitted": false
+            "wallTimeMs": 22.985749999999825
           }
         },
-        "toolCallId": "call_61df0b10614742a5afa32a5f",
-        "toolName": "bash",
+        "isError": false,
         "type": "tool_execution_end"
       }
     }
   },
   {
-    "id": "01a190e3-e284-771a-8cd9-f9254214bd67",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.196831Z",
+    "id": "01a1910f-e5ce-771b-be55-bbefae604f03",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.622337Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
+          "role": "toolResult",
+          "toolCallId": "call_80aa9075e1bb4d699256fd47",
+          "toolName": "bash",
           "content": [
             {
               "text": "alvin-tool-ok\n",
               "type": "text"
             }
           ],
-          "details": {
-            "timeoutSeconds": 300,
-            "wallTimeMs": 25.781458999999813,
-            "wallTimeNoticeEmitted": false
-          },
           "isError": false,
-          "role": "toolResult",
-          "timestamp": 1793432216196.0,
-          "toolCallId": "call_61df0b10614742a5afa32a5f",
-          "toolName": "bash"
+          "timestamp": 1793435100621.0,
+          "details": {
+            "wallTimeNoticeEmitted": false,
+            "timeoutSeconds": 300,
+            "wallTimeMs": 22.985749999999825
+          }
         },
         "messageId": "msg-3",
         "type": "message_start"
@@ -1588,29 +1588,29 @@
     }
   },
   {
-    "id": "01a190e3-e284-771a-8cd9-f92644490d87",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.196899Z",
+    "id": "01a1910f-e5ce-771b-be55-bbf039302bf9",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.62245Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
+          "role": "toolResult",
+          "toolCallId": "call_80aa9075e1bb4d699256fd47",
+          "toolName": "bash",
           "content": [
             {
               "text": "alvin-tool-ok\n",
               "type": "text"
             }
           ],
-          "details": {
-            "timeoutSeconds": 300,
-            "wallTimeMs": 25.781458999999813,
-            "wallTimeNoticeEmitted": false
-          },
           "isError": false,
-          "role": "toolResult",
-          "timestamp": 1793432216196.0,
-          "toolCallId": "call_61df0b10614742a5afa32a5f",
-          "toolName": "bash"
+          "timestamp": 1793435100621.0,
+          "details": {
+            "wallTimeNoticeEmitted": false,
+            "timeoutSeconds": 300,
+            "wallTimeMs": 22.985749999999825
+          }
         },
         "messageId": "msg-3",
         "type": "message_end"
@@ -1618,70 +1618,70 @@
     }
   },
   {
-    "id": "01a190e3-e286-73a5-8530-a824d5f9dc87",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.198273Z",
+    "id": "01a1910f-e5cf-7524-96d1-7b504c65334b",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.623527Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
+              "type": "toolCall",
+              "id": "call_80aa9075e1bb4d699256fd47",
+              "name": "bash",
               "arguments": {
                 "command": "echo alvin-tool-ok",
-                "i": "Running echo check"
+                "i": "Running echo smoke test"
               },
-              "id": "call_61df0b10614742a5afa32a5f",
-              "intent": "Running echo check",
-              "name": "bash",
-              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
-              "streamIndex": 0,
-              "type": "toolCall"
+              "intent": "Running echo smoke test",
+              "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}",
+              "streamIndex": 0
             }
           ],
-          "credentialId": 1,
-          "duration": 4751.247584000001,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "202610311536516dd2ccb4c4e64ae2",
-          "role": "assistant",
-          "stopReason": "toolUse",
-          "timestamp": 1793432211406.0,
-          "ttft": 4748.818792,
+          "model": "glm-5.3-flash",
           "usage": {
+            "input": 9662,
+            "output": 24,
             "cacheRead": 0,
             "cacheWrite": 0,
+            "totalTokens": 9686,
             "cost": {
+              "input": 0.0014493,
+              "output": 0.000012,
               "cacheRead": 0.0,
               "cacheWrite": 0.0,
-              "input": 0.00144945,
-              "output": 0.0000115,
-              "total": 0.00146095
-            },
-            "input": 9663,
-            "output": 23,
-            "totalTokens": 9686
-          }
+              "total": 0.0014613
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793435096069.0,
+          "responseId": "2026103116245697e2c1965bde48ee",
+          "duration": 4504.484082999999,
+          "ttft": 4501.949042,
+          "credentialId": 1
         },
         "toolResults": [
           {
+            "role": "toolResult",
+            "toolCallId": "call_80aa9075e1bb4d699256fd47",
+            "toolName": "bash",
             "content": [
               {
                 "text": "alvin-tool-ok\n",
                 "type": "text"
               }
             ],
-            "details": {
-              "timeoutSeconds": 300,
-              "wallTimeMs": 25.781458999999813,
-              "wallTimeNoticeEmitted": false
-            },
             "isError": false,
-            "role": "toolResult",
-            "timestamp": 1793432216196.0,
-            "toolCallId": "call_61df0b10614742a5afa32a5f",
-            "toolName": "bash"
+            "timestamp": 1793435100621.0,
+            "details": {
+              "wallTimeNoticeEmitted": false,
+              "timeoutSeconds": 300,
+              "wallTimeMs": 22.985749999999825
+            }
           }
         ],
         "type": "turn_end"
@@ -1689,9 +1689,9 @@
     }
   },
   {
-    "id": "01a190e3-e287-7453-bbbc-4d27da47ea4d",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:56.199462Z",
+    "id": "01a1910f-e5d0-7058-9bec-71f5d9c451ce",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:00.624387Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1700,41 +1700,41 @@
     }
   },
   {
-    "id": "01a190e3-e6ef-77e7-9326-71fdb5045202",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:57.327745Z",
+    "id": "01a19110-0a06-757d-97ac-774745de7d61",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:09.894535Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
               "text": "done",
               "type": "text"
             }
           ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153656d5826e3fd59a437c",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432216199.0,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
             "input": 0,
             "output": 0,
-            "totalTokens": 0
-          }
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435100624.0,
+          "responseId": "2026103116250042e8fd9315ac41e4",
+          "credentialId": 1
         },
         "messageId": "msg-4",
         "type": "message_start"
@@ -1742,75 +1742,75 @@
     }
   },
   {
-    "id": "01a190e3-e6f0-7362-b997-95b7bbd0d6e4",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:57.328252Z",
+    "id": "01a19110-0a07-7058-aa18-a87c8ebe5829",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:09.895486Z",
     "body": {
       "kind": "agent",
       "frame": {
-        "assistantMessageEvent": {
-          "contentIndex": 0,
-          "partial": {
-            "api": "openai-completions",
-            "content": [
-              {
-                "text": "done",
-                "type": "text"
-              }
-            ],
-            "credentialId": 1,
-            "model": "glm-5.3-flash",
-            "provider": "zai",
-            "responseId": "20261031153656d5826e3fd59a437c",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432216199.0,
-            "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.0,
-                "output": 0.0,
-                "total": 0.0
-              },
-              "input": 0,
-              "output": 0,
-              "totalTokens": 0
-            }
-          },
-          "type": "text_start"
-        },
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
               "text": "done",
               "type": "text"
             }
           ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153656d5826e3fd59a437c",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432216199.0,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
             "input": 0,
             "output": 0,
-            "totalTokens": 0
-          }
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435100624.0,
+          "responseId": "2026103116250042e8fd9315ac41e4",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "done",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435100624.0,
+            "responseId": "2026103116250042e8fd9315ac41e4",
+            "credentialId": 1
+          },
+          "type": "text_start"
         },
         "messageId": "msg-4",
         "type": "message_update"
@@ -1818,157 +1818,157 @@
     }
   },
   {
-    "id": "01a190e3-e6f0-7362-b997-95b868324a3c",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:57.328571Z",
+    "id": "01a19110-0a08-70f6-9dba-961d19e8f6ac",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:09.896117Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435100624.0,
+          "responseId": "2026103116250042e8fd9315ac41e4",
+          "credentialId": 1
+        },
         "assistantMessageEvent": {
           "contentIndex": 0,
           "delta": "done",
           "partial": {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
                 "text": "done",
                 "type": "text"
               }
             ],
-            "credentialId": 1,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "20261031153656d5826e3fd59a437c",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432216199.0,
+            "model": "glm-5.3-flash",
             "usage": {
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "input": 0.0,
-                "output": 0.0,
-                "total": 0.0
-              },
               "input": 0,
               "output": 0,
-              "totalTokens": 0
-            }
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435100624.0,
+            "responseId": "2026103116250042e8fd9315ac41e4",
+            "credentialId": 1
           },
           "type": "text_delta"
         },
-        "message": {
-          "api": "openai-completions",
-          "content": [
-            {
-              "text": "done",
-              "type": "text"
-            }
-          ],
-          "credentialId": 1,
-          "model": "glm-5.3-flash",
-          "provider": "zai",
-          "responseId": "20261031153656d5826e3fd59a437c",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432216199.0,
-          "usage": {
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "input": 0.0,
-              "output": 0.0,
-              "total": 0.0
-            },
-            "input": 0,
-            "output": 0,
-            "totalTokens": 0
-          }
-        },
         "messageId": "msg-4",
         "type": "message_update"
       }
     }
   },
   {
-    "id": "01a190e3-e6f8-73ac-a457-28ff45fa786c",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:57.336071Z",
+    "id": "01a19110-0a10-72c2-99d0-ce5407347b5a",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:09.904722Z",
     "body": {
       "kind": "agent",
       "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 95,
+            "output": 3,
+            "cacheRead": 9600,
+            "cacheWrite": 0,
+            "totalTokens": 9698,
+            "cost": {
+              "input": 0.00001425,
+              "output": 1.5e-6,
+              "cacheRead": 0.00028799999999999995,
+              "cacheWrite": 0.0,
+              "total": 0.00030374999999999993
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435100624.0,
+          "responseId": "2026103116250042e8fd9315ac41e4",
+          "duration": 9277.883417,
+          "ttft": 9268.187834,
+          "credentialId": 1
+        },
         "assistantMessageEvent": {
-          "content": "done",
           "contentIndex": 0,
+          "content": "done",
           "partial": {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
                 "text": "done",
                 "type": "text"
               }
             ],
-            "credentialId": 1,
-            "duration": 1135.5029999999997,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "20261031153656d5826e3fd59a437c",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432216199.0,
-            "ttft": 1127.106334,
+            "model": "glm-5.3-flash",
             "usage": {
-              "cacheRead": 9600,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.00028799999999999995,
-                "cacheWrite": 0.0,
-                "input": 0.00001425,
-                "output": 1.5e-6,
-                "total": 0.00030374999999999993
-              },
               "input": 95,
               "output": 3,
-              "totalTokens": 9698
-            }
+              "cacheRead": 9600,
+              "cacheWrite": 0,
+              "totalTokens": 9698,
+              "cost": {
+                "input": 0.00001425,
+                "output": 1.5e-6,
+                "cacheRead": 0.00028799999999999995,
+                "cacheWrite": 0.0,
+                "total": 0.00030374999999999993
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435100624.0,
+            "responseId": "2026103116250042e8fd9315ac41e4",
+            "duration": 9277.883417,
+            "ttft": 9268.187834,
+            "credentialId": 1
           },
           "type": "text_end"
-        },
-        "message": {
-          "api": "openai-completions",
-          "content": [
-            {
-              "text": "done",
-              "type": "text"
-            }
-          ],
-          "credentialId": 1,
-          "duration": 1135.5029999999997,
-          "model": "glm-5.3-flash",
-          "provider": "zai",
-          "responseId": "20261031153656d5826e3fd59a437c",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432216199.0,
-          "ttft": 1127.106334,
-          "usage": {
-            "cacheRead": 9600,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.00028799999999999995,
-              "cacheWrite": 0.0,
-              "input": 0.00001425,
-              "output": 1.5e-6,
-              "total": 0.00030374999999999993
-            },
-            "input": 95,
-            "output": 3,
-            "totalTokens": 9698
-          }
         },
         "messageId": "msg-4",
         "type": "message_update"
@@ -1976,44 +1976,44 @@
     }
   },
   {
-    "id": "01a190e3-e6f8-73ac-a457-2900b404ad21",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:57.336201Z",
+    "id": "01a19110-0a11-723b-84ab-c3628531ec22",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:09.905086Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
-          "completedAt": 1793432217335.0,
+          "role": "assistant",
           "content": [
             {
               "text": "done",
               "type": "text"
             }
           ],
-          "credentialId": 1,
-          "duration": 1135.5029999999997,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153656d5826e3fd59a437c",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432216199.0,
-          "ttft": 1127.106334,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 9600,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.00028799999999999995,
-              "cacheWrite": 0.0,
-              "input": 0.00001425,
-              "output": 1.5e-6,
-              "total": 0.00030374999999999993
-            },
             "input": 95,
             "output": 3,
-            "totalTokens": 9698
-          }
+            "cacheRead": 9600,
+            "cacheWrite": 0,
+            "totalTokens": 9698,
+            "cost": {
+              "input": 0.00001425,
+              "output": 1.5e-6,
+              "cacheRead": 0.00028799999999999995,
+              "cacheWrite": 0.0,
+              "total": 0.00030374999999999993
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435100624.0,
+          "responseId": "2026103116250042e8fd9315ac41e4",
+          "duration": 9277.883417,
+          "ttft": 9268.187834,
+          "completedAt": 1793435109903.0,
+          "credentialId": 1
         },
         "messageId": "msg-4",
         "type": "message_end"
@@ -2021,43 +2021,43 @@
     }
   },
   {
-    "id": "01a190e3-e6f8-73ac-a457-2901112871bc",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:57.336397Z",
+    "id": "01a19110-0a12-73b2-805a-0073c7a3bc86",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:09.906073Z",
     "body": {
       "kind": "agent",
       "frame": {
         "message": {
-          "api": "openai-completions",
+          "role": "assistant",
           "content": [
             {
               "text": "done",
               "type": "text"
             }
           ],
-          "credentialId": 1,
-          "duration": 1135.5029999999997,
-          "model": "glm-5.3-flash",
+          "api": "openai-completions",
           "provider": "zai",
-          "responseId": "20261031153656d5826e3fd59a437c",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": 1793432216199.0,
-          "ttft": 1127.106334,
+          "model": "glm-5.3-flash",
           "usage": {
-            "cacheRead": 9600,
-            "cacheWrite": 0,
-            "cost": {
-              "cacheRead": 0.00028799999999999995,
-              "cacheWrite": 0.0,
-              "input": 0.00001425,
-              "output": 1.5e-6,
-              "total": 0.00030374999999999993
-            },
             "input": 95,
             "output": 3,
-            "totalTokens": 9698
-          }
+            "cacheRead": 9600,
+            "cacheWrite": 0,
+            "totalTokens": 9698,
+            "cost": {
+              "input": 0.00001425,
+              "output": 1.5e-6,
+              "cacheRead": 0.00028799999999999995,
+              "cacheWrite": 0.0,
+              "total": 0.00030374999999999993
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793435100624.0,
+          "responseId": "2026103116250042e8fd9315ac41e4",
+          "duration": 9277.883417,
+          "ttft": 9268.187834,
+          "credentialId": 1
         },
         "toolResults": [],
         "type": "turn_end"
@@ -2065,139 +2065,139 @@
     }
   },
   {
-    "id": "01a190e3-e6f9-711e-a369-96bb3de0b883",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:57.337384Z",
+    "id": "01a19110-0a14-71f8-bc64-a51532dbb220",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:09.908355Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb864dbe41be4c",
-        "method": "setWidget",
+        "id": "15bb915685201758",
+        "widgetKey": "autoresearch",
         "type": "extension_ui_request",
-        "widgetKey": "autoresearch"
+        "method": "setWidget"
       }
     }
   },
   {
-    "id": "01a190e3-e6fa-751a-9c92-46b54483c790",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:57.338534Z",
+    "id": "01a19110-0a17-7044-982f-4b1d74b3f0b2",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:09.911471Z",
     "body": {
       "kind": "agent",
       "frame": {
-        "isTerminal": true,
         "messages": [
           {
-            "attribution": "user",
             "content": [
               {
                 "text": "Use your bash tool to run `echo alvin-tool-ok`, then reply with the single word done.",
                 "type": "text"
               }
             ],
-            "role": "user",
-            "timestamp": 1793432210734.0
+            "timestamp": 1793435095572.0,
+            "attribution": "user",
+            "role": "user"
           },
           {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
+                "type": "toolCall",
+                "id": "call_80aa9075e1bb4d699256fd47",
+                "name": "bash",
                 "arguments": {
                   "command": "echo alvin-tool-ok",
-                  "i": "Running echo check"
+                  "i": "Running echo smoke test"
                 },
-                "id": "call_61df0b10614742a5afa32a5f",
-                "intent": "Running echo check",
-                "name": "bash",
-                "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
-                "streamIndex": 0,
-                "type": "toolCall"
+                "intent": "Running echo smoke test",
+                "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}",
+                "streamIndex": 0
               }
             ],
-            "credentialId": 1,
-            "duration": 4751.247584000001,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "202610311536516dd2ccb4c4e64ae2",
-            "role": "assistant",
-            "stopReason": "toolUse",
-            "timestamp": 1793432211406.0,
-            "ttft": 4748.818792,
+            "model": "glm-5.3-flash",
             "usage": {
+              "input": 9662,
+              "output": 24,
               "cacheRead": 0,
               "cacheWrite": 0,
+              "totalTokens": 9686,
               "cost": {
+                "input": 0.0014493,
+                "output": 0.000012,
                 "cacheRead": 0.0,
                 "cacheWrite": 0.0,
-                "input": 0.00144945,
-                "output": 0.0000115,
-                "total": 0.00146095
-              },
-              "input": 9663,
-              "output": 23,
-              "totalTokens": 9686
-            }
+                "total": 0.0014613
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793435096069.0,
+            "responseId": "2026103116245697e2c1965bde48ee",
+            "duration": 4504.484082999999,
+            "ttft": 4501.949042,
+            "credentialId": 1
           },
           {
+            "role": "toolResult",
+            "toolCallId": "call_80aa9075e1bb4d699256fd47",
+            "toolName": "bash",
             "content": [
               {
                 "text": "alvin-tool-ok\n",
                 "type": "text"
               }
             ],
-            "details": {
-              "timeoutSeconds": 300,
-              "wallTimeMs": 25.781458999999813,
-              "wallTimeNoticeEmitted": false
-            },
             "isError": false,
-            "role": "toolResult",
-            "timestamp": 1793432216196.0,
-            "toolCallId": "call_61df0b10614742a5afa32a5f",
-            "toolName": "bash"
+            "timestamp": 1793435100621.0,
+            "details": {
+              "wallTimeNoticeEmitted": false,
+              "timeoutSeconds": 300,
+              "wallTimeMs": 22.985749999999825
+            }
           },
           {
-            "api": "openai-completions",
+            "role": "assistant",
             "content": [
               {
                 "text": "done",
                 "type": "text"
               }
             ],
-            "credentialId": 1,
-            "duration": 1135.5029999999997,
-            "model": "glm-5.3-flash",
+            "api": "openai-completions",
             "provider": "zai",
-            "responseId": "20261031153656d5826e3fd59a437c",
-            "role": "assistant",
-            "stopReason": "stop",
-            "timestamp": 1793432216199.0,
-            "ttft": 1127.106334,
+            "model": "glm-5.3-flash",
             "usage": {
-              "cacheRead": 9600,
-              "cacheWrite": 0,
-              "cost": {
-                "cacheRead": 0.00028799999999999995,
-                "cacheWrite": 0.0,
-                "input": 0.00001425,
-                "output": 1.5e-6,
-                "total": 0.00030374999999999993
-              },
               "input": 95,
               "output": 3,
-              "totalTokens": 9698
-            }
+              "cacheRead": 9600,
+              "cacheWrite": 0,
+              "totalTokens": 9698,
+              "cost": {
+                "input": 0.00001425,
+                "output": 1.5e-6,
+                "cacheRead": 0.00028799999999999995,
+                "cacheWrite": 0.0,
+                "total": 0.00030374999999999993
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793435100624.0,
+            "responseId": "2026103116250042e8fd9315ac41e4",
+            "duration": 9277.883417,
+            "ttft": 9268.187834,
+            "credentialId": 1
           }
         ],
-        "type": "agent_end",
-        "yielded": true
+        "isTerminal": true,
+        "yielded": true,
+        "type": "agent_end"
       }
     }
   },
   {
-    "id": "01a190e3-e6fa-751a-9c92-46b672035e72",
-    "live": "01a190e3-cd2d-70ea-b0dd-4a5648c7040e",
-    "at": "2026-10-31T07:36:57.338549Z",
+    "id": "01a19110-0a17-7044-982f-4b1eab757055",
+    "live": "01a1910f-d213-75c4-bc46-8cccb3b6ac10",
+    "at": "2026-10-31T08:25:09.911533Z",
     "body": {
       "kind": "promptResult",
       "frame": {
