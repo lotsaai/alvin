@@ -9,7 +9,6 @@ description = "Wire contract between the alvin gateway and its clients"
 server = ["jsonrpsee/server-core"]
 
 [dependencies]
-alvin-workspace-hack = { version = "0.1", path = "../alvin-workspace-hack" }
 jiff = { version = "0.2.38", features = ["serde"] }
 jsonrpsee = { version = "0.26.1", default-features = false, features = ["client-core", "macros"] }
 serde = { version = "1.0.229", features = ["derive"] }

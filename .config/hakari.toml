@@ -2,9 +2,10 @@ hakari-package = "alvin-workspace-hack"
 dep-format-version = "4"
 resolver = "2"
 
-platforms = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+platforms = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
 
-# alvin-protocol and alvin-client build for wasm32 without the jsonrpsee server half, and without tokio's `net`
-# (mio does not build there). Unifying the gateway's features into the hack crate would turn them on everywhere.
+# alvin-protocol and alvin-client are the wasm32 boundary. The hack crate unifies the gateway's native features
+# (tokio `net` pulls in mio, which does not build for wasm32; jsonrpsee `server`), so these two stay out of its
+# graph and never depend on it.
 [traversal-excludes]
-third-party = [{ name = "jsonrpsee" }, { name = "tokio" }]
+workspace-members = ["alvin-protocol", "alvin-client"]

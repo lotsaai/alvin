@@ -16,7 +16,6 @@ name = "alvin-client"
 version = "0.1.0"
 dependencies = [
  "alvin-protocol",
- "alvin-workspace-hack",
  "jsonrpsee",
  "serde",
  "serde_json",
@@ -44,7 +43,6 @@ dependencies = [
 name = "alvin-protocol"
 version = "0.1.0"
 dependencies = [
- "alvin-workspace-hack",
  "jiff",
  "jsonrpsee",
  "serde",
@@ -73,7 +71,12 @@ dependencies = [
  "memchr",
  "proc-macro2",
  "quote",
+ "serde",
+ "serde_core",
+ "serde_json",
+ "syn 2.0.119",
  "syn 3.0.9",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -11,13 +11,17 @@ description = "workspace-hack package, managed by hakari"
 ### BEGIN HAKARI SECTION
 [dependencies]
 memchr = { version = "2" }
+serde = { version = "1", features = ["alloc", "derive"] }
+serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
+serde_json = { version = "1", features = ["alloc", "raw_value"] }
+
+[target.x86_64-pc-windows-msvc.dependencies]
+windows-sys = { version = "0.61", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 
 [build-dependencies]
 proc-macro2 = { version = "1" }
 quote = { version = "1" }
-syn = { version = "3", features = ["extra-traits", "fold", "visit"] }
-
-[target.wasm32-unknown-unknown.build-dependencies]
-syn = { version = "3", default-features = false, features = ["full", "visit-mut"] }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["full", "visit-mut"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 ### END HAKARI SECTION
