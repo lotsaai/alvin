@@ -20,7 +20,7 @@ Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mis
 
 ## Phase 3: Live sessions (CLI-proven)
 - [x] Task 7: omp-host core: start, events, prompt, abort, bash, teardown
-- [ ] Task 8: Live turn end to end: open, prompt, subscribe, close
+- [x] Task 8: Live turn end to end: open, prompt, subscribe, close
 - [ ] Task 9: Client reconnect and `Resync`
 - [ ] Task 10: Windows Job Object teardown (verified on the Windows VM via `tasks/briefs/task-10-windows.md`; may stay blocked while later tasks continue)
 

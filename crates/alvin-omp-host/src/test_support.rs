@@ -83,12 +83,12 @@ impl Fixture {
   pub fn request(&self) -> StartRequest {
     StartRequest::builder()
       .cwd(self.cwd.path().to_path_buf())
-      .model(MODEL.to_owned())
-      .session_dir(self.sessions.path().to_path_buf())
+      .model(Some(MODEL.to_owned()))
+      .session_dir(Some(self.sessions.path().to_path_buf()))
       .build()
   }
 
-  pub async fn start(&self) -> Session {
+  pub async fn start(&self) -> (Session, Receiver<EventBody>) {
     self.host.start(self.request()).await.unwrap()
   }
 }

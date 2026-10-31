@@ -2,10 +2,14 @@
 
 use std::time::Instant;
 
-use alvin_protocol::{ListSessions, ProjectSummary, ProjectsApiServer, SessionPage, SessionsApiServer};
-use jsonrpsee::core::{RpcResult, async_trait};
-use jsonrpsee::server::Methods;
+use alvin_protocol::{
+  BashRequest, BashResult, EventsApiServer, ListSessions, LiveApiServer, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
+  OpenRequest, ProjectSummary, ProjectsApiServer, PromptRequest, SessionPage, SessionState, SessionsApiServer, SubscribeRequest,
+};
+use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
+use jsonrpsee::server::{Methods, PendingSubscriptionSink, SubscriptionMessage};
 use jsonrpsee::types::ErrorObjectOwned;
+use tokio::sync::broadcast::error::RecvError;
 use tracing::Instrument;
 
 use crate::{Gateway, Result};
@@ -24,11 +28,95 @@ impl SessionsApiServer for Gateway {
   }
 }
 
+#[async_trait]
+impl LiveApiServer for Gateway {
+  async fn open(&self, request: OpenRequest) -> RpcResult<LiveSessionSummary> {
+    self.traced("live/open", Gateway::open(self, request)).await
+  }
+
+  async fn close(&self, live: LiveSessionId) -> RpcResult<()> {
+    self.traced("live/close", Gateway::close(self, live)).await
+  }
+
+  async fn list(&self) -> RpcResult<Vec<LiveSessionSummary>> {
+    self.traced("live/list", async { Ok(self.list_live()) }).await
+  }
+
+  async fn state(&self, live: LiveSessionId) -> RpcResult<SessionState> {
+    self.traced("live/state", Gateway::state(self, live)).await
+  }
+
+  async fn messages(&self, request: MessagesRequest) -> RpcResult<MessagesPage> {
+    self.traced("live/messages", Gateway::messages(self, request)).await
+  }
+
+  async fn prompt(&self, request: PromptRequest) -> RpcResult<()> {
+    self.traced("live/prompt", Gateway::prompt(self, request)).await
+  }
+
+  async fn abort(&self, live: LiveSessionId) -> RpcResult<()> {
+    self.traced("live/abort", Gateway::abort(self, live)).await
+  }
+
+  async fn bash(&self, request: BashRequest) -> RpcResult<BashResult> {
+    self.traced("live/bash", Gateway::bash(self, request)).await
+  }
+
+  async fn abort_bash(&self, live: LiveSessionId) -> RpcResult<()> {
+    self.traced("live/abortBash", Gateway::abort_bash(self, live)).await
+  }
+}
+
+#[async_trait]
+impl EventsApiServer for Gateway {
+  async fn events(&self, pending: PendingSubscriptionSink, request: SubscribeRequest) -> SubscriptionResult {
+    let (replay, mut receiver, log) = match self.subscribe(&request) {
+      Ok(subscription) => subscription,
+      Err(error) => {
+        pending.reject(ErrorObjectOwned::from(error)).await;
+        return Ok(());
+      }
+    };
+    let sink = pending.accept().await?;
+    for event in replay {
+      if sink
+        .send(SubscriptionMessage::new(sink.method_name(), sink.subscription_id(), &event)?)
+        .await
+        .is_err()
+      {
+        return Ok(());
+      }
+    }
+    loop {
+      tokio::select! {
+        () = sink.closed() => return Ok(()),
+        received = receiver.recv() => match received {
+          Ok(event) => {
+            if sink.send(SubscriptionMessage::new(sink.method_name(), sink.subscription_id(), &event)?).await.is_err() {
+              return Ok(());
+            }
+          }
+          // The subscriber fell behind the broadcast buffer. The subscription ends; the client resubscribes with its
+          // last event id and the log covers the gap while the events are still retained.
+          Err(RecvError::Lagged(skipped)) => {
+            tracing::debug!(skipped, "ending a subscription that fell behind");
+            log.metrics().subscription_stale();
+            return Ok(());
+          }
+          Err(RecvError::Closed) => return Ok(()),
+        },
+      }
+    }
+  }
+}
+
 impl Gateway {
   /// Every method the gateway serves. Both transports serve exactly this table.
   pub(crate) fn methods(&self) -> Result<Methods> {
     let mut methods = Methods::from(ProjectsApiServer::into_rpc(self.clone()));
     methods.merge(SessionsApiServer::into_rpc(self.clone()))?;
+    methods.merge(LiveApiServer::into_rpc(self.clone()))?;
+    methods.merge(EventsApiServer::into_rpc(self.clone()))?;
     Ok(methods)
   }
 
@@ -52,15 +140,36 @@ impl Gateway {
 
 #[cfg(test)]
 mod tests {
-  use crate::GatewayConfig;
+  use alvin_omp_host::HostConfig;
 
   use super::*;
+  use crate::GatewayConfig;
 
   #[test]
   fn the_declared_method_list_is_pinned() {
-    let gateway = Gateway::new(GatewayConfig::builder().sessions_dir("sessions").build());
-    let mut methods: Vec<_> = gateway.methods().unwrap().method_names().collect();
+    let config = GatewayConfig::builder()
+      .sessions_dir("sessions")
+      .omp(HostConfig::builder().omp("omp".into()).build())
+      .build();
+    let mut methods: Vec<_> = Gateway::new(config).methods().unwrap().method_names().collect();
     methods.sort_unstable();
-    assert_eq!(methods, ["projects/list", "sessions/list"]);
+    assert_eq!(
+      methods,
+      [
+        "events/subscribe",
+        "events/unsubscribe",
+        "live/abort",
+        "live/abortBash",
+        "live/bash",
+        "live/close",
+        "live/list",
+        "live/messages",
+        "live/open",
+        "live/prompt",
+        "live/state",
+        "projects/list",
+        "sessions/list",
+      ]
+    );
   }
 }

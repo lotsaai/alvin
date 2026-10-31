@@ -3,26 +3,22 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use alvin_protocol::{BashResult, EventBody, PromptAck};
-use omp_rpc::{AbortBashCommand, AbortCommand, BashCommand, Client, Command, PromptCommand};
-use tokio::sync::mpsc;
+use alvin_protocol::{BashResult, MessagesPage, PromptAck, SessionState};
+use omp_rpc::{AbortBashCommand, AbortCommand, BashCommand, Client, Command, GetMessagesPageCommand, GetStateCommand, PromptCommand};
 
 use crate::translate::convert;
 use crate::{Error, Result};
 
-/// A running `omp --mode rpc-ui` process, its working directory and its event stream. Dropping the handle tears the
+/// A running `omp --mode rpc-ui` process and its working directory. Dropping the handle tears the
 /// process and its children down.
 pub struct Session {
   cwd: PathBuf,
   pid: u32,
   client: Option<Arc<Client>>,
-  events: Option<mpsc::Receiver<EventBody>>,
   closing: Arc<AtomicBool>,
   untranslated: Arc<AtomicU64>,
-  bridge: Option<JoinHandle<()>>,
 }
 
 impl std::fmt::Debug for Session {
@@ -34,23 +30,13 @@ impl std::fmt::Debug for Session {
   }
 }
 impl Session {
-  pub(crate) fn new(
-    cwd: PathBuf,
-    pid: u32,
-    client: Client,
-    events: mpsc::Receiver<EventBody>,
-    closing: Arc<AtomicBool>,
-    untranslated: Arc<AtomicU64>,
-    bridge: JoinHandle<()>,
-  ) -> Self {
+  pub(crate) fn new(cwd: PathBuf, pid: u32, client: Client, closing: Arc<AtomicBool>, untranslated: Arc<AtomicU64>) -> Self {
     Self {
       cwd,
       pid,
       client: Some(Arc::new(client)),
-      events: Some(events),
       closing,
       untranslated,
-      bridge: Some(bridge),
     }
   }
 
@@ -62,11 +48,6 @@ impl Session {
   /// The omp process id. On Unix it is also the process group id.
   pub fn pid(&self) -> u32 {
     self.pid
-  }
-
-  /// Takes the event stream. There is one stream per session: later calls return `None`.
-  pub fn take_events(&mut self) -> Option<mpsc::Receiver<EventBody>> {
-    self.events.take()
   }
 
   /// How many frames the protocol does not expose have arrived so far.
@@ -99,6 +80,18 @@ impl Session {
     convert("bash result", &result)
   }
 
+  /// omp's state of the session: session file, model, thinking level, streaming and compacting flags.
+  pub async fn state(&self) -> Result<SessionState> {
+    let state = self.call(GetStateCommand::default()).await?;
+    convert("session state", &state)
+  }
+
+  /// One page of the session's messages. `cursor` is the previous page's `next_cursor`.
+  pub async fn messages(&self, cursor: Option<String>, limit: Option<i64>) -> Result<MessagesPage> {
+    let page = self.call(GetMessagesPageCommand { cursor, limit }).await?;
+    convert("messages page", &page)
+  }
+
   /// Aborts the running `bash` command.
   pub async fn abort_bash(&self) -> Result<()> {
     self.call(AbortBashCommand::default()).await
@@ -108,14 +101,12 @@ impl Session {
   /// command is still running; the teardown then finishes when it returns.
   pub async fn close(mut self) -> Result<()> {
     self.closing.store(true, Ordering::SeqCst);
-    drop(self.events.take());
     let client = self
       .client
       .take()
       .ok_or_else(|| Error::from_rpc(&self.cwd, "close", omp_rpc::Error::Closed))?;
     let cwd = self.cwd.clone();
-    let bridge = self.bridge.take();
-    tokio::task::spawn_blocking(move || teardown(cwd, client, bridge)).await?
+    tokio::task::spawn_blocking(move || teardown(cwd, client)).await?
   }
 
   async fn call<C>(&self, command: C) -> Result<C::Output>
@@ -135,14 +126,12 @@ impl Session {
 impl Drop for Session {
   fn drop(&mut self) {
     self.closing.store(true, Ordering::SeqCst);
-    drop(self.events.take());
     let Some(client) = self.client.take() else {
       return;
     };
     let cwd = self.cwd.clone();
-    let bridge = self.bridge.take();
     let job = move || {
-      if let Err(error) = teardown(cwd, client, bridge) {
+      if let Err(error) = teardown(cwd, client) {
         tracing::warn!(%error, "tearing down a dropped omp session");
       }
     };
@@ -166,25 +155,17 @@ const IN_FLIGHT_GRACE: Duration = Duration::from_secs(5);
 /// omp runs every command in a process group of its own, so signalling omp's group cannot reach a running command's
 /// processes. omp kills its own children when told to abort, so abort first. Processes a command left running in the
 /// background after it returned are out of reach here.
-fn teardown(cwd: PathBuf, client: Arc<Client>, bridge: Option<JoinHandle<()>>) -> Result<()> {
+fn teardown(cwd: PathBuf, client: Arc<Client>) -> Result<()> {
   abort_running_work(&cwd, &client);
   let deadline = Instant::now() + IN_FLIGHT_GRACE;
   while Arc::strong_count(&client) > 1 && Instant::now() < deadline {
     std::thread::sleep(Duration::from_millis(10));
   }
   match Arc::try_unwrap(client) {
-    Ok(client) => {
-      let outcome = client.close().map_err(|source| Error::Teardown {
-        cwd: cwd.clone(),
-        source: Box::new(source),
-      });
-      if let Some(bridge) = bridge
-        && bridge.join().is_err()
-      {
-        tracing::error!(cwd = %cwd.display(), "the omp event bridge panicked");
-      }
-      outcome
-    }
+    Ok(client) => client.close().map_err(|source| Error::Teardown {
+      cwd,
+      source: Box::new(source),
+    }),
     Err(client) => {
       drop(client);
       Err(Error::CloseInFlight { cwd })
@@ -217,8 +198,7 @@ mod tests {
   #[tokio::test]
   async fn a_prompt_streams_text_deltas_in_order_and_ends_with_its_result() {
     let fixture = Fixture::new();
-    let mut session = fixture.start().await;
-    let mut events = session.take_events().unwrap();
+    let (session, mut events) = fixture.start().await;
 
     let ack = session.prompt("Reply with the single word ok.".to_owned()).await.unwrap();
     let seen = until_prompt_result(&mut events).await;
@@ -242,8 +222,7 @@ mod tests {
   #[tokio::test]
   async fn abort_stops_a_running_turn() {
     let fixture = Fixture::new();
-    let mut session = fixture.start().await;
-    let mut events = session.take_events().unwrap();
+    let (session, mut events) = fixture.start().await;
 
     session
       .prompt("Write the numbers from 1 to 400, one per line, nothing else.".to_owned())
@@ -264,7 +243,7 @@ mod tests {
   #[tokio::test]
   async fn bash_returns_the_commands_output() {
     let fixture = Fixture::new();
-    let session = fixture.start().await;
+    let (session, _events) = fixture.start().await;
 
     let result = session.bash("echo alvin-bash-ok".to_owned()).await.unwrap();
 
@@ -285,7 +264,7 @@ mod tests {
   #[tokio::test]
   async fn close_leaves_neither_omp_nor_a_running_command() {
     let fixture = Fixture::new();
-    let session = fixture.start().await;
+    let (session, _events) = fixture.start().await;
     let omp = session.pid();
     let child = running_child(&session, &fixture).await;
     assert!(alive(omp) && alive(child));
@@ -299,7 +278,7 @@ mod tests {
   #[tokio::test]
   async fn dropping_the_handle_leaves_neither_omp_nor_a_running_command() {
     let fixture = Fixture::new();
-    let session = fixture.start().await;
+    let (session, _events) = fixture.start().await;
     let omp = session.pid();
     let child = running_child(&session, &fixture).await;
     assert!(alive(omp) && alive(child));
@@ -313,8 +292,7 @@ mod tests {
   #[tokio::test]
   async fn a_killed_omp_yields_a_process_exited_event_and_a_typed_error() {
     let fixture = Fixture::new();
-    let mut session = fixture.start().await;
-    let mut events = session.take_events().unwrap();
+    let (session, mut events) = fixture.start().await;
 
     let status = std::process::Command::new("kill")
       .args(["-9", &session.pid().to_string()])
@@ -335,8 +313,7 @@ mod tests {
   #[tokio::test]
   async fn a_slow_consumer_loses_no_events() {
     let fixture = Fixture::with_capacity(1);
-    let mut session = fixture.start().await;
-    let mut events = session.take_events().unwrap();
+    let (session, mut events) = fixture.start().await;
 
     session
       .prompt("Write the numbers from 1 to 60, one per line, nothing else.".to_owned())

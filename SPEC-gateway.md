@@ -16,13 +16,13 @@ Success:
 
 ## Configuration
 
-`GatewayConfig` (typed-builder), built by the faces: omp executable path, omp sessions directory (resolved by the face, see `SPEC-session-index.md`), optional default model (`provider/id`, passed to omp as `--model`). `alvind` adds a listen address. No environment reads, no defaults chosen here.
+`GatewayConfig` (typed-builder), built by the faces: the omp launch settings (`alvin_omp_host::HostConfig`: executable, extra arguments, environment), the omp sessions directory (resolved by the face, see `SPEC-session-index.md`), and an optional default model (`provider/id`, passed to omp as `--model`). `alvind` adds a listen address, `--omp` and `--model`. No environment reads, no defaults chosen here.
 
 ## Live Sessions
 
 - Registry: `LiveSessionId` (fresh UUIDv7) to a live entry holding the `alvin-omp-host` session, its session file path, and its event log. Second index: session file path to `LiveSessionId`.
-- `live/open` with a listed session: if that session file is already live, return the existing `LiveSessionId` (one omp per session file; two omp processes on one file make omp fork a continuation, `session-entries.ts` `continuationOf`). Otherwise start omp in the session's `cwd` and send `switch_session`.
-- `live/open` new: the requested directory must exist; the gateway canonicalizes it and starts omp there with `new_session`.
+- `live/open` with a listed session: if that session file is already live, return the existing `LiveSessionId` (one omp per session file; two omp processes on one file make omp fork a continuation, `session-entries.ts` `continuationOf`). Otherwise start omp in the session's recorded `cwd` and send `switch_session`. The `cwd` is passed exactly as the session header records it: omp refuses the switch when its own spelling of the working directory differs from the recorded one (macOS `/var` against `/private/var`). Opens are serialized, so concurrent opens of one file start one process. Registry keys are session file paths with their directory canonicalized.
+- `live/open` new: the checkout's directory must exist; the gateway starts omp there on a new session and reads the session file path with `get_state`.
 - `live/branch` and `live/fork` move the omp process onto a new session file (`docs/rpc.md:245-247`). After a non-cancelled reply the gateway reads the new `sessionFile` with `get_state` and moves the session-file index entry to it under the registry lock, so "one omp per session file" still holds. The `LiveSessionId` stays the same.
 - `live/close`: closes that session's omp through `alvin-omp-host` (teardown includes omp's children) and removes both index entries. The gateway never closes a session by itself; `session_settled` is reported to the UI, not acted on.
 - omp exiting on its own appends a process-exited event, then later commands on that live session fail with the process-exited error code. The entry stays until `live/close`, so the UI can show what happened.
@@ -31,9 +31,9 @@ Success:
 ## Event Log
 
 - A pump task per live session reads the host's event stream, stamps each body with a fresh `EventId` (`Uuid::now_v7`; the uuid crate guarantees ids from one process are ordered by creation) and the `LiveSessionId`, appends it to the log, then publishes it on a `tokio::sync::broadcast` channel.
-- Retention: the log holds events since the last `session_settled`. On `session_settled` the log is cleared after that event is published; everything before it is in omp's transcript and is read with `live/messages`.
-- `events/subscribe { live, after }`: under the log's lock, take the events with id greater than `after` and register the broadcast receiver, then release the lock, so nothing falls between replay and live. `after` older than the oldest retained event (and not the last cleared settle) fails with the stale-cursor error code; the client reloads with `live/messages` and subscribes without `after`.
-- A subscriber that falls behind the broadcast buffer gets its subscription ended with the stale-cursor code and resubscribes with its last id; the log covers the gap if the events are still retained. Slow subscribers never slow omp.
+- Retention: the log holds events since the last settle. omp signals it two ways, both of which clear the log after that event is published: a `session_settled` event, and a `prompt_result` with `sessionSettled: true`. omp may send both for one turn. Everything before the settle is in omp's transcript and is read with `live/messages`.
+- `events/subscribe { live, after }`: under the log's lock, take the events with id greater than `after` and register the broadcast receiver, then release the lock, so nothing falls between replay and live. `after` older than the last clearing event fails with the stale-cursor error code; the client reloads with `live/messages` and subscribes without `after`. An unknown live session fails with the unknown-live-session code.
+- A subscriber that falls behind the broadcast buffer has its subscription ended (JSON-RPC cannot attach an error code to a subscription that is already accepted) and resubscribes with its last id; the log covers the gap if the events are still retained. Slow subscribers never slow omp.
 
 ## Validation and Errors
 

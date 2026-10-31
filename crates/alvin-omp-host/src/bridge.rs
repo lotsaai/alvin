@@ -9,7 +9,7 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, mpsc as std_mpsc};
-use std::thread::{Builder, JoinHandle};
+use std::thread::Builder;
 
 use alvin_protocol::EventBody;
 use tokio::sync::mpsc;
@@ -23,8 +23,6 @@ pub(crate) struct Bridge {
   pub(crate) events: mpsc::Receiver<EventBody>,
   /// How many frames the protocol does not expose have been seen.
   pub(crate) untranslated: Arc<AtomicU64>,
-  /// The pump thread. It ends when `omp-rpc`'s channel disconnects or the consumer drops `events`.
-  pub(crate) thread: JoinHandle<()>,
 }
 
 impl Bridge {
@@ -40,18 +38,16 @@ impl Bridge {
     let untranslated = Arc::new(AtomicU64::new(0));
     let counter = Arc::clone(&untranslated);
     let owner = cwd.to_path_buf();
-    let thread = Builder::new()
+    // Detached: the thread ends when omp-rpc's channel disconnects or the consumer drops `events`. Joining it could wait
+    // forever on a consumer that holds a full channel without draining it.
+    Builder::new()
       .name("alvin-omp-events".to_owned())
       .spawn(move || pump(&source, &sender, &counter, &closing, &owner))
       .map_err(|source| Error::Bridge {
         cwd: cwd.to_path_buf(),
         source,
       })?;
-    Ok(Self {
-      events,
-      untranslated,
-      thread,
-    })
+    Ok(Self { events, untranslated })
   }
 }
 

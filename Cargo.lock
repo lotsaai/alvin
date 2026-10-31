@@ -29,6 +29,7 @@ name = "alvin-gateway"
 version = "0.1.0"
 dependencies = [
  "alvin-client",
+ "alvin-omp-host",
  "alvin-protocol",
  "alvin-session-index",
  "alvin-workspace-hack",
@@ -37,6 +38,7 @@ dependencies = [
  "dirs",
  "eyre",
  "init-tracing-opentelemetry",
+ "jiff",
  "jsonrpsee",
  "opentelemetry",
  "opentelemetry-appender-tracing",

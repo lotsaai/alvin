@@ -6,6 +6,7 @@ mod config;
 mod error;
 mod gateway;
 mod listener;
+mod live;
 mod omp_dirs;
 mod rpc;
 mod telemetry;

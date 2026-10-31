@@ -4,14 +4,21 @@ mod error;
 mod error_codes;
 mod events;
 mod ids;
+mod live;
 mod omp_wire;
 mod projects;
 mod sessions;
 
 pub use error::{Error, Result};
 pub use error_codes::{ErrorCode, ErrorData};
-pub use events::EventBody;
+pub use events::{Event, EventBody};
 pub use ids::{CheckoutId, EventId, LiveSessionId, ProjectId, SessionId};
+pub use live::{
+  BashRequest, EventsApiClient, LiveApiClient, LiveSessionSummary, MessagesRequest, OpenRequest, OpenTarget, PromptRequest,
+  SubscribeRequest,
+};
+#[cfg(feature = "server")]
+pub use live::{EventsApiServer, LiveApiServer};
 pub use omp_wire::*;
 #[cfg(feature = "server")]
 pub use projects::ProjectsApiServer;

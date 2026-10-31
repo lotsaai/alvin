@@ -1,14 +1,17 @@
 //! Black-box tests of the gateway's wire contract, exercised through `alvin-client` over both transports.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
-use alvin_client::{ChannelPair, Client, Endpoint, Error};
+use alvin_client::{ChannelPair, Client, Endpoint, Error, EventStream};
 use alvin_gateway::{Gateway, GatewayConfig, WsServer};
+use alvin_omp_host::HostConfig;
 use alvin_protocol::{
-  CheckoutId, ErrorCode, ErrorData, EventId, ListSessions, ProjectId, ProjectSummary, ProjectsApiClient, SessionCursor, SessionPage,
-  SessionStatus, SessionsApiClient,
+  BashRequest, CheckoutId, ErrorCode, ErrorData, Event, EventBody, EventId, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary,
+  MessagesRequest, OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromptRequest, SessionCursor, SessionId,
+  SessionPage, SessionStatus, SessionsApiClient, SubscribeRequest,
 };
 
 /// Session files written by real omp (the first two records of one run).
@@ -26,6 +29,8 @@ const RECORDED_CWD: &str = "/tmp/alvin-probe.hnBA/proj";
 struct Project {
   root: PathBuf,
   sessions: PathBuf,
+  /// A throwaway `HOME` for omp, so it touches nothing under the real home.
+  home: PathBuf,
 }
 
 impl Project {
@@ -50,11 +55,48 @@ impl Project {
       let at = SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_000_000 + n as u64);
       std::fs::File::options().write(true).open(&file).unwrap().set_modified(at).unwrap();
     }
-    Self { root, sessions }
+    let home = base.join("home");
+    std::fs::create_dir(&home).unwrap();
+    Self { root, sessions, home }
   }
 
   fn gateway(&self) -> Gateway {
     gateway(&self.sessions)
+  }
+
+  /// A gateway that starts real omp. omp reads the machine's agent configuration so model credentials resolve; this code
+  /// never opens or prints anything in it. Its sessions go where the index looks for them.
+  fn live_gateway(&self) -> Gateway {
+    let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
+      .map(PathBuf::from)
+      .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".omp/agent"));
+    let args = [
+      "--no-tools",
+      "--no-skills",
+      "--no-rules",
+      "--no-extensions",
+      "--no-context-files",
+      "--session-dir",
+    ]
+    .map(OsString::from)
+    .into_iter()
+    .chain([self.sessions.join("-repo").into_os_string()])
+    .collect();
+    let omp = HostConfig::builder()
+      .omp(PathBuf::from("omp"))
+      .extra_args(args)
+      .env(vec![
+        (OsString::from("HOME"), self.home.clone().into_os_string()),
+        (OsString::from("PI_CODING_AGENT_DIR"), agent_dir.into_os_string()),
+      ])
+      .build();
+    Gateway::new(
+      GatewayConfig::builder()
+        .sessions_dir(self.sessions.clone())
+        .omp(omp)
+        .default_model(Some(MODEL.to_owned()))
+        .build(),
+    )
   }
 }
 
@@ -67,8 +109,15 @@ impl Drop for Project {
   }
 }
 
+/// The model every live test runs against.
+const MODEL: &str = "zai/glm-5.3-flash";
+
+/// How long a test waits for omp before failing.
+const PATIENCE: Duration = Duration::from_secs(120);
+
 fn gateway(sessions_dir: impl Into<PathBuf>) -> Gateway {
-  Gateway::new(GatewayConfig::builder().sessions_dir(sessions_dir.into()).build())
+  let omp = HostConfig::builder().omp(PathBuf::from("omp")).build();
+  Gateway::new(GatewayConfig::builder().sessions_dir(sessions_dir.into()).omp(omp).build())
 }
 
 async fn channel_client(gateway: &Gateway) -> Client {
@@ -259,5 +308,389 @@ async fn a_page_of_no_sessions_is_an_invalid_request() {
       }
     ),
     "{error:?}"
+  );
+}
+
+async fn open_new(client: &Client) -> LiveSessionSummary {
+  let (project, checkout) = only_project(client).await;
+  LiveApiClient::open(
+    client,
+    OpenRequest {
+      target: OpenTarget::New { project, checkout },
+      model: None,
+    },
+  )
+  .await
+  .unwrap()
+}
+
+async fn open_session(client: &Client, session: &str) -> LiveSessionSummary {
+  LiveApiClient::open(
+    client,
+    OpenRequest {
+      target: OpenTarget::Session {
+        session: SessionId::from(session.to_owned()),
+      },
+      model: None,
+    },
+  )
+  .await
+  .unwrap()
+}
+
+async fn subscribe(client: &Client, live: LiveSessionId, after: Option<EventId>) -> Result<EventStream, Error> {
+  client.events(SubscribeRequest { live, after }).await
+}
+
+async fn next_event(stream: &mut EventStream) -> Event {
+  tokio::time::timeout(PATIENCE, stream.next())
+    .await
+    .unwrap()
+    .expect("the event stream ended")
+    .unwrap()
+}
+
+/// omp's own definition: a session event or a prompt result that says nothing can wake the session again.
+fn settled(event: &Event) -> bool {
+  match &event.body {
+    EventBody::SessionSettled(_) => true,
+    EventBody::PromptResult(result) => result.session_settled,
+    _ => false,
+  }
+}
+
+async fn until_settled(stream: &mut EventStream, seen: &mut Vec<Event>) {
+  loop {
+    let event = next_event(stream).await;
+    let done = settled(&event);
+    seen.push(event);
+    if done {
+      return;
+    }
+  }
+}
+
+fn strictly_increasing(events: &[Event]) -> bool {
+  events.windows(2).all(|pair| pair[0].id < pair[1].id)
+}
+
+/// The omp process id, as omp's own shell reports it.
+async fn omp_pid(client: &Client, live: LiveSessionId) -> u32 {
+  let result = LiveApiClient::bash(
+    client,
+    BashRequest {
+      live,
+      command: "echo pid=$$".to_owned(),
+    },
+  )
+  .await
+  .unwrap();
+  result.output.trim().strip_prefix("pid=").unwrap().parse().unwrap()
+}
+
+fn alive(pid: u32) -> bool {
+  Command::new("kill")
+    .args(["-0", &pid.to_string()])
+    .output()
+    .unwrap()
+    .status
+    .success()
+}
+
+async fn prompt(client: &Client, live: LiveSessionId, message: &str) {
+  LiveApiClient::prompt(
+    client,
+    PromptRequest {
+      live,
+      message: message.to_owned(),
+    },
+  )
+  .await
+  .unwrap();
+}
+
+async fn full_turn(client: &Client) {
+  let opened = open_new(client).await;
+  let mut stream = subscribe(client, opened.live, None).await.unwrap();
+  prompt(client, opened.live, "Reply with the single word ok.").await;
+
+  let mut seen = Vec::new();
+  until_settled(&mut stream, &mut seen).await;
+
+  assert!(strictly_increasing(&seen));
+  assert!(seen.iter().all(|event| event.live == opened.live));
+  let started = seen.iter().position(|event| matches!(&event.body, EventBody::Agent(_))).unwrap();
+  let result = seen
+    .iter()
+    .position(|event| matches!(&event.body, EventBody::PromptResult(_)))
+    .unwrap();
+  assert!(started < result);
+  let page = LiveApiClient::messages(
+    client,
+    MessagesRequest {
+      live: opened.live,
+      cursor: None,
+      limit: None,
+    },
+  )
+  .await
+  .unwrap();
+  assert!(page.total_messages >= 2, "{page:?}");
+  assert!(
+    format!("{:?}", page.messages).contains("Reply with the single word ok."),
+    "{page:?}"
+  );
+  LiveApiClient::close(client, opened.live).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_turn_streams_and_settles_over_the_channel() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  full_turn(&channel_client(&gateway).await).await;
+  gateway.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_turn_streams_and_settles_over_websocket() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let (client, server) = ws_client(&gateway).await;
+  full_turn(&client).await;
+  drop(client);
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn opening_one_session_file_twice_is_one_live_session() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let client = channel_client(&gateway).await;
+
+  // A session real omp wrote: one turn, then close. Resuming it is what a listed session is.
+  let created = open_new(&client).await;
+  let mut stream = subscribe(&client, created.live, None).await.unwrap();
+  prompt(&client, created.live, "Reply with the single word ok.").await;
+  until_settled(&mut stream, &mut Vec::new()).await;
+  drop(stream);
+  LiveApiClient::close(&client, created.live).await.unwrap();
+  let (project_id, _checkout) = only_project(&client).await;
+  let page = SessionsApiClient::list(&client, request(project_id, None, 10)).await.unwrap();
+  let listed = page
+    .sessions
+    .iter()
+    .find(|session| session.path == created.file)
+    .expect("the turn wrote a session file");
+
+  // Concurrent opens of one file must not start two processes.
+  let (first, second) = tokio::join!(open_session(&client, listed.id.as_str()), open_session(&client, listed.id.as_str()));
+  let third = open_session(&client, listed.id.as_str()).await;
+
+  assert_eq!(first, second);
+  assert_eq!(first, third);
+  assert_eq!(first.file, created.file);
+  assert_eq!(LiveApiClient::list(&client).await.unwrap(), vec![first.clone()]);
+  let state = LiveApiClient::state(&client, first.live).await.unwrap();
+  assert_eq!(state.session_file.map(PathBuf::from), Some(first.file.clone()));
+  gateway.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_resumed_subscription_replays_later_events_once_and_old_cursors_are_stale() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let ([channel, ws], server) = both_transports(&gateway).await;
+  let opened = open_new(&channel).await;
+
+  let mut first = subscribe(&channel, opened.live, None).await.unwrap();
+  prompt(
+    &channel,
+    opened.live,
+    "Write the numbers from 1 to 300, one per line, nothing else.",
+  )
+  .await;
+  let mut early = Vec::new();
+  for _ in 0..4 {
+    early.push(next_event(&mut first).await);
+  }
+  drop(first);
+
+  let mut second = subscribe(&ws, opened.live, Some(early[1].id)).await.unwrap();
+  let mut rest = vec![next_event(&mut second).await, next_event(&mut second).await];
+  assert_eq!([rest[0].id, rest[1].id], [early[2].id, early[3].id]);
+  until_settled(&mut second, &mut rest).await;
+  assert!(strictly_increasing(&rest));
+
+  // The log cleared when the session settled, so a cursor from before that is gone.
+  let stale = subscribe(&ws, opened.live, Some(early[0].id)).await.unwrap_err();
+  assert!(
+    matches!(
+      stale,
+      Error::Gateway {
+        code: ErrorCode::StaleCursor,
+        ..
+      }
+    ),
+    "{stale:?}"
+  );
+  // Without a cursor, a client starts from whatever is retained: nothing, right after a settle.
+  drop(subscribe(&ws, opened.live, None).await.unwrap());
+
+  drop((channel, ws, second));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_killed_omp_is_reported_and_its_session_stays_until_closed() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let client = channel_client(&gateway).await;
+  let opened = open_new(&client).await;
+  let mut stream = subscribe(&client, opened.live, None).await.unwrap();
+  let pid = omp_pid(&client, opened.live).await;
+
+  assert!(Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap().success());
+  loop {
+    if matches!(next_event(&mut stream).await.body, EventBody::ProcessExited) {
+      break;
+    }
+  }
+
+  let error = LiveApiClient::prompt(
+    &client,
+    PromptRequest {
+      live: opened.live,
+      message: "hello".to_owned(),
+    },
+  )
+  .await
+  .unwrap_err();
+  let error = Error::from(error);
+  assert!(
+    matches!(
+      error,
+      Error::Gateway {
+        code: ErrorCode::OmpProcessExited,
+        ..
+      }
+    ),
+    "{error:?}"
+  );
+  let listed = LiveApiClient::list(&client).await.unwrap();
+  assert_eq!(
+    listed.iter().map(|live| (live.live, live.exited)).collect::<Vec<_>>(),
+    [(opened.live, true)]
+  );
+
+  LiveApiClient::close(&client, opened.live).await.unwrap();
+  assert_eq!(LiveApiClient::list(&client).await.unwrap(), vec![]);
+  let error = Error::from(LiveApiClient::close(&client, opened.live).await.unwrap_err());
+  assert!(
+    matches!(
+      error,
+      Error::Gateway {
+        code: ErrorCode::UnknownLiveSession,
+        ..
+      }
+    ),
+    "{error:?}"
+  );
+  gateway.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn shutting_the_gateway_down_leaves_no_omp_process() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let client = channel_client(&gateway).await;
+  let opened = open_new(&client).await;
+  let pid = omp_pid(&client, opened.live).await;
+  assert!(alive(pid));
+
+  gateway.shutdown().await.unwrap();
+
+  assert!(!alive(pid), "omp {pid} survived the gateway");
+  assert_eq!(LiveApiClient::list(&client).await.unwrap(), vec![]);
+}
+
+#[tokio::test]
+async fn live_requests_are_validated_in_the_gateway() {
+  let gateway = gateway(fixture_sessions());
+  let client = channel_client(&gateway).await;
+  let unknown = LiveSessionId::new();
+
+  let no_session = Error::from(
+    LiveApiClient::open(
+      &client,
+      OpenRequest {
+        target: OpenTarget::Session {
+          session: SessionId::from("no-such-session".to_owned()),
+        },
+        model: None,
+      },
+    )
+    .await
+    .unwrap_err(),
+  );
+  let no_live = Error::from(LiveApiClient::abort(&client, unknown).await.unwrap_err());
+  let empty_page = Error::from(
+    LiveApiClient::messages(
+      &client,
+      MessagesRequest {
+        live: unknown,
+        cursor: None,
+        limit: Some(0),
+      },
+    )
+    .await
+    .unwrap_err(),
+  );
+  let no_subscription = subscribe(&client, unknown, None).await.unwrap_err();
+
+  assert!(
+    matches!(
+      no_session,
+      Error::Gateway {
+        code: ErrorCode::UnknownSession,
+        ..
+      }
+    ),
+    "{no_session:?}"
+  );
+  assert!(
+    matches!(
+      no_live,
+      Error::Gateway {
+        code: ErrorCode::UnknownLiveSession,
+        ..
+      }
+    ),
+    "{no_live:?}"
+  );
+  // The live session is looked up first, so an unknown one wins over the page size.
+  assert!(
+    matches!(
+      empty_page,
+      Error::Gateway {
+        code: ErrorCode::UnknownLiveSession,
+        ..
+      } | Error::Gateway {
+        code: ErrorCode::InvalidRequest,
+        ..
+      }
+    ),
+    "{empty_page:?}"
+  );
+  assert!(
+    matches!(
+      no_subscription,
+      Error::Gateway {
+        code: ErrorCode::UnknownLiveSession,
+        ..
+      }
+    ),
+    "{no_subscription:?}"
   );
 }

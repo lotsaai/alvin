@@ -27,6 +27,7 @@ fn run(settings: Settings) -> eyre::Result<()> {
     shutdown_signal().await?;
     tracing::info!("shutting down");
     server.shutdown().await?;
+    gateway.shutdown().await?;
     Ok(())
   })
 }

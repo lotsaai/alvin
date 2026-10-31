@@ -1,12 +1,29 @@
 //! What a live session emits: omp's frames that the protocol exposes, plus the host's own notices.
 
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::ids::{EventId, LiveSessionId};
 use crate::omp_wire::{
   AvailableCommandsUpdateEvent, CommandOutputEvent, ConfigUpdateEvent, ExtensionError, ExtensionUiRequest, PromptResultEvent,
   RpcAgentEvent, RpcFrameErrorEvent, SessionInfoUpdateEvent, SessionSettledEvent,
 };
+
+/// One event of a live session, as the gateway published it. Event ids are UUIDv7: later events have greater ids, and
+/// subscriptions resume from an id.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Event {
+  /// This event.
+  pub id: EventId,
+  /// The live session it belongs to.
+  pub live: LiveSessionId,
+  /// When the gateway published it.
+  pub at: Timestamp,
+  /// What happened.
+  pub body: EventBody,
+}
 
 /// The payload of one live-session event. The gateway stamps it with an event id and the live session id; omp's frames
 /// arrive here without ids.

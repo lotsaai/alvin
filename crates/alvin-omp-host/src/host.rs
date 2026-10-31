@@ -7,7 +7,9 @@ use std::process::Command as Process;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use omp_rpc::{Client, ClientOptions, Command, SetAskDialogCommand};
+use alvin_protocol::EventBody;
+use omp_rpc::{Client, ClientOptions, Command, SetAskDialogCommand, SwitchSessionCommand};
+use tokio::sync::mpsc;
 use typed_builder::TypedBuilder;
 
 use crate::bridge::Bridge;
@@ -40,11 +42,14 @@ pub struct StartRequest {
   /// The working directory the session runs in and records.
   cwd: PathBuf,
   /// A model, as `provider/id`.
-  #[builder(default, setter(strip_option))]
+  #[builder(default)]
   model: Option<String>,
   /// Where omp writes its session file.
-  #[builder(default, setter(strip_option))]
+  #[builder(default)]
   session_dir: Option<PathBuf>,
+  /// An existing session file to resume. omp starts on a new session and switches to it, restoring its saved model.
+  #[builder(default)]
+  resume: Option<PathBuf>,
 }
 
 /// Starts omp processes, one per live session.
@@ -59,16 +64,22 @@ impl Host {
     Self { config: Arc::new(config) }
   }
 
-  /// Spawns `omp --mode rpc-ui` in the request's working directory and waits for its handshake. `rpc-ui` is the same
+  /// Spawns `omp --mode rpc-ui` in the request's working directory and waits for its handshake. Returns the session handle
+  /// and its one event stream; the stream is the caller's to drain. `rpc-ui` is the same
   /// transport as `rpc` with extension dialogs enabled; omp-rpc speaks it unchanged.
-  pub async fn start(&self, request: StartRequest) -> Result<Session> {
+  pub async fn start(&self, request: StartRequest) -> Result<(Session, mpsc::Receiver<EventBody>)> {
     let config = Arc::clone(&self.config);
     tokio::task::spawn_blocking(move || launch(&config, request)).await?
   }
 }
 
-fn launch(config: &HostConfig, request: StartRequest) -> Result<Session> {
-  let StartRequest { cwd, model, session_dir } = request;
+fn launch(config: &HostConfig, request: StartRequest) -> Result<(Session, mpsc::Receiver<EventBody>)> {
+  let StartRequest {
+    cwd,
+    model,
+    session_dir,
+    resume,
+  } = request;
   let mut process = Process::new(&config.omp);
   // `--cwd` sets the directory omp records; `current_dir` makes a missing directory fail at spawn with a clear error.
   process.args(["--mode", "rpc-ui", "--cwd"]).arg(&cwd).current_dir(&cwd);
@@ -106,16 +117,21 @@ fn launch(config: &HostConfig, request: StartRequest) -> Result<Session> {
     ));
   }
 
+  if let Some(path) = &resume {
+    let session_path = path.to_str().ok_or_else(|| Error::PathNotUtf8 { path: path.clone() })?.to_owned();
+    let switched = client
+      .call(&SwitchSessionCommand {
+        session_path,
+        provider: None,
+        model_id: None,
+      })
+      .map_err(|source| Error::from_rpc(&cwd, SwitchSessionCommand::NAME, source))?;
+    if switched.cancelled {
+      return Err(Error::ResumeCancelled { cwd, path: path.clone() });
+    }
+  }
   let pid = client.pid().ok_or_else(|| Error::from_rpc(&cwd, "spawn", omp_rpc::Error::Closed))?;
   let closing = Arc::new(AtomicBool::new(false));
   let bridge = Bridge::start(source, config.event_capacity, Arc::clone(&closing), &cwd)?;
-  Ok(Session::new(
-    cwd,
-    pid,
-    client,
-    bridge.events,
-    closing,
-    bridge.untranslated,
-    bridge.thread,
-  ))
+  Ok((Session::new(cwd, pid, client, closing, bridge.untranslated), bridge.events))
 }

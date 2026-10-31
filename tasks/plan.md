@@ -138,11 +138,11 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 #### Task 8: Live turn end to end: open, prompt, subscribe, close
 **Description:** Gateway `live.rs` holds the registry (two indexes, idempotent open), the event log (stamp UUIDv7, broadcast, clear on settle), and `events/subscribe` replay under the lock with stale-cursor handling. Methods: `live/open` (new and listed), `close`, `list`, `state`, `messages`, `prompt`, `abort`, `bash`, `abortBash`. Semantic validation lives in the gateway only. `Client::events(live)` returns a stream with no reconnect yet. Add the live metrics.
 **Acceptance criteria:**
-- [ ] Over both transports: open → prompt → streamed events → settled. `live/messages` then returns the turn.
-- [ ] Opening the same session file twice returns one `LiveSessionId` and one omp process.
-- [ ] Subscribing with `after` replays later events exactly once. An `after` older than the retained log returns the stale-cursor code. After gateway shutdown no omp process remains.
+- [x] Over both transports: open → prompt → streamed events → settled. `live/messages` then returns the turn.
+- [x] Opening the same session file twice (concurrently too) returns one `LiveSessionId` and one omp process.
+- [x] Subscribing with `after` replays later events exactly once. An `after` older than the retained log returns the stale-cursor code. After gateway shutdown no omp process remains.
 **Verification:** `mise format`; `mise run --force test`; manual: `alvind` + a small client call sequence (throwaway script, deleted after use).
-**Dependencies:** 4, 7. **Files:** `crates/alvin-gateway/src/{live,rpc/*}.rs`, gateway tests, `crates/alvin-client/src/{client,events}.rs`. **Scope:** L.
+**Dependencies:** 4, 7. **Files:** `crates/alvin-gateway/src/{live,gateway,rpc,config,error,telemetry}.rs`, `crates/alvin-gateway/tests/wire.rs`, `crates/alvin-protocol/src/{live,events,error_codes}.rs`, `crates/alvin-omp-host/src/{host,session}.rs` (resume, state, messages), `crates/alvin-client/src/events.rs`. **Scope:** L.
 
 #### Task 9: Client reconnect and `Resync`
 **Description:** `reconnect.rs`: a state machine (`Connecting`/`Connected`/`Reconnecting`/`Lost`) driven by `on_disconnect`, with backoff from 250 ms to 30 s plus jitter (`jiff::SignedDuration`). `gloo-timers` provides timers on wasm. The event stream resumes from the last id. A second stale cursor or an unknown live session yields one `Resync`. A closed channel goes straight to `Lost`. Calls never retry.

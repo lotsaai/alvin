@@ -2,7 +2,9 @@
 
 use std::io;
 
-use alvin_protocol::{CheckoutId, ErrorCode, ErrorData, ProjectId};
+use std::path::PathBuf;
+
+use alvin_protocol::{CheckoutId, ErrorCode, ErrorData, LiveSessionId, ProjectId, SessionId};
 use jsonrpsee::types::error::INTERNAL_ERROR_CODE;
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 
@@ -25,6 +27,62 @@ pub enum Error {
     /// The requested checkout, when the request named one.
     checkout: Option<CheckoutId>,
   },
+
+  /// No live session has this id.
+  #[error("no live session {live:?}")]
+  UnknownLiveSession {
+    /// The requested live session.
+    live: LiveSessionId,
+  },
+
+  /// No omp session file has this id.
+  #[error("no session {session:?}")]
+  UnknownSession {
+    /// The requested session.
+    session: SessionId,
+  },
+
+  /// The working directory a session would run in does not exist.
+  #[error("the directory {path} does not exist")]
+  MissingDirectory {
+    /// The missing directory.
+    path: PathBuf,
+  },
+
+  /// omp reported no session file for a session it just started.
+  #[error("omp reported no session file in {cwd}")]
+  NoSessionFile {
+    /// The session's working directory.
+    cwd: PathBuf,
+  },
+
+  /// Resolving a session file's directory failed.
+  #[error("resolving the session file {path}")]
+  SessionFilePath {
+    /// The session file.
+    path: PathBuf,
+    /// The failure.
+    #[source]
+    source: io::Error,
+  },
+
+  /// An `events/subscribe` cursor is older than the retained log.
+  #[error("the cursor is older than the retained events of {live:?}")]
+  StaleCursor {
+    /// The live session.
+    live: LiveSessionId,
+  },
+
+  /// A command is still running in the live session, so it could not be closed in time.
+  #[error("a command is still running in {live:?}")]
+  StillRunning {
+    /// The live session.
+    live: LiveSessionId,
+  },
+
+  /// The omp host failed.
+  #[error("omp host")]
+  Host(#[from] alvin_omp_host::Error),
 
   /// A listing asked for pages of no sessions.
   #[error("the page size must be at least 1")]
@@ -54,9 +112,21 @@ pub enum Error {
 /// Result alias for this crate.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
+/// The error and every cause beneath it, joined, so a client sees why and not only what.
+fn chain(error: &dyn std::error::Error) -> String {
+  let mut message = error.to_string();
+  let mut source = error.source();
+  while let Some(cause) = source {
+    message.push_str(": ");
+    message.push_str(&cause.to_string());
+    source = cause.source();
+  }
+  message
+}
+
 impl From<Error> for ErrorObjectOwned {
   fn from(error: Error) -> Self {
-    let message = error.to_string();
+    let message = chain(&error);
     match &error {
       Error::SessionIndex(source) => ErrorObject::owned(
         ErrorCode::SessionIndexFailed.code(),
@@ -73,8 +143,31 @@ impl From<Error> for ErrorObjectOwned {
           checkout: checkout.clone(),
         }),
       ),
-      Error::EmptyPage => ErrorObject::owned(ErrorCode::InvalidRequest.code(), message, None::<()>),
+      Error::UnknownLiveSession { live } => ErrorObject::owned(
+        ErrorCode::UnknownLiveSession.code(),
+        message,
+        Some(ErrorData::UnknownLiveSession { live: *live }),
+      ),
+      Error::UnknownSession { session } => ErrorObject::owned(
+        ErrorCode::UnknownSession.code(),
+        message,
+        Some(ErrorData::UnknownSession { session: session.clone() }),
+      ),
+      Error::EmptyPage | Error::MissingDirectory { .. } => ErrorObject::owned(ErrorCode::InvalidRequest.code(), message, None::<()>),
+      Error::StaleCursor { .. } => ErrorObject::owned(ErrorCode::StaleCursor.code(), message, None::<()>),
+      Error::StillRunning { .. } => ErrorObject::owned(ErrorCode::SessionBusy.code(), message, None::<()>),
+      Error::Host(alvin_omp_host::Error::ProcessExited { .. }) => {
+        ErrorObject::owned(ErrorCode::OmpProcessExited.code(), message, None::<()>)
+      }
+      Error::Host(alvin_omp_host::Error::Command { code, .. }) => ErrorObject::owned(
+        ErrorCode::OmpCommandFailed.code(),
+        message,
+        Some(ErrorData::OmpCommandFailed { code: code.clone() }),
+      ),
       Error::Task(_)
+      | Error::Host(_)
+      | Error::NoSessionFile { .. }
+      | Error::SessionFilePath { .. }
       | Error::Bind(_)
       | Error::AlreadyStopped(_)
       | Error::RegisterMethods(_)

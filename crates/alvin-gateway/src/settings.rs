@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use alvin_gateway::GatewayConfig;
+use alvin_omp_host::HostConfig;
 use confique::Config as _;
 use eyre::eyre;
 
@@ -20,6 +21,14 @@ pub struct AlvindConfig {
   #[config(env = "ALVIN_SESSIONS_DIR")]
   #[config(layer_attr(arg(long)))]
   pub sessions_dir: Option<PathBuf>,
+  /// The omp executable.
+  #[config(default = "omp", env = "ALVIN_OMP")]
+  #[config(layer_attr(arg(long)))]
+  pub omp: PathBuf,
+  /// The model sessions start with when a request names none, as `provider/id`.
+  #[config(env = "ALVIN_MODEL")]
+  #[config(layer_attr(arg(long)))]
+  pub model: Option<String>,
 }
 
 /// alvind's command line.
@@ -51,7 +60,11 @@ impl Cli {
       .unwrap_or_else(|| alvin_gateway::sessions_dir(|name| std::env::var_os(name), &home));
     Ok(Settings {
       listen: config.listen,
-      gateway: GatewayConfig::builder().sessions_dir(sessions_dir).build(),
+      gateway: GatewayConfig::builder()
+        .sessions_dir(sessions_dir)
+        .omp(HostConfig::builder().omp(config.omp).build())
+        .default_model(config.model)
+        .build(),
     })
   }
 }

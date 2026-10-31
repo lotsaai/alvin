@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{CheckoutId, ProjectId};
+use crate::ids::{CheckoutId, LiveSessionId, ProjectId, SessionId};
 
 /// A stable gateway error code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +83,21 @@ pub enum ErrorData {
     project: ProjectId,
     /// The requested checkout, when the request named one.
     checkout: Option<CheckoutId>,
+  },
+  /// No live session has this id.
+  UnknownLiveSession {
+    /// The requested live session.
+    live: LiveSessionId,
+  },
+  /// No omp session file has this id.
+  UnknownSession {
+    /// The requested session.
+    session: SessionId,
+  },
+  /// omp rejected a command. `code` is omp's own error code when it sent one.
+  OmpCommandFailed {
+    /// omp's error code.
+    code: Option<String>,
   },
 }
 

@@ -101,6 +101,22 @@ pub enum Error {
     source: io::Error,
   },
 
+  /// A hook cancelled the switch to the session file being resumed.
+  #[error("omp did not switch to {path} in {cwd}")]
+  ResumeCancelled {
+    /// The session's working directory.
+    cwd: PathBuf,
+    /// The session file.
+    path: PathBuf,
+  },
+
+  /// omp's protocol carries paths as strings, and this one is not UTF-8.
+  #[error("{path} is not valid UTF-8")]
+  PathNotUtf8 {
+    /// The path.
+    path: PathBuf,
+  },
+
   /// A blocking task panicked or was cancelled.
   #[error("blocking omp task did not finish")]
   Task(#[from] tokio::task::JoinError),
