@@ -97,6 +97,11 @@ string_id! {
   SessionId
 }
 
+string_id! {
+  /// An id omp gives a session entry. It is a plain string (omp writes short hex), not a UUID.
+  EntryId
+}
+
 #[cfg(test)]
 mod tests {
   use uuid::Uuid;

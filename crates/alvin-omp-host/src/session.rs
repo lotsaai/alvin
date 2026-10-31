@@ -6,14 +6,15 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashResult, ExtensionUiResponse, MessagesPage, ModelCycleResult, ModelInfo, PromoteQueuedMessageResult,
-  PromptAck, QueuedMessageQueue, RemoveQueuedMessageResult, SessionState, ThinkingLevel, ThinkingLevelCycleResult,
+  AbortAndRestoreQueueResult, BashResult, EntryId, ExtensionUiResponse, HistoryEntries, MessagesPage, ModelCycleResult, ModelInfo,
+  PromoteQueuedMessageResult, PromptAck, QueuedMessageQueue, RemoveQueuedMessageResult, SessionState, ThinkingLevel,
+  ThinkingLevelCycleResult,
 };
 use omp_rpc::{
   AbortAndPromptCommand, AbortAndRestoreQueueCommand, AbortBashCommand, AbortCommand, BashCommand, Client, Command, CycleModelCommand,
-  CycleThinkingLevelCommand, FollowUpCommand, GetAvailableModelsCommand, GetAvailableThinkingLevelsCommand, GetMessagesPageCommand,
-  GetStateCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, RpcInbound, SetModelCommand,
-  SetThinkingLevelCommand, SteerCommand,
+  CycleThinkingLevelCommand, FollowUpCommand, GetAvailableModelsCommand, GetAvailableThinkingLevelsCommand, GetEntriesCommand,
+  GetMessagesPageCommand, GetStateCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, RpcInbound,
+  SetModelCommand, SetThinkingLevelCommand, SteerCommand,
 };
 
 use crate::translate::convert;
@@ -121,6 +122,16 @@ impl Session {
     // Queueing a frame does not wait for omp, but the client's lock is blocking.
     let outcome = tokio::task::spawn_blocking(move || client.send(&RpcInbound::ExtensionUiResponse(response))).await?;
     outcome.map_err(|source| Error::from_rpc(&cwd, "extension_ui_response", source))
+  }
+
+  /// The entries omp appended after `since`, or all of them.
+  pub async fn entries(&self, since: Option<EntryId>) -> Result<HistoryEntries> {
+    let raw = self
+      .call(GetEntriesCommand {
+        since: since.map(|id| id.as_str().to_owned()),
+      })
+      .await?;
+    crate::history::entries(raw)
   }
 
   /// The models omp can use.

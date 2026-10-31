@@ -1,12 +1,12 @@
 [
   {
-    "id": "01a19121-da3a-74a6-97cb-6aacedbff83e",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:37.306807Z",
+    "id": "01a1913c-6562-74d5-8279-058cad3c737b",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:36.866272Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb95ca8318a0d6",
+        "id": "15bb9c6d4d39ccfe",
         "widgetKey": "autoresearch",
         "type": "extension_ui_request",
         "method": "setWidget"
@@ -14,9 +14,9 @@
     }
   },
   {
-    "id": "01a19121-da3a-74a6-97cb-6aad7dd19902",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:37.306814Z",
+    "id": "01a1913c-6562-74d5-8279-058d4b33afe4",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:36.866279Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -25,9 +25,9 @@
     }
   },
   {
-    "id": "01a19121-da3a-74a6-97cb-6aaefbe58534",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:37.306817Z",
+    "id": "01a1913c-6562-74d5-8279-058e40e7cf68",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:36.866294Z",
     "body": {
       "kind": "availableCommandsUpdate",
       "frame": {
@@ -990,9 +990,9 @@
     }
   },
   {
-    "id": "01a19121-ddd7-709d-9c3f-1000bcb1f152",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:38.23118Z",
+    "id": "01a1913c-6a7a-7040-b9e3-31023155f13c",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:38.170423Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1004,9 +1004,9 @@
     }
   },
   {
-    "id": "01a19121-ddd7-709d-9c3f-100194828a6c",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:38.23173Z",
+    "id": "01a1913c-6a7b-737b-882f-629cea2056a9",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:38.171026Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1015,9 +1015,9 @@
     }
   },
   {
-    "id": "01a19121-ddd8-76be-8744-edf82f00bcc5",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:38.232389Z",
+    "id": "01a1913c-6a7b-737b-882f-629daa161d7f",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:38.171744Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1026,9 +1026,9 @@
     }
   },
   {
-    "id": "01a19121-ddd8-76be-8744-edf980668671",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:38.232595Z",
+    "id": "01a1913c-6a7b-737b-882f-629ee387f653",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:38.171994Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1039,7 +1039,7 @@
               "type": "text"
             }
           ],
-          "timestamp": 1793436277307.0,
+          "timestamp": 1793438016869.0,
           "attribution": "user",
           "role": "user"
         },
@@ -1049,9 +1049,9 @@
     }
   },
   {
-    "id": "01a19121-ddd8-76be-8744-edfa92b94af0",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:38.232664Z",
+    "id": "01a1913c-6a7c-7215-b128-8182aa6f2fa3",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:38.172075Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1062,7 +1062,7 @@
               "type": "text"
             }
           ],
-          "timestamp": 1793436277307.0,
+          "timestamp": 1793438016869.0,
           "attribution": "user",
           "role": "user"
         },
@@ -1072,9 +1072,9 @@
     }
   },
   {
-    "id": "01a19121-e2ad-73bd-a367-7346dbd4d49d",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:39.46917Z",
+    "id": "01a1913c-6e99-7491-a398-5399759aea3b",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:39.225673Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1104,8 +1104,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793436278233.0,
-          "responseId": "2026103116443801bd60436f5844a1",
+          "timestamp": 1793438018172.0,
+          "responseId": "202610311713383a53039c15cf4b2f",
           "credentialId": 1
         },
         "messageId": "msg-2",
@@ -1114,9 +1114,9 @@
     }
   },
   {
-    "id": "01a19121-e2ad-73bd-a367-73471f45da92",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:39.469274Z",
+    "id": "01a1913c-6e9c-74a7-ab44-fda2c6832f2c",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:39.228553Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1146,8 +1146,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793436278233.0,
-          "responseId": "2026103116443801bd60436f5844a1",
+          "timestamp": 1793438018172.0,
+          "responseId": "202610311713383a53039c15cf4b2f",
           "credentialId": 1
         },
         "assistantMessageEvent": {
@@ -1178,8 +1178,8 @@
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793436278233.0,
-            "responseId": "2026103116443801bd60436f5844a1",
+            "timestamp": 1793438018172.0,
+            "responseId": "202610311713383a53039c15cf4b2f",
             "credentialId": 1
           },
           "type": "text_start"
@@ -1190,9 +1190,9 @@
     }
   },
   {
-    "id": "01a19121-e2ae-765b-983a-70ec28e89f83",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:39.470899Z",
+    "id": "01a1913c-6e9e-7573-8536-657a89462994",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:39.230641Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1222,8 +1222,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793436278233.0,
-          "responseId": "2026103116443801bd60436f5844a1",
+          "timestamp": 1793438018172.0,
+          "responseId": "202610311713383a53039c15cf4b2f",
           "credentialId": 1
         },
         "assistantMessageEvent": {
@@ -1255,8 +1255,8 @@
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793436278233.0,
-            "responseId": "2026103116443801bd60436f5844a1",
+            "timestamp": 1793438018172.0,
+            "responseId": "202610311713383a53039c15cf4b2f",
             "credentialId": 1
           },
           "type": "text_delta"
@@ -1267,9 +1267,9 @@
     }
   },
   {
-    "id": "01a19121-e2ae-765b-983a-70ed85ce58f2",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:39.471003Z",
+    "id": "01a1913c-6ea0-7618-9ab5-d9127966759f",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:39.232869Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1285,24 +1285,24 @@
           "provider": "zai",
           "model": "glm-5.3-flash",
           "usage": {
-            "input": 3547,
+            "input": 93,
             "output": 3,
-            "cacheRead": 0,
+            "cacheRead": 3456,
             "cacheWrite": 0,
-            "totalTokens": 3550,
+            "totalTokens": 3552,
             "cost": {
-              "input": 0.00053205,
+              "input": 0.00001395,
               "output": 1.5e-6,
-              "cacheRead": 0.0,
+              "cacheRead": 0.00010368,
               "cacheWrite": 0.0,
-              "total": 0.0005335499999999999
+              "total": 0.00011913
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793436278233.0,
-          "responseId": "2026103116443801bd60436f5844a1",
-          "duration": 1231.5214999999998,
-          "ttft": 1228.8869169999998,
+          "timestamp": 1793438018172.0,
+          "responseId": "202610311713383a53039c15cf4b2f",
+          "duration": 1052.8260409999998,
+          "ttft": 1049.9795410000002,
           "credentialId": 1
         },
         "assistantMessageEvent": {
@@ -1320,24 +1320,24 @@
             "provider": "zai",
             "model": "glm-5.3-flash",
             "usage": {
-              "input": 3547,
+              "input": 93,
               "output": 3,
-              "cacheRead": 0,
+              "cacheRead": 3456,
               "cacheWrite": 0,
-              "totalTokens": 3550,
+              "totalTokens": 3552,
               "cost": {
-                "input": 0.00053205,
+                "input": 0.00001395,
                 "output": 1.5e-6,
-                "cacheRead": 0.0,
+                "cacheRead": 0.00010368,
                 "cacheWrite": 0.0,
-                "total": 0.0005335499999999999
+                "total": 0.00011913
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793436278233.0,
-            "responseId": "2026103116443801bd60436f5844a1",
-            "duration": 1231.5214999999998,
-            "ttft": 1228.8869169999998,
+            "timestamp": 1793438018172.0,
+            "responseId": "202610311713383a53039c15cf4b2f",
+            "duration": 1052.8260409999998,
+            "ttft": 1049.9795410000002,
             "credentialId": 1
           },
           "type": "text_end"
@@ -1348,9 +1348,9 @@
     }
   },
   {
-    "id": "01a19121-e2af-707c-a630-46900cd3bd29",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:39.471317Z",
+    "id": "01a1913c-6ea1-7068-8780-5e319333e734",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:39.23349Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1366,25 +1366,25 @@
           "provider": "zai",
           "model": "glm-5.3-flash",
           "usage": {
-            "input": 3547,
+            "input": 93,
             "output": 3,
-            "cacheRead": 0,
+            "cacheRead": 3456,
             "cacheWrite": 0,
-            "totalTokens": 3550,
+            "totalTokens": 3552,
             "cost": {
-              "input": 0.00053205,
+              "input": 0.00001395,
               "output": 1.5e-6,
-              "cacheRead": 0.0,
+              "cacheRead": 0.00010368,
               "cacheWrite": 0.0,
-              "total": 0.0005335499999999999
+              "total": 0.00011913
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793436278233.0,
-          "responseId": "2026103116443801bd60436f5844a1",
-          "duration": 1231.5214999999998,
-          "ttft": 1228.8869169999998,
-          "completedAt": 1793436279466.0,
+          "timestamp": 1793438018172.0,
+          "responseId": "202610311713383a53039c15cf4b2f",
+          "duration": 1052.8260409999998,
+          "ttft": 1049.9795410000002,
+          "completedAt": 1793438019226.0,
           "credentialId": 1
         },
         "messageId": "msg-2",
@@ -1393,9 +1393,9 @@
     }
   },
   {
-    "id": "01a19121-e2b8-74e9-86e4-566aae7246b0",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:39.480189Z",
+    "id": "01a1913c-6ea3-700e-94d2-9af2ce4a3923",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:39.235737Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1411,24 +1411,24 @@
           "provider": "zai",
           "model": "glm-5.3-flash",
           "usage": {
-            "input": 3547,
+            "input": 93,
             "output": 3,
-            "cacheRead": 0,
+            "cacheRead": 3456,
             "cacheWrite": 0,
-            "totalTokens": 3550,
+            "totalTokens": 3552,
             "cost": {
-              "input": 0.00053205,
+              "input": 0.00001395,
               "output": 1.5e-6,
-              "cacheRead": 0.0,
+              "cacheRead": 0.00010368,
               "cacheWrite": 0.0,
-              "total": 0.0005335499999999999
+              "total": 0.00011913
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793436278233.0,
-          "responseId": "2026103116443801bd60436f5844a1",
-          "duration": 1231.5214999999998,
-          "ttft": 1228.8869169999998,
+          "timestamp": 1793438018172.0,
+          "responseId": "202610311713383a53039c15cf4b2f",
+          "duration": 1052.8260409999998,
+          "ttft": 1049.9795410000002,
           "credentialId": 1
         },
         "toolResults": [],
@@ -1437,13 +1437,13 @@
     }
   },
   {
-    "id": "01a19121-e2ba-7590-84c3-dfcd7648b558",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:39.482142Z",
+    "id": "01a1913c-6ea4-7200-a91d-b1c55a0a7c35",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:39.236877Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb95ccae58a0d8",
+        "id": "15bb9c6fa939cd00",
         "widgetKey": "autoresearch",
         "type": "extension_ui_request",
         "method": "setWidget"
@@ -1451,9 +1451,9 @@
     }
   },
   {
-    "id": "01a19121-e2bb-75a7-afc0-6a1d07fa2402",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:39.483851Z",
+    "id": "01a1913c-6ea6-7314-befb-1e1bcd671843",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:39.238733Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1465,7 +1465,7 @@
                 "type": "text"
               }
             ],
-            "timestamp": 1793436277307.0,
+            "timestamp": 1793438016869.0,
             "attribution": "user",
             "role": "user"
           },
@@ -1481,24 +1481,24 @@
             "provider": "zai",
             "model": "glm-5.3-flash",
             "usage": {
-              "input": 3547,
+              "input": 93,
               "output": 3,
-              "cacheRead": 0,
+              "cacheRead": 3456,
               "cacheWrite": 0,
-              "totalTokens": 3550,
+              "totalTokens": 3552,
               "cost": {
-                "input": 0.00053205,
+                "input": 0.00001395,
                 "output": 1.5e-6,
-                "cacheRead": 0.0,
+                "cacheRead": 0.00010368,
                 "cacheWrite": 0.0,
-                "total": 0.0005335499999999999
+                "total": 0.00011913
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793436278233.0,
-            "responseId": "2026103116443801bd60436f5844a1",
-            "duration": 1231.5214999999998,
-            "ttft": 1228.8869169999998,
+            "timestamp": 1793438018172.0,
+            "responseId": "202610311713383a53039c15cf4b2f",
+            "duration": 1052.8260409999998,
+            "ttft": 1049.9795410000002,
             "credentialId": 1
           }
         ],
@@ -1509,9 +1509,9 @@
     }
   },
   {
-    "id": "01a19121-e2bb-75a7-afc0-6a1e0ebde0b1",
-    "live": "01a19121-da3a-74a6-97cb-6aabbf7fb641",
-    "at": "2026-10-31T08:44:39.483887Z",
+    "id": "01a1913c-6ea6-7314-befb-1e1cb71f7911",
+    "live": "01a1913c-6562-74d5-8279-058b2e7e484d",
+    "at": "2026-10-31T09:13:39.238769Z",
     "body": {
       "kind": "promptResult",
       "frame": {

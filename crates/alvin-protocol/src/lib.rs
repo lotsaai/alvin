@@ -4,6 +4,7 @@ mod dialog;
 mod error;
 mod error_codes;
 mod events;
+mod history;
 mod ids;
 mod live;
 mod model;
@@ -18,7 +19,8 @@ pub use dialog::{DialogApiClient, RespondRequest};
 pub use error::{Error, Result};
 pub use error_codes::{ErrorCode, ErrorData};
 pub use events::{Event, EventBody};
-pub use ids::{CheckoutId, EventId, LiveSessionId, ProjectId, SessionId};
+pub use history::{EntriesRequest, Entry, EntryKind, HistoryEntries};
+pub use ids::{CheckoutId, EntryId, EventId, LiveSessionId, ProjectId, SessionId};
 pub use live::{
   BashRequest, EventsApiClient, LiveApiClient, LiveSessionSummary, MessagesRequest, OpenRequest, OpenTarget, PromptRequest,
   SubscribeRequest,

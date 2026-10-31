@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use alvin_protocol::{Event, LiveSessionId, LiveSessionSummary, MessagesPage, ProjectSummary, SessionCursor, SessionPage, SessionState};
+use alvin_protocol::{
+  EntryId, Event, HistoryEntries, LiveSessionId, LiveSessionSummary, MessagesPage, ProjectSummary, SessionCursor, SessionPage, SessionState,
+};
 
 use crate::live::LiveView;
 use crate::workspace::{SessionsKey, Workspace};
@@ -106,6 +108,26 @@ impl Conversation {
     }
   }
 
+  /// Replaces a session's tree with the one these entries (all of them) make: on open, after a resync, and when omp does not
+  /// know the `since` of an earlier read.
+  pub fn set_entries(&mut self, live: LiveSessionId, entries: HistoryEntries) {
+    if let Some(view) = self.live.get_mut(&live) {
+      view.set_entries(entries);
+    }
+  }
+
+  /// Adds the entries omp appended after [`Conversation::tree_cursor`].
+  pub fn apply_entries(&mut self, live: LiveSessionId, entries: HistoryEntries) {
+    if let Some(view) = self.live.get_mut(&live) {
+      view.apply_entries(entries);
+    }
+  }
+
+  /// The `since` of the next read of entries: the newest entry the tree has. `None` when there is no tree yet.
+  pub fn tree_cursor(&self, live: LiveSessionId) -> Option<&EntryId> {
+    self.live.get(&live)?.tree.as_ref()?.cursor()
+  }
+
   /// Closes the dialog a request named, after the user answered or dismissed it.
   pub fn dialog_answered(&mut self, live: LiveSessionId, request: &str) {
     if let Some(view) = self.live.get_mut(&live) {
@@ -124,7 +146,7 @@ impl Conversation {
 
 #[cfg(test)]
 mod tests {
-  use alvin_protocol::{AgentMessage, EventBody, ExtensionUiRequest, MessagesPage, PromptStatus, RpcAgentEvent};
+  use alvin_protocol::{AgentMessage, EventBody, ExtensionUiRequest, HistoryEntries, MessagesPage, PromptStatus, RpcAgentEvent};
 
   use super::*;
   use crate::live::{Origin, Run};
@@ -514,5 +536,35 @@ mod tests {
     conversation.apply(&cancel);
 
     assert!(conversation.live(live).unwrap().dialogs.pending().is_empty());
+  }
+
+  #[test]
+  fn history_grows_after_each_turn_and_a_resync_drops_the_tree() {
+    let recorded: Recorded = Recorded {
+      events: serde_json::from_str(include_str!("../fixtures/tree_turn.events.json")).unwrap(),
+      messages: serde_json::from_str(include_str!("../fixtures/tree_turn.messages.json")).unwrap(),
+    };
+    let before: HistoryEntries = serde_json::from_str(include_str!("../fixtures/tree_turn.entries_before.json")).unwrap();
+    let delta: HistoryEntries = serde_json::from_str(include_str!("../fixtures/tree_turn.entries_delta.json")).unwrap();
+    let live = summary(&recorded).live;
+    let mut conversation = Conversation::default();
+    conversation.open(&summary(&recorded));
+    assert_eq!(conversation.tree_cursor(live), None);
+
+    conversation.set_entries(live, before.clone());
+    assert!(!conversation.live(live).unwrap().tree_stale);
+    assert_eq!(conversation.tree_cursor(live), before.entries.last().map(|entry| &entry.id));
+
+    // The turn that follows ends, which says history may have grown; reading the entries since the cursor settles that.
+    for event in &recorded.events {
+      conversation.apply(event);
+    }
+    assert!(conversation.live(live).unwrap().tree_stale);
+    conversation.apply_entries(live, delta.clone());
+    assert!(!conversation.live(live).unwrap().tree_stale);
+    assert_eq!(conversation.tree_cursor(live), delta.entries.last().map(|entry| &entry.id));
+
+    conversation.resync(live);
+    assert!(conversation.live(live).unwrap().tree.is_none());
   }
 }

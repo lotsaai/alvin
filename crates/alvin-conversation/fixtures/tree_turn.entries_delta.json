@@ -1,0 +1,103 @@
+{
+  "entries": [
+    {
+      "id": "da8e1621",
+      "parentId": "b2f16360",
+      "timestamp": "2026-10-31T09:14:17.919Z",
+      "type": "model_usage",
+      "runtime": {
+        "version": "18.14.1"
+      },
+      "purpose": "auto-thinking",
+      "role": "typesafe",
+      "api": "openrouter-decisions",
+      "provider": "openrouter",
+      "model": "liquid/d1.1",
+      "usage": {
+        "input": 152,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 152,
+        "cost": {
+          "input": 3.04e-6,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 3.04e-6
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "id": "b70dd226",
+      "parentId": "da8e1621",
+      "timestamp": "2026-10-31T09:14:17.92Z",
+      "type": "message",
+      "runtime": {
+        "version": "18.14.1"
+      },
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Reply with the single word again."
+          }
+        ],
+        "attribution": "user",
+        "timestamp": 1793438057592
+      }
+    },
+    {
+      "id": "9fd714a2",
+      "parentId": "b70dd226",
+      "timestamp": "2026-10-31T09:14:18.857Z",
+      "type": "message",
+      "runtime": {
+        "version": "18.14.1"
+      },
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "again"
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "zai",
+        "model": "glm-5.3-flash",
+        "usage": {
+          "input": 40,
+          "output": 3,
+          "cacheRead": 3520,
+          "cacheWrite": 0,
+          "totalTokens": 3563,
+          "cost": {
+            "input": 6e-6,
+            "output": 1.5e-6,
+            "cacheRead": 0.0001056,
+            "cacheWrite": 0,
+            "total": 0.0001131
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793438057920,
+        "responseId": "202610311714180490dbaa886f4101",
+        "duration": 936.1437499999996,
+        "ttft": 931.6540410000002,
+        "credentialId": 1,
+        "completedAt": 1793438058857,
+        "contextSnapshot": {
+          "promptTokens": 3560,
+          "nonMessageTokens": 3112,
+          "toolSchemaTokens": 850,
+          "compactionEpoch": 0
+        },
+        "errorId": 0
+      }
+    }
+  ],
+  "leaf": "9fd714a2"
+}

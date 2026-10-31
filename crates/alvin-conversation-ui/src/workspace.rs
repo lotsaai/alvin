@@ -603,4 +603,70 @@ mod tests {
     until(cx, "the dialog to close", |cx| !asking(cx, &workspace));
     fixture.finish().await;
   }
+
+  /// The rows the active session's history panel lists.
+  fn history_rows(cx: &mut TestAppContext, workspace: &Entity<Workspace>) -> Vec<crate::history_tree::Row> {
+    cx.read(|cx| {
+      let workspace = workspace.read(cx);
+      let Some(live) = workspace.active() else { return Vec::new() };
+      workspace
+        .tabs
+        .iter()
+        .find(|(tab, _)| *tab == live)
+        .map(|(_, view)| view.read(cx).history_row_list(cx))
+        .unwrap_or_default()
+    })
+  }
+
+  async fn entries(client: &Client, live: LiveSessionId) -> alvin_protocol::HistoryEntries {
+    LiveApiClient::entries(client, alvin_protocol::EntriesRequest { live, since: None })
+      .await
+      .unwrap()
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn the_history_panel_follows_the_session_as_turns_add_entries(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let client = fixture.client().await;
+    let (window, workspace) = open_window(cx, client.clone());
+    open_new_session(cx, window, &workspace);
+    let live = active(cx, &workspace).expect("a session is open");
+
+    type_and_send(cx, window, "Reply with the single word ok.");
+    until(cx, "the turn to settle", |cx| {
+      with_active(cx, &workspace, |view| view.run == Run::Settled).unwrap_or(false)
+    });
+    // omp sends no event when history grows; the end of the turn is what makes the UI read it.
+    let after_one = entries(&client, live).await;
+    until(cx, "the panel to list the first turn", |cx| {
+      history_rows(cx, &workspace).len() == after_one.entries.len()
+    });
+    let rows = history_rows(cx, &workspace);
+    let leaf = after_one.leaf.clone().expect("the turn has a leaf");
+    assert!(rows.iter().any(|row| row.text.starts_with("user: Reply with the single word ok.")));
+    assert!(rows.iter().any(|row| row.id == leaf && row.active));
+
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      window.click("history-toggle", cx);
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
+
+    type_and_send(cx, window, "Reply with the single word again.");
+    until(cx, "the second turn to settle and its entries to arrive", |cx| {
+      with_active(cx, &workspace, |view| {
+        view.run == Run::Settled && !view.tree_stale && view.queue.steering.is_empty()
+      })
+      .unwrap_or(false)
+        && history_rows(cx, &workspace).len() > after_one.entries.len()
+    });
+    let after_two = entries(&client, live).await;
+    until(cx, "the panel to list every entry", |cx| {
+      history_rows(cx, &workspace).len() == after_two.entries.len()
+    });
+    fixture.finish().await;
+  }
 }

@@ -1,0 +1,2067 @@
+[
+  {
+    "id": "01a1913c-fc8e-76db-9e6f-3441838be468",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:15.566936Z",
+    "body": {
+      "kind": "extensionUiRequest",
+      "frame": {
+        "id": "15bb9c93182f828d",
+        "widgetKey": "autoresearch",
+        "type": "extension_ui_request",
+        "method": "setWidget"
+      }
+    }
+  },
+  {
+    "id": "01a1913c-fc8e-76db-9e6f-344238ea72a0",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:15.566944Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "advisor_cost_changed"
+      }
+    }
+  },
+  {
+    "id": "01a1913c-fc8e-76db-9e6f-344326e607ca",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:15.566946Z",
+    "body": {
+      "kind": "availableCommandsUpdate",
+      "frame": {
+        "commands": [
+          {
+            "name": "security",
+            "source": "builtin",
+            "description": "Plan, run, inspect, import, and compare OMP-native security scans",
+            "input": {
+              "hint": "<plan|scan|status|cancel|scans|show|import|export|validate|compare|disposition>"
+            },
+            "subcommands": [
+              {
+                "name": "plan",
+                "description": "Create an immutable security scan plan"
+              },
+              {
+                "name": "scan",
+                "description": "Start a planned or newly planned native scan"
+              },
+              {
+                "name": "status",
+                "description": "Show native scan operation status"
+              },
+              {
+                "name": "cancel",
+                "description": "Cancel a running native scan"
+              },
+              {
+                "name": "scans",
+                "description": "List stored project security scans"
+              },
+              {
+                "name": "show",
+                "description": "Render a scan or security:// resource"
+              },
+              {
+                "name": "import",
+                "description": "Import SARIF or a Codex Security bundle"
+              },
+              {
+                "name": "export",
+                "description": "Export a canonical bundle, SARIF, or report"
+              },
+              {
+                "name": "validate",
+                "description": "Validate one finding with OMP-native tools"
+              },
+              {
+                "name": "compare",
+                "description": "Compare finding lineage across two scans"
+              },
+              {
+                "name": "disposition",
+                "description": "Set a finding disposition with rationale"
+              }
+            ]
+          },
+          {
+            "name": "model",
+            "source": "builtin",
+            "aliases": [
+              "models"
+            ],
+            "description": "Show current model selection"
+          },
+          {
+            "name": "switch",
+            "source": "builtin",
+            "description": "Switch model for this session only",
+            "input": {
+              "hint": "[model]"
+            }
+          },
+          {
+            "name": "fast",
+            "source": "builtin",
+            "description": "Toggle fast mode",
+            "input": {
+              "hint": "[on|ultra|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable fast mode (priority tier)"
+              },
+              {
+                "name": "ultra",
+                "description": "Enable Ultrafast (OpenAI API, or Codex models that offer it)"
+              },
+              {
+                "name": "off",
+                "description": "Disable fast mode"
+              },
+              {
+                "name": "status",
+                "description": "Show fast mode status"
+              }
+            ]
+          },
+          {
+            "name": "slow",
+            "source": "builtin",
+            "description": "Toggle slow mode",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Flex tier, or Anthropic low priority at the session limit (auto)"
+              },
+              {
+                "name": "off",
+                "description": "Standard service; stop Anthropic low priority"
+              },
+              {
+                "name": "status",
+                "description": "Show slow mode status"
+              }
+            ]
+          },
+          {
+            "name": "skillful",
+            "source": "builtin",
+            "description": "Toggle skill listing",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "List skills in the prompt for this session"
+              },
+              {
+                "name": "off",
+                "description": "Omit the skills listing for this session"
+              },
+              {
+                "name": "status",
+                "description": "Show skill listing status"
+              }
+            ]
+          },
+          {
+            "name": "extended-context",
+            "source": "builtin",
+            "description": "Toggle extended context",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable larger context windows"
+              },
+              {
+                "name": "off",
+                "description": "Use default or standard-pricing context windows"
+              },
+              {
+                "name": "status",
+                "description": "Show extended context status"
+              }
+            ]
+          },
+          {
+            "name": "computer",
+            "source": "builtin",
+            "description": "Toggle computer use",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable computer use for this session"
+              },
+              {
+                "name": "off",
+                "description": "Disable computer use for this session"
+              },
+              {
+                "name": "status",
+                "description": "Show computer use status"
+              }
+            ]
+          },
+          {
+            "name": "ratchet",
+            "source": "builtin",
+            "description": "Build (or reuse) an eval for an LLM flow, then hillclimb it unattended",
+            "input": {
+              "hint": "[flow and goal]"
+            }
+          },
+          {
+            "name": "prewalk",
+            "source": "builtin",
+            "description": "Arm, restart, or cancel prewalk",
+            "input": {
+              "hint": "[into] | restart [from] [into] | off"
+            },
+            "subcommands": [
+              {
+                "name": "restart",
+                "description": "Return to the planning model and re-arm the handoff (default prewalk.from → prewalk.into)",
+                "usage": "[from] [into]"
+              },
+              {
+                "name": "off",
+                "description": "Cancel this session's handoff without changing the active model"
+              }
+            ]
+          },
+          {
+            "name": "modelpreset",
+            "source": "builtin",
+            "description": "Manage model presets",
+            "input": {
+              "hint": "[list|save|switch|delete] [name]"
+            },
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "List saved presets"
+              },
+              {
+                "name": "save",
+                "description": "Save the current role models and thinking level",
+                "usage": "<name>"
+              },
+              {
+                "name": "switch",
+                "description": "Apply a saved preset",
+                "usage": "<name>"
+              },
+              {
+                "name": "delete",
+                "description": "Delete a saved preset",
+                "usage": "<name>"
+              }
+            ]
+          },
+          {
+            "name": "effort",
+            "source": "builtin",
+            "description": "Set or show reasoning effort (thinking level, intelligence)",
+            "input": {
+              "hint": "[level]"
+            },
+            "subcommands": [
+              {
+                "name": "off",
+                "description": "No reasoning"
+              },
+              {
+                "name": "minimal",
+                "description": "Very brief reasoning (~1k tokens)"
+              },
+              {
+                "name": "low",
+                "description": "Light reasoning (~2k tokens)"
+              },
+              {
+                "name": "medium",
+                "description": "Moderate reasoning (~8k tokens)"
+              },
+              {
+                "name": "high",
+                "description": "Deep reasoning (~16k tokens)"
+              },
+              {
+                "name": "xhigh",
+                "description": "Extended reasoning (~32k tokens)"
+              },
+              {
+                "name": "max",
+                "description": "Maximum reasoning the model supports"
+              },
+              {
+                "name": "auto",
+                "description": "Auto-detect per prompt"
+              }
+            ]
+          },
+          {
+            "name": "advisor",
+            "source": "builtin",
+            "description": "Toggle advisor",
+            "input": {
+              "hint": "[on|off|status|dump [raw]|configure]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable the advisor"
+              },
+              {
+                "name": "off",
+                "description": "Disable the advisor"
+              },
+              {
+                "name": "status",
+                "description": "Show advisor status"
+              },
+              {
+                "name": "dump",
+                "description": "Copy the advisor's transcript to clipboard",
+                "usage": "[raw]"
+              },
+              {
+                "name": "configure",
+                "description": "Open the advisor configuration editor (TUI)"
+              }
+            ]
+          },
+          {
+            "name": "export",
+            "source": "builtin",
+            "description": "Export session to HTML file",
+            "input": {
+              "hint": "[--themes] [path]"
+            }
+          },
+          {
+            "name": "trace",
+            "source": "builtin",
+            "description": "Open this session's trace in the stats dashboard"
+          },
+          {
+            "name": "dump",
+            "source": "builtin",
+            "description": "Return full transcript as plain text, with LLM request JSON path",
+            "input": {
+              "hint": "[all|anon]"
+            },
+            "subcommands": [
+              {
+                "name": "all",
+                "description": "Write a zip with the main transcript, LLM request JSON, and one file per subagent"
+              },
+              {
+                "name": "anon",
+                "description": "Write a zip of anonymized session JSONL (contents redacted, metadata kept) plus subagents"
+              }
+            ]
+          },
+          {
+            "name": "share",
+            "source": "builtin",
+            "description": "Share session via an encrypted link (share server or secret gist)"
+          },
+          {
+            "name": "browser",
+            "source": "builtin",
+            "description": "Toggle browser eval-prelude headless vs visible mode",
+            "input": {
+              "hint": "[headless|visible]"
+            },
+            "subcommands": [
+              {
+                "name": "headless",
+                "description": "Switch to headless mode"
+              },
+              {
+                "name": "visible",
+                "description": "Switch to visible mode"
+              }
+            ]
+          },
+          {
+            "name": "todo",
+            "source": "builtin",
+            "description": "Manage todos",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "edit",
+                "description": "Open todos in $EDITOR (Markdown round-trip)"
+              },
+              {
+                "name": "copy",
+                "description": "Copy todos as Markdown to clipboard"
+              },
+              {
+                "name": "expand",
+                "description": "Show every phase and task in the HUD"
+              },
+              {
+                "name": "collapse",
+                "description": "Restore the bounded HUD preview"
+              },
+              {
+                "name": "export",
+                "description": "Write todos as Markdown to a file (default: TODO.md)",
+                "usage": "[<path>]"
+              },
+              {
+                "name": "import",
+                "description": "Replace todos from a Markdown file (default: TODO.md)",
+                "usage": "[<path>]"
+              },
+              {
+                "name": "append",
+                "description": "Append a task; phase fuzzy-matched or auto-created",
+                "usage": "[<phase>] <task...>"
+              },
+              {
+                "name": "start",
+                "description": "Mark task in_progress (fuzzy-matched)",
+                "usage": "<task>"
+              },
+              {
+                "name": "done",
+                "description": "Mark task/phase/all completed (fuzzy-matched)",
+                "usage": "[<task|phase>]"
+              },
+              {
+                "name": "drop",
+                "description": "Mark task/phase/all abandoned (fuzzy-matched)",
+                "usage": "[<task|phase>]"
+              },
+              {
+                "name": "rm",
+                "description": "Remove task/phase/all (fuzzy-matched)",
+                "usage": "[<task|phase>]"
+              }
+            ]
+          },
+          {
+            "name": "session",
+            "source": "builtin",
+            "description": "Show or configure the current session",
+            "input": {
+              "hint": "[info|delete|pin [account]]"
+            },
+            "subcommands": [
+              {
+                "name": "info",
+                "description": "Show session info and stats"
+              },
+              {
+                "name": "delete",
+                "description": "Delete current session and return to selector"
+              },
+              {
+                "name": "pin",
+                "description": "Pin a stored OAuth account to the current provider for this session",
+                "usage": "[account]"
+              }
+            ]
+          },
+          {
+            "name": "jobs",
+            "source": "builtin",
+            "description": "Show background jobs",
+            "input": {
+              "hint": "[full|kill <id>|kill all]"
+            },
+            "subcommands": [
+              {
+                "name": "full",
+                "description": "Show full, untruncated command lines"
+              },
+              {
+                "name": "kill",
+                "description": "Cancel a running background job",
+                "usage": "<id>|all"
+              }
+            ]
+          },
+          {
+            "name": "usage",
+            "source": "builtin",
+            "description": "Show token usage",
+            "input": {
+              "hint": "[show|reset [provider/credential-id|provider/active]]"
+            },
+            "subcommands": [
+              {
+                "name": "show",
+                "description": "Show provider usage and limits"
+              },
+              {
+                "name": "reset",
+                "description": "Spend a saved provider rate-limit reset",
+                "usage": "[provider/credential-id|provider/active]"
+              }
+            ]
+          },
+          {
+            "name": "stats",
+            "source": "builtin",
+            "description": "Launch the local stats dashboard",
+            "input": {
+              "hint": "[--port <port>] [--host <host>]"
+            }
+          },
+          {
+            "name": "changelog",
+            "source": "builtin",
+            "description": "Show changelog",
+            "input": {
+              "hint": "[full|last [N]]"
+            },
+            "subcommands": [
+              {
+                "name": "full",
+                "description": "Show complete changelog"
+              },
+              {
+                "name": "last",
+                "description": "Show the last N releases (default 1)",
+                "usage": "[N]"
+              }
+            ]
+          },
+          {
+            "name": "tools",
+            "source": "builtin",
+            "description": "Show available tools"
+          },
+          {
+            "name": "context",
+            "source": "builtin",
+            "description": "Show context usage"
+          },
+          {
+            "name": "mcp",
+            "source": "builtin",
+            "description": "Manage MCP servers",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "Add a new MCP server",
+                "usage": "<name> [--scope project|user] [--url <url>] [-- <command...>]"
+              },
+              {
+                "name": "list",
+                "description": "List all configured MCP servers"
+              },
+              {
+                "name": "remove",
+                "description": "Remove an MCP server",
+                "usage": "<name> [--scope project|user]"
+              },
+              {
+                "name": "test",
+                "description": "Test connection to a server",
+                "usage": "<name>"
+              },
+              {
+                "name": "reauth",
+                "description": "Reauthorize OAuth for a server",
+                "usage": "<name>"
+              },
+              {
+                "name": "unauth",
+                "description": "Remove OAuth auth from a server",
+                "usage": "<name>"
+              },
+              {
+                "name": "enable",
+                "description": "Enable an MCP server",
+                "usage": "<name>"
+              },
+              {
+                "name": "disable",
+                "description": "Disable an MCP server",
+                "usage": "<name>"
+              },
+              {
+                "name": "smithery-search",
+                "description": "Search Smithery registry and deploy an MCP server",
+                "usage": "<keyword> [--scope project|user] [--limit <1-100>] [--semantic]"
+              },
+              {
+                "name": "smithery-login",
+                "description": "Login to Smithery and cache API key"
+              },
+              {
+                "name": "smithery-logout",
+                "description": "Remove cached Smithery API key"
+              },
+              {
+                "name": "reconnect",
+                "description": "Reconnect to a specific MCP server",
+                "usage": "<name>"
+              },
+              {
+                "name": "reload",
+                "description": "Force reload MCP runtime tools"
+              },
+              {
+                "name": "resources",
+                "description": "List available resources from connected servers"
+              },
+              {
+                "name": "prompts",
+                "description": "List available prompts from connected servers"
+              },
+              {
+                "name": "notifications",
+                "description": "Show notification capabilities and subscriptions"
+              },
+              {
+                "name": "help",
+                "description": "Show help message"
+              }
+            ]
+          },
+          {
+            "name": "ssh",
+            "source": "builtin",
+            "description": "Manage SSH connections",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "Add an SSH host",
+                "usage": "<name> --host <host> [--user <user>] [--port <port>] [--key <keyPath>] [--scope project|user]"
+              },
+              {
+                "name": "list",
+                "description": "List all configured SSH hosts"
+              },
+              {
+                "name": "remove",
+                "description": "Remove an SSH host",
+                "usage": "<name> [--scope project|user]"
+              },
+              {
+                "name": "help",
+                "description": "Show help message"
+              }
+            ]
+          },
+          {
+            "name": "fresh",
+            "source": "builtin",
+            "description": "Reset provider stream state without changing the local transcript"
+          },
+          {
+            "name": "compact",
+            "source": "builtin",
+            "description": "Compact the conversation",
+            "input": {
+              "hint": "[soft|remote|snapcompact] [focus]"
+            },
+            "subcommands": [
+              {
+                "name": "soft",
+                "description": "Summarize locally with the active model (skip server compaction)",
+                "usage": "[focus]"
+              },
+              {
+                "name": "remote",
+                "description": "Summarize via OpenAI-compatible server compaction, then fall back to a local summary",
+                "usage": "[focus]"
+              },
+              {
+                "name": "snapcompact",
+                "description": "Archive history onto dense bitmap images the model reads back (no LLM call)"
+              }
+            ]
+          },
+          {
+            "name": "shake",
+            "source": "builtin",
+            "description": "Shake heavy content out of the conversation context",
+            "input": {
+              "hint": "[elide|images|thinking]"
+            },
+            "subcommands": [
+              {
+                "name": "elide",
+                "description": "Strip tool results + large blocks (default)"
+              },
+              {
+                "name": "images",
+                "description": "Strip image blocks"
+              },
+              {
+                "name": "thinking",
+                "description": "Drop all thinking blocks"
+              }
+            ]
+          },
+          {
+            "name": "handoff",
+            "source": "builtin",
+            "description": "Summarize the session into a handoff document and compact in place",
+            "input": {
+              "hint": "[focus instructions]"
+            }
+          },
+          {
+            "name": "pin",
+            "source": "builtin",
+            "description": "Pin or unpin a session at the top of the resume list",
+            "input": {
+              "hint": "[session id]"
+            }
+          },
+          {
+            "name": "retry",
+            "source": "builtin",
+            "description": "Retry the last failed agent turn"
+          },
+          {
+            "name": "memory",
+            "source": "builtin",
+            "description": "Manage memory",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "view",
+                "description": "Show current memory injection payload"
+              },
+              {
+                "name": "stats",
+                "description": "Show memory backend statistics"
+              },
+              {
+                "name": "diagnose",
+                "description": "Run memory backend diagnostics"
+              },
+              {
+                "name": "queue",
+                "description": "Show pending memory deltas awaiting consolidation"
+              },
+              {
+                "name": "sync",
+                "description": "Run memory consolidation now"
+              },
+              {
+                "name": "clear",
+                "description": "Clear persisted memory data and artifacts"
+              },
+              {
+                "name": "reset",
+                "description": "Alias for clear"
+              },
+              {
+                "name": "enqueue",
+                "description": "Enqueue memory consolidation maintenance"
+              },
+              {
+                "name": "rebuild",
+                "description": "Alias for enqueue"
+              },
+              {
+                "name": "mm list",
+                "description": "List mental models on the active bank"
+              },
+              {
+                "name": "mm show",
+                "description": "Show one mental model (id required)"
+              },
+              {
+                "name": "mm refresh",
+                "description": "Refresh auto-refresh models bank-wide, or one model by id"
+              },
+              {
+                "name": "mm history",
+                "description": "Diff the change history of a mental model"
+              },
+              {
+                "name": "mm seed",
+                "description": "Create any built-in mental models that are missing"
+              },
+              {
+                "name": "mm delete",
+                "description": "Delete a mental model from the bank (id required)"
+              },
+              {
+                "name": "mm reload",
+                "description": "Re-pull the cached <mental_models> block"
+              }
+            ]
+          },
+          {
+            "name": "rename",
+            "source": "builtin",
+            "description": "Rename the current session (omit title to generate)",
+            "input": {
+              "hint": "[title]"
+            }
+          },
+          {
+            "name": "move",
+            "source": "builtin",
+            "description": "Move the current session to a different directory",
+            "input": {
+              "hint": "[<path>]"
+            }
+          },
+          {
+            "name": "wt",
+            "source": "builtin",
+            "aliases": [
+              "worktree"
+            ],
+            "description": "Move this session into a new worktree, changes included",
+            "input": {
+              "hint": "[<branch>]"
+            }
+          },
+          {
+            "name": "add-dir",
+            "source": "builtin",
+            "description": "Add a workspace directory to this session",
+            "input": {
+              "hint": "<path>"
+            }
+          },
+          {
+            "name": "remove-dir",
+            "source": "builtin",
+            "description": "Remove a workspace directory from this session",
+            "input": {
+              "hint": "<path>"
+            }
+          },
+          {
+            "name": "dirs",
+            "source": "builtin",
+            "description": "List this session's workspace directories"
+          },
+          {
+            "name": "marketplace",
+            "source": "builtin",
+            "description": "Manage plugins from marketplaces",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "Add a marketplace source",
+                "usage": "<source>"
+              },
+              {
+                "name": "remove",
+                "description": "Remove a marketplace source",
+                "usage": "<name>"
+              },
+              {
+                "name": "update",
+                "description": "Update marketplace catalog(s)",
+                "usage": "[name]"
+              },
+              {
+                "name": "list",
+                "description": "List configured marketplaces"
+              },
+              {
+                "name": "discover",
+                "description": "Browse available plugins",
+                "usage": "[marketplace]"
+              },
+              {
+                "name": "install",
+                "description": "Install a plugin (interactive browser if no args)",
+                "usage": "[--force] [name@marketplace]"
+              },
+              {
+                "name": "uninstall",
+                "description": "Uninstall a plugin (selector if no args)",
+                "usage": "[name@marketplace]"
+              },
+              {
+                "name": "installed",
+                "description": "List installed marketplace plugins"
+              },
+              {
+                "name": "upgrade",
+                "description": "Upgrade outdated plugins",
+                "usage": "[name@marketplace]"
+              },
+              {
+                "name": "help",
+                "description": "Show usage guide"
+              }
+            ]
+          },
+          {
+            "name": "plugins",
+            "source": "builtin",
+            "aliases": [
+              "plugin"
+            ],
+            "description": "Manage plugins",
+            "input": {
+              "hint": "[list|enable|disable]"
+            },
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "List all installed plugins (npm + marketplace)"
+              },
+              {
+                "name": "enable",
+                "description": "Enable an installed plugin",
+                "usage": "<plugin>"
+              },
+              {
+                "name": "disable",
+                "description": "Disable an installed plugin",
+                "usage": "<plugin>"
+              }
+            ]
+          },
+          {
+            "name": "reload-plugins",
+            "source": "builtin",
+            "description": "Reload all plugins"
+          },
+          {
+            "name": "force",
+            "source": "builtin",
+            "aliases": [
+              "force:"
+            ],
+            "description": "Force next turn to use a specific tool",
+            "input": {
+              "hint": "<tool-name> [prompt]"
+            }
+          },
+          {
+            "name": "forget-approvals",
+            "source": "builtin",
+            "description": "Forget every file and folder approval Ask and remember has recorded"
+          },
+          {
+            "name": "autoresearch",
+            "source": "extension",
+            "description": "Toggle builtin autoresearch mode, or pass off / clear, or a goal message.",
+            "input": {
+              "hint": "arguments"
+            }
+          },
+          {
+            "name": "init",
+            "source": "file",
+            "description": "Generate AGENTS.md for current codebase"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "01a1913c-ff75-72be-839b-ce5e59ec891a",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:16.309553Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "thinkingLevel": "low",
+        "configured": "auto",
+        "resolved": "low",
+        "type": "thinking_level_changed"
+      }
+    }
+  },
+  {
+    "id": "01a1913c-ff76-71f4-819f-c4b27dd09dfa",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:16.310234Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "agent_start"
+      }
+    }
+  },
+  {
+    "id": "01a1913c-ff77-7607-b68a-0e33df92ca68",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:16.311075Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a1913c-ff77-7607-b68a-0e344a0e9d23",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:16.311288Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "content": [
+            {
+              "text": "Reply with the single word ok.",
+              "type": "text"
+            }
+          ],
+          "timestamp": 1793438055567.0,
+          "attribution": "user",
+          "role": "user"
+        },
+        "messageId": "msg-1",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a1913c-ff77-7607-b68a-0e35c9ca1d73",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:16.311345Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "content": [
+            {
+              "text": "Reply with the single word ok.",
+              "type": "text"
+            }
+          ],
+          "timestamp": 1793438055567.0,
+          "attribution": "user",
+          "role": "user"
+        },
+        "messageId": "msg-1",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0462-708f-92c4-f64e1891f6e1",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.570502Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438056312.0,
+          "responseId": "2026103117141675492c32644644e1",
+          "credentialId": 1
+        },
+        "messageId": "msg-2",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0464-7683-aa89-3f535bb89781",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.572217Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438056312.0,
+          "responseId": "2026103117141675492c32644644e1",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793438056312.0,
+            "responseId": "2026103117141675492c32644644e1",
+            "credentialId": 1
+          },
+          "type": "text_start"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0465-7015-b6b3-912d0a43f67c",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.573158Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438056312.0,
+          "responseId": "2026103117141675492c32644644e1",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "ok",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793438056312.0,
+            "responseId": "2026103117141675492c32644644e1",
+            "credentialId": 1
+          },
+          "type": "text_delta"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0466-776f-99d6-5d148c7edba4",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.574574Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 92,
+            "output": 3,
+            "cacheRead": 3456,
+            "cacheWrite": 0,
+            "totalTokens": 3551,
+            "cost": {
+              "input": 0.0000138,
+              "output": 1.5e-6,
+              "cacheRead": 0.00010368,
+              "cacheWrite": 0.0,
+              "total": 0.00011898
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438056312.0,
+          "responseId": "2026103117141675492c32644644e1",
+          "duration": 1256.9255,
+          "ttft": 1254.34475,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "content": "ok",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 92,
+              "output": 3,
+              "cacheRead": 3456,
+              "cacheWrite": 0,
+              "totalTokens": 3551,
+              "cost": {
+                "input": 0.0000138,
+                "output": 1.5e-6,
+                "cacheRead": 0.00010368,
+                "cacheWrite": 0.0,
+                "total": 0.00011898
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793438056312.0,
+            "responseId": "2026103117141675492c32644644e1",
+            "duration": 1256.9255,
+            "ttft": 1254.34475,
+            "credentialId": 1
+          },
+          "type": "text_end"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0467-7304-bc7d-e968c497e86c",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.575224Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 92,
+            "output": 3,
+            "cacheRead": 3456,
+            "cacheWrite": 0,
+            "totalTokens": 3551,
+            "cost": {
+              "input": 0.0000138,
+              "output": 1.5e-6,
+              "cacheRead": 0.00010368,
+              "cacheWrite": 0.0,
+              "total": 0.00011898
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438056312.0,
+          "responseId": "2026103117141675492c32644644e1",
+          "duration": 1256.9255,
+          "ttft": 1254.34475,
+          "completedAt": 1793438057570.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-2",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0473-75ec-b316-a33ec235496f",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.587362Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "ok",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 92,
+            "output": 3,
+            "cacheRead": 3456,
+            "cacheWrite": 0,
+            "totalTokens": 3551,
+            "cost": {
+              "input": 0.0000138,
+              "output": 1.5e-6,
+              "cacheRead": 0.00010368,
+              "cacheWrite": 0.0,
+              "total": 0.00011898
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438056312.0,
+          "responseId": "2026103117141675492c32644644e1",
+          "duration": 1256.9255,
+          "ttft": 1254.34475,
+          "credentialId": 1
+        },
+        "toolResults": [],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0473-75ec-b316-a33f76b6ac42",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.587843Z",
+    "body": {
+      "kind": "extensionUiRequest",
+      "frame": {
+        "id": "15bb9c951cef828f",
+        "widgetKey": "autoresearch",
+        "type": "extension_ui_request",
+        "method": "setWidget"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0475-759d-9eaa-9abee82aad79",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.589396Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "messages": [
+          {
+            "content": [
+              {
+                "text": "Reply with the single word ok.",
+                "type": "text"
+              }
+            ],
+            "timestamp": 1793438055567.0,
+            "attribution": "user",
+            "role": "user"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "ok",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 92,
+              "output": 3,
+              "cacheRead": 3456,
+              "cacheWrite": 0,
+              "totalTokens": 3551,
+              "cost": {
+                "input": 0.0000138,
+                "output": 1.5e-6,
+                "cacheRead": 0.00010368,
+                "cacheWrite": 0.0,
+                "total": 0.00011898
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793438056312.0,
+            "responseId": "2026103117141675492c32644644e1",
+            "duration": 1256.9255,
+            "ttft": 1254.34475,
+            "credentialId": 1
+          }
+        ],
+        "isTerminal": true,
+        "yielded": true,
+        "type": "agent_end"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0475-759d-9eaa-9abff6c6ea90",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.589426Z",
+    "body": {
+      "kind": "promptResult",
+      "frame": {
+        "agentInvoked": true,
+        "status": "completed",
+        "sessionSettled": true,
+        "id": "req_4"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0475-759d-9eaa-9ac0929e7b03",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.589479Z",
+    "body": {
+      "kind": "sessionSettled",
+      "frame": {}
+    }
+  },
+  {
+    "id": "01a1913d-05bf-737b-824a-4f4d2e80318a",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.919955Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "thinkingLevel": "low",
+        "configured": "auto",
+        "resolved": "low",
+        "type": "thinking_level_changed"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-05c0-70a3-8241-828407799ac4",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.920087Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "agent_start"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-05c0-70a3-8241-828548a2f5ef",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.92044Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-05c0-70a3-8241-82865c475069",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.920598Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "content": [
+            {
+              "text": "Reply with the single word again.",
+              "type": "text"
+            }
+          ],
+          "timestamp": 1793438057592.0,
+          "attribution": "user",
+          "role": "user"
+        },
+        "messageId": "msg-3",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-05c0-70a3-8241-8287ccb2d404",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:17.920646Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "content": [
+            {
+              "text": "Reply with the single word again.",
+              "type": "text"
+            }
+          ],
+          "timestamp": 1793438057592.0,
+          "attribution": "user",
+          "role": "user"
+        },
+        "messageId": "msg-3",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0965-724f-819d-243f9aef438a",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:18.853019Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "again",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438057920.0,
+          "responseId": "202610311714180490dbaa886f4101",
+          "credentialId": 1
+        },
+        "messageId": "msg-4",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0965-724f-819d-244010a3c8e7",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:18.85344Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "again",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438057920.0,
+          "responseId": "202610311714180490dbaa886f4101",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "again",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793438057920.0,
+            "responseId": "202610311714180490dbaa886f4101",
+            "credentialId": 1
+          },
+          "type": "text_start"
+        },
+        "messageId": "msg-4",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0965-724f-819d-2441d5a5c306",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:18.853749Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "again",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438057920.0,
+          "responseId": "202610311714180490dbaa886f4101",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "again",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "again",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793438057920.0,
+            "responseId": "202610311714180490dbaa886f4101",
+            "credentialId": 1
+          },
+          "type": "text_delta"
+        },
+        "messageId": "msg-4",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0969-7369-b177-55d04da4700b",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:18.857772Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "again",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 40,
+            "output": 3,
+            "cacheRead": 3520,
+            "cacheWrite": 0,
+            "totalTokens": 3563,
+            "cost": {
+              "input": 6e-6,
+              "output": 1.5e-6,
+              "cacheRead": 0.0001056,
+              "cacheWrite": 0.0,
+              "total": 0.0001131
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438057920.0,
+          "responseId": "202610311714180490dbaa886f4101",
+          "duration": 936.1437499999996,
+          "ttft": 931.6540410000002,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "content": "again",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "again",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 40,
+              "output": 3,
+              "cacheRead": 3520,
+              "cacheWrite": 0,
+              "totalTokens": 3563,
+              "cost": {
+                "input": 6e-6,
+                "output": 1.5e-6,
+                "cacheRead": 0.0001056,
+                "cacheWrite": 0.0,
+                "total": 0.0001131
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793438057920.0,
+            "responseId": "202610311714180490dbaa886f4101",
+            "duration": 936.1437499999996,
+            "ttft": 931.6540410000002,
+            "credentialId": 1
+          },
+          "type": "text_end"
+        },
+        "messageId": "msg-4",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-0969-7369-b177-55d124a3980f",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:18.857903Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "again",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 40,
+            "output": 3,
+            "cacheRead": 3520,
+            "cacheWrite": 0,
+            "totalTokens": 3563,
+            "cost": {
+              "input": 6e-6,
+              "output": 1.5e-6,
+              "cacheRead": 0.0001056,
+              "cacheWrite": 0.0,
+              "total": 0.0001131
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438057920.0,
+          "responseId": "202610311714180490dbaa886f4101",
+          "duration": 936.1437499999996,
+          "ttft": 931.6540410000002,
+          "completedAt": 1793438058857.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-4",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-096a-720f-b0db-317fc2cb775d",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:18.858055Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "again",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 40,
+            "output": 3,
+            "cacheRead": 3520,
+            "cacheWrite": 0,
+            "totalTokens": 3563,
+            "cost": {
+              "input": 6e-6,
+              "output": 1.5e-6,
+              "cacheRead": 0.0001056,
+              "cacheWrite": 0.0,
+              "total": 0.0001131
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793438057920.0,
+          "responseId": "202610311714180490dbaa886f4101",
+          "duration": 936.1437499999996,
+          "ttft": 931.6540410000002,
+          "credentialId": 1
+        },
+        "toolResults": [],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-096a-720f-b0db-31802f884d0e",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:18.858066Z",
+    "body": {
+      "kind": "extensionUiRequest",
+      "frame": {
+        "id": "15bb9c965a6f8290",
+        "widgetKey": "autoresearch",
+        "type": "extension_ui_request",
+        "method": "setWidget"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-096a-720f-b0db-31819a67505b",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:18.858546Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "messages": [
+          {
+            "content": [
+              {
+                "text": "Reply with the single word again.",
+                "type": "text"
+              }
+            ],
+            "timestamp": 1793438057592.0,
+            "attribution": "user",
+            "role": "user"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "again",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 40,
+              "output": 3,
+              "cacheRead": 3520,
+              "cacheWrite": 0,
+              "totalTokens": 3563,
+              "cost": {
+                "input": 6e-6,
+                "output": 1.5e-6,
+                "cacheRead": 0.0001056,
+                "cacheWrite": 0.0,
+                "total": 0.0001131
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793438057920.0,
+            "responseId": "202610311714180490dbaa886f4101",
+            "duration": 936.1437499999996,
+            "ttft": 931.6540410000002,
+            "credentialId": 1
+          }
+        ],
+        "isTerminal": true,
+        "yielded": true,
+        "type": "agent_end"
+      }
+    }
+  },
+  {
+    "id": "01a1913d-096a-720f-b0db-31823b71b5d7",
+    "live": "01a1913c-fc8e-76db-9e6f-3440cb0fa6b1",
+    "at": "2026-10-31T09:14:18.858558Z",
+    "body": {
+      "kind": "promptResult",
+      "frame": {
+        "agentInvoked": true,
+        "status": "completed",
+        "sessionSettled": true,
+        "id": "req_6"
+      }
+    }
+  }
+]

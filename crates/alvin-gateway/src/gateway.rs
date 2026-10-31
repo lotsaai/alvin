@@ -6,10 +6,10 @@ use std::time::Instant;
 
 use alvin_omp_host::{Host, StartRequest};
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashRequest, BashResult, ListSessions, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
-  ModelCycleResult, ModelInfo, OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest,
-  RemoveQueuedMessageResult, RemoveQueuedRequest, RespondRequest, SessionPage, SessionState, SetModelRequest, SetThinkingRequest,
-  SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
+  AbortAndRestoreQueueResult, BashRequest, BashResult, EntriesRequest, HistoryEntries, ListSessions, LiveSessionId, LiveSessionSummary,
+  MessagesPage, MessagesRequest, ModelCycleResult, ModelInfo, OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult,
+  PromoteQueuedRequest, PromptRequest, RemoveQueuedMessageResult, RemoveQueuedRequest, RespondRequest, SessionPage, SessionState,
+  SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use tokio::sync::broadcast;
 
@@ -230,6 +230,11 @@ impl Gateway {
   pub(crate) async fn respond(&self, request: RespondRequest) -> Result<()> {
     let live = self.live.get(request.live)?;
     self.timed("extension_ui_response", live.session.respond(request.response)).await
+  }
+
+  pub(crate) async fn entries(&self, request: EntriesRequest) -> Result<HistoryEntries> {
+    let live = self.live.get(request.live)?;
+    self.timed("get_entries", live.session.entries(request.since)).await
   }
 
   pub(crate) async fn models(&self, id: LiveSessionId) -> Result<Vec<ModelInfo>> {

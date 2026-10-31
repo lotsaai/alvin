@@ -6,10 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use alvin_client::{Client, ConnectionState, Error, ResyncReason};
 use alvin_conversation::{Connection, Conversation, Notice, Run, SessionsKey};
 use alvin_protocol::{
-  BashRequest, CheckoutId, DialogApiClient, ErrorCode, ExtensionUiResponse, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary,
-  MessagesPage, MessagesRequest, ModelApiClient, ModelInfo, OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest,
-  PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RespondRequest, SessionCursor, SessionId, SessionsApiClient,
-  SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
+  BashRequest, CheckoutId, DialogApiClient, EntriesRequest, ErrorCode, ErrorData, ExtensionUiResponse, ListSessions, LiveApiClient,
+  LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest, ModelApiClient, ModelInfo, OpenRequest, OpenTarget, ProjectId,
+  ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RespondRequest,
+  SessionCursor, SessionId, SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
 };
 use gpui_kit::{AsyncApp, Context, EventEmitter, SharedString, Task, WeakEntity};
 
@@ -59,6 +59,8 @@ pub struct Catalog {
 /// Projects, sessions and live sessions, and the commands that change them.
 pub struct Model {
   catalogs: BTreeMap<LiveSessionId, Catalog>,
+  /// Sessions whose history is being read, and those asked to be read again meanwhile. Triggers coalesce into one request.
+  tree_reads: BTreeMap<LiveSessionId, bool>,
   conversation: Conversation,
   client: Client,
   /// Live sessions with a `!` command running, so Escape aborts that and not the turn.
@@ -94,6 +96,7 @@ impl Model {
     });
     Self {
       catalogs: BTreeMap::new(),
+      tree_reads: BTreeMap::new(),
       conversation: Conversation::default(),
       client,
       bash_running: BTreeSet::new(),
@@ -228,6 +231,7 @@ impl Model {
               model.conversation.set_state(live, &state);
               model.conversation.load_page(live, page);
               model.load_catalog(live, cx);
+              model.refresh_tree(live, cx);
               cx.notify();
             });
             if loaded.is_err() {
@@ -254,6 +258,9 @@ impl Model {
                   let seen = model.conversation.live(live).map_or(0, |view| view.notices.len());
                   model.conversation.apply(&event);
                   model.announce(live, seen, cx);
+                  if model.conversation.live(live).is_some_and(|view| view.tree_stale) {
+                    model.refresh_tree(live, cx);
+                  }
                   // omp said the model changed without saying to what.
                   if model.conversation.live(live).is_some_and(|view| view.state_stale) {
                     model.refresh_state(live, cx);
@@ -400,6 +407,67 @@ impl Model {
         .map_err(Error::from)
       {
         fail(&this, cx, &error);
+      }
+    })
+    .detach();
+  }
+
+  /// Reads the entries omp appended since the tree's newest, or all of them when there is no tree yet or omp does not know
+  /// the cursor. One read runs per session; triggers that arrive meanwhile ask for one more when it ends.
+  fn refresh_tree(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    if let Some(again) = self.tree_reads.get_mut(&live) {
+      *again = true;
+      return;
+    }
+    self.tree_reads.insert(live, false);
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      loop {
+        let since = match this.update(cx, |model, _| model.conversation.tree_cursor(live).cloned()) {
+          Ok(since) => since,
+          Err(_) => return,
+        };
+        let read = LiveApiClient::entries(
+          &client,
+          EntriesRequest {
+            live,
+            since: since.clone(),
+          },
+        )
+        .await
+        .map_err(Error::from);
+        let read = match read {
+          // omp does not know the cursor (the session moved to another file, say): read everything.
+          Err(Error::Gateway {
+            data: Some(ErrorData::OmpCommandFailed { code: Some(code) }),
+            ..
+          }) if code == "unknown_since" => LiveApiClient::entries(&client, EntriesRequest { live, since: None })
+            .await
+            .map_err(Error::from)
+            .map(|entries| (entries, true)),
+          other => other.map(|entries| (entries, since.is_none())),
+        };
+        let again = this.update(cx, |model, cx| {
+          match read {
+            Ok((entries, true)) => model.conversation.set_entries(live, entries),
+            Ok((entries, false)) => model.conversation.apply_entries(live, entries),
+            Err(error) => {
+              model.tree_reads.remove(&live);
+              model.fail(&error, cx);
+              return false;
+            }
+          }
+          cx.notify();
+          let again = model.tree_reads.insert(live, false).unwrap_or(false);
+          if !again {
+            model.tree_reads.remove(&live);
+          }
+          again
+        });
+        match again {
+          Ok(true) => {}
+          _ => return,
+        }
       }
     })
     .detach();

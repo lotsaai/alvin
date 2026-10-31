@@ -4,6 +4,7 @@
 mod actions;
 mod composer;
 mod dialogs;
+mod history_tree;
 mod model;
 mod pickers;
 mod queue;

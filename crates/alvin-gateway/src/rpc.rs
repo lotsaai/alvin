@@ -3,11 +3,11 @@
 use std::time::Instant;
 
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashRequest, BashResult, DialogApiServer, EventsApiServer, ListSessions, LiveApiServer, LiveSessionId,
-  LiveSessionSummary, MessagesPage, MessagesRequest, ModelApiServer, ModelCycleResult, ModelInfo, OpenRequest, ProjectSummary,
-  ProjectsApiServer, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer, RemoveQueuedMessageResult,
-  RemoveQueuedRequest, RespondRequest, SessionPage, SessionState, SessionsApiServer, SetModelRequest, SetThinkingRequest, SubscribeRequest,
-  ThinkingLevel, ThinkingLevelCycleResult,
+  AbortAndRestoreQueueResult, BashRequest, BashResult, DialogApiServer, EntriesRequest, EventsApiServer, HistoryEntries, ListSessions,
+  LiveApiServer, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest, ModelApiServer, ModelCycleResult, ModelInfo,
+  OpenRequest, ProjectSummary, ProjectsApiServer, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer,
+  RemoveQueuedMessageResult, RemoveQueuedRequest, RespondRequest, SessionPage, SessionState, SessionsApiServer, SetModelRequest,
+  SetThinkingRequest, SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
 use jsonrpsee::server::{Methods, PendingSubscriptionSink, SubscriptionMessage};
@@ -79,6 +79,10 @@ impl LiveApiServer for Gateway {
 
   async fn abort_bash(&self, live: LiveSessionId) -> RpcResult<()> {
     self.traced("live/abortBash", Gateway::abort_bash(self, live)).await
+  }
+
+  async fn entries(&self, request: EntriesRequest) -> RpcResult<HistoryEntries> {
+    self.traced("live/entries", Gateway::entries(self, request)).await
   }
 }
 
@@ -231,6 +235,7 @@ mod tests {
         "live/abortBash",
         "live/bash",
         "live/close",
+        "live/entries",
         "live/followUp",
         "live/list",
         "live/messages",

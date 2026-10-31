@@ -1,0 +1,152 @@
+{
+  "entries": [
+    {
+      "id": "66bf6a2c",
+      "parentId": null,
+      "timestamp": "2026-10-31T09:14:15.509Z",
+      "type": "model_change",
+      "runtime": {
+        "version": "18.14.1"
+      },
+      "model": "zai/glm-5.3-flash",
+      "resolvedModelIsFallback": false
+    },
+    {
+      "id": "657313ca",
+      "parentId": "66bf6a2c",
+      "timestamp": "2026-10-31T09:14:15.97Z",
+      "type": "custom",
+      "customType": "memory_recall",
+      "data": {
+        "version": 1,
+        "scope": "[\"hindsight\",\"http://aristotle:8888\",\"409638ee2bde459\",\"omp-repo\",[],null]",
+        "text": "",
+        "memories": []
+      },
+      "runtime": {
+        "version": "18.14.1"
+      }
+    },
+    {
+      "id": "a3355780",
+      "parentId": "657313ca",
+      "timestamp": "2026-10-31T09:14:16.309Z",
+      "type": "model_usage",
+      "runtime": {
+        "version": "18.14.1"
+      },
+      "purpose": "auto-thinking",
+      "role": "typesafe",
+      "api": "openrouter-decisions",
+      "provider": "openrouter",
+      "model": "liquid/d1.1",
+      "usage": {
+        "input": 152,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 152,
+        "cost": {
+          "input": 3.04e-6,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 3.04e-6
+        }
+      },
+      "stopReason": "stop"
+    },
+    {
+      "id": "e6ed95e1",
+      "parentId": "a3355780",
+      "timestamp": "2026-10-31T09:14:16.309Z",
+      "type": "thinking_level_change",
+      "runtime": {
+        "version": "18.14.1"
+      },
+      "thinkingLevel": "low",
+      "configured": "auto"
+    },
+    {
+      "id": "60d7226c",
+      "parentId": "e6ed95e1",
+      "timestamp": "2026-10-31T09:14:16.311Z",
+      "type": "message",
+      "runtime": {
+        "version": "18.14.1"
+      },
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Reply with the single word ok."
+          }
+        ],
+        "attribution": "user",
+        "timestamp": 1793438055567
+      }
+    },
+    {
+      "id": "64506ad9",
+      "parentId": "60d7226c",
+      "timestamp": "2026-10-31T09:14:17.571Z",
+      "type": "custom",
+      "customType": "system-prompt-digest",
+      "data": "f14c511d49dbe0d4",
+      "runtime": {
+        "version": "18.14.1"
+      }
+    },
+    {
+      "id": "b2f16360",
+      "parentId": "64506ad9",
+      "timestamp": "2026-10-31T09:14:17.571Z",
+      "type": "message",
+      "runtime": {
+        "version": "18.14.1"
+      },
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok"
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "zai",
+        "model": "glm-5.3-flash",
+        "usage": {
+          "input": 92,
+          "output": 3,
+          "cacheRead": 3456,
+          "cacheWrite": 0,
+          "totalTokens": 3551,
+          "cost": {
+            "input": 0.0000138,
+            "output": 1.5e-6,
+            "cacheRead": 0.00010368,
+            "cacheWrite": 0,
+            "total": 0.00011898
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793438056312,
+        "responseId": "2026103117141675492c32644644e1",
+        "duration": 1256.9255,
+        "ttft": 1254.34475,
+        "credentialId": 1,
+        "completedAt": 1793438057570,
+        "contextSnapshot": {
+          "promptTokens": 3548,
+          "nonMessageTokens": 3112,
+          "toolSchemaTokens": 850,
+          "compactionEpoch": 0
+        },
+        "errorId": 0
+      }
+    }
+  ],
+  "leaf": "b2f16360"
+}

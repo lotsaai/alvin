@@ -1,12 +1,12 @@
 [
   {
-    "id": "01a19121-fa14-770f-9626-edbf26dcb589",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:45.460171Z",
+    "id": "01a1913c-9845-723b-ac32-d22ba0d9030a",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:49.893888Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb95d2798ff833",
+        "id": "15bb9c7a07522f31",
         "widgetKey": "autoresearch",
         "type": "extension_ui_request",
         "method": "setWidget"
@@ -14,9 +14,9 @@
     }
   },
   {
-    "id": "01a19121-fa14-770f-9626-edc01d3aed0e",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:45.460178Z",
+    "id": "01a1913c-9845-723b-ac32-d22c8778a26b",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:49.893895Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -25,9 +25,9 @@
     }
   },
   {
-    "id": "01a19121-fa14-770f-9626-edc1ce3e8e29",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:45.46018Z",
+    "id": "01a1913c-9845-723b-ac32-d22d9c732238",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:49.893897Z",
     "body": {
       "kind": "availableCommandsUpdate",
       "frame": {
@@ -990,9 +990,9 @@
     }
   },
   {
-    "id": "01a19121-fc40-728e-9a2c-b9901a74e0df",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.016211Z",
+    "id": "01a1913c-9d1c-76b6-8195-0e1bf7d6ce19",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:51.132838Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1004,9 +1004,9 @@
     }
   },
   {
-    "id": "01a19121-fc41-7511-81e1-f4aad665c4cc",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.017842Z",
+    "id": "01a1913c-9d1e-7233-837a-f2b230d88a2a",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:51.134201Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1015,9 +1015,9 @@
     }
   },
   {
-    "id": "01a19121-fc43-7421-84fa-40c119d372f9",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.019372Z",
+    "id": "01a1913c-9d1f-72b0-ad27-48c76ebea0bb",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:51.135967Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1026,9 +1026,9 @@
     }
   },
   {
-    "id": "01a19121-fc43-7421-84fa-40c2cb22611e",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.019659Z",
+    "id": "01a1913c-9d20-71b0-b4a2-24c61c6820a8",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:51.136387Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1039,7 +1039,7 @@
               "type": "text"
             }
           ],
-          "timestamp": 1793436285460.0,
+          "timestamp": 1793438029894.0,
           "attribution": "user",
           "role": "user"
         },
@@ -1049,9 +1049,9 @@
     }
   },
   {
-    "id": "01a19121-fc43-7421-84fa-40c3792016e4",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.019725Z",
+    "id": "01a1913c-9d20-71b0-b4a2-24c7ca295bcb",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:51.1365Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1062,7 +1062,7 @@
               "type": "text"
             }
           ],
-          "timestamp": 1793436285460.0,
+          "timestamp": 1793438029894.0,
           "attribution": "user",
           "role": "user"
         },
@@ -1072,9 +1072,9 @@
     }
   },
   {
-    "id": "01a19121-ffbc-777c-8d6a-5373f88c1ed7",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.908481Z",
+    "id": "01a1913c-a4b1-76be-ac0d-21f01a39749e",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:53.073454Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1082,10 +1082,8 @@
           "role": "assistant",
           "content": [
             {
-              "thinking": "The",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking",
-              "summary": false
+              "text": "1",
+              "type": "text"
             }
           ],
           "api": "openai-completions",
@@ -1106,8 +1104,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793436286021.0,
-          "responseId": "20261031164446161a6c08a32b4a28",
+          "timestamp": 1793438031138.0,
+          "responseId": "20261031171351c096e698a6c2406e",
           "credentialId": 1
         },
         "messageId": "msg-2",
@@ -1116,9 +1114,9 @@
     }
   },
   {
-    "id": "01a19121-ffbe-769a-a512-b9d6fba00eaf",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.910723Z",
+    "id": "01a1913c-a4b2-72f1-9339-389abba34c3d",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:53.074487Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1126,10 +1124,8 @@
           "role": "assistant",
           "content": [
             {
-              "thinking": "The",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking",
-              "summary": false
+              "text": "1",
+              "type": "text"
             }
           ],
           "api": "openai-completions",
@@ -1150,8 +1146,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793436286021.0,
-          "responseId": "20261031164446161a6c08a32b4a28",
+          "timestamp": 1793438031138.0,
+          "responseId": "20261031171351c096e698a6c2406e",
           "credentialId": 1
         },
         "assistantMessageEvent": {
@@ -1160,10 +1156,8 @@
             "role": "assistant",
             "content": [
               {
-                "thinking": "The",
-                "thinkingSignature": "reasoning_content",
-                "type": "thinking",
-                "summary": false
+                "text": "1",
+                "type": "text"
               }
             ],
             "api": "openai-completions",
@@ -1184,11 +1178,11 @@
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793436286021.0,
-            "responseId": "20261031164446161a6c08a32b4a28",
+            "timestamp": 1793438031138.0,
+            "responseId": "20261031171351c096e698a6c2406e",
             "credentialId": 1
           },
-          "type": "thinking_start"
+          "type": "text_start"
         },
         "messageId": "msg-2",
         "type": "message_update"
@@ -1196,9 +1190,9 @@
     }
   },
   {
-    "id": "01a19121-ffbf-728a-a2f0-2fd97e5fa46f",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.911958Z",
+    "id": "01a1913c-a4b3-72af-b9e4-86a4fe447655",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:53.075304Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1206,10 +1200,8 @@
           "role": "assistant",
           "content": [
             {
-              "thinking": "The",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking",
-              "summary": false
+              "text": "1",
+              "type": "text"
             }
           ],
           "api": "openai-completions",
@@ -1230,21 +1222,19 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793436286021.0,
-          "responseId": "20261031164446161a6c08a32b4a28",
+          "timestamp": 1793438031138.0,
+          "responseId": "20261031171351c096e698a6c2406e",
           "credentialId": 1
         },
         "assistantMessageEvent": {
           "contentIndex": 0,
-          "delta": "The",
+          "delta": "1",
           "partial": {
             "role": "assistant",
             "content": [
               {
-                "thinking": "The",
-                "thinkingSignature": "reasoning_content",
-                "type": "thinking",
-                "summary": false
+                "text": "1",
+                "type": "text"
               }
             ],
             "api": "openai-completions",
@@ -1265,11 +1255,11 @@
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793436286021.0,
-            "responseId": "20261031164446161a6c08a32b4a28",
+            "timestamp": 1793438031138.0,
+            "responseId": "20261031171351c096e698a6c2406e",
             "credentialId": 1
           },
-          "type": "thinking_delta"
+          "type": "text_delta"
         },
         "messageId": "msg-2",
         "type": "message_update"
@@ -1277,9 +1267,9 @@
     }
   },
   {
-    "id": "01a19121-ffc7-72ff-9dbc-3d50856dd627",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.919071Z",
+    "id": "01a1913c-a4b7-7250-bae5-a732732104a1",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:53.079087Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1287,10 +1277,8 @@
           "role": "assistant",
           "content": [
             {
-              "thinking": "The",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking",
-              "summary": false
+              "text": "1",
+              "type": "text"
             }
           ],
           "api": "openai-completions",
@@ -1311,11 +1299,11 @@
             }
           },
           "stopReason": "aborted",
-          "timestamp": 1793436286021.0,
-          "responseId": "20261031164446161a6c08a32b4a28",
+          "timestamp": 1793438031138.0,
+          "responseId": "20261031171351c096e698a6c2406e",
           "errorMessage": "Interrupted by user",
           "errorId": 67112960.0,
-          "completedAt": 1793436286917.0,
+          "completedAt": 1793438033078.0,
           "credentialId": 1
         },
         "messageId": "msg-2",
@@ -1324,9 +1312,9 @@
     }
   },
   {
-    "id": "01a19121-ffcf-75f3-8cc2-3c0e25432ddf",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.92745Z",
+    "id": "01a1913c-a4ba-7160-aa02-61398ae914bc",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:53.082046Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1334,10 +1322,8 @@
           "role": "assistant",
           "content": [
             {
-              "thinking": "The",
-              "thinkingSignature": "reasoning_content",
-              "type": "thinking",
-              "summary": false
+              "text": "1",
+              "type": "text"
             }
           ],
           "api": "openai-completions",
@@ -1358,8 +1344,8 @@
             }
           },
           "stopReason": "aborted",
-          "timestamp": 1793436286021.0,
-          "responseId": "20261031164446161a6c08a32b4a28",
+          "timestamp": 1793438031138.0,
+          "responseId": "20261031171351c096e698a6c2406e",
           "errorMessage": "Interrupted by user",
           "credentialId": 1
         },
@@ -1369,9 +1355,9 @@
     }
   },
   {
-    "id": "01a19121-ffd1-75f1-8a42-5873147b0329",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.92953Z",
+    "id": "01a1913c-a4bb-7172-a963-af8e310c2fdf",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:53.083418Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1383,7 +1369,7 @@
                 "type": "text"
               }
             ],
-            "timestamp": 1793436285460.0,
+            "timestamp": 1793438029894.0,
             "attribution": "user",
             "role": "user"
           },
@@ -1391,10 +1377,8 @@
             "role": "assistant",
             "content": [
               {
-                "thinking": "The",
-                "thinkingSignature": "reasoning_content",
-                "type": "thinking",
-                "summary": false
+                "text": "1",
+                "type": "text"
               }
             ],
             "api": "openai-completions",
@@ -1415,8 +1399,8 @@
               }
             },
             "stopReason": "aborted",
-            "timestamp": 1793436286021.0,
-            "responseId": "20261031164446161a6c08a32b4a28",
+            "timestamp": 1793438031138.0,
+            "responseId": "20261031171351c096e698a6c2406e",
             "errorMessage": "Interrupted by user",
             "credentialId": 1
           }
@@ -1428,13 +1412,13 @@
     }
   },
   {
-    "id": "01a19121-ffd1-75f1-8a42-5874d66f879b",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.929561Z",
+    "id": "01a1913c-a4bb-7172-a963-af8fc347eafd",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:53.083447Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb95d3f40ff835",
+        "id": "15bb9c7d2e922f33",
         "widgetKey": "autoresearch",
         "type": "extension_ui_request",
         "method": "setWidget"
@@ -1442,9 +1426,9 @@
     }
   },
   {
-    "id": "01a19121-ffd1-75f1-8a42-5875b4a14f75",
-    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
-    "at": "2026-10-31T08:44:46.92957Z",
+    "id": "01a1913c-a4bb-7172-a963-af90b14b5920",
+    "live": "01a1913c-9845-723b-ac32-d22a408e005c",
+    "at": "2026-10-31T09:13:53.083454Z",
     "body": {
       "kind": "promptResult",
       "frame": {

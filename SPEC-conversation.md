@@ -30,7 +30,7 @@ Shapes follow omp's wire types (generated into `alvin-protocol`, read from omp-r
   - `notices`: `notice`, `command_output`, `extension_error`, untranslated-frame and dropped-frame events, in arrival order.
   - `title`: from the session list and `session_info_update`.
   - `exited`: set by the process-exited event.
-  - `tree`: the history tree (`HistoryTree`: roots, children, labels, leaf) from `live/tree`, kept current from `live/entries { since }`. The leaf marks the active branch; the transcript is that branch. omp sends no tree-change event, so `turn_end`, `agent_end`, compaction end, and the replies to `live/navigateTree` and `live/label` set `tree_stale`; the UI then fetches entries since `tree_cursor`. `live/branch` and `live/fork` move the session onto a new file (`docs/rpc.md:235-247`), so after either the UI fetches the whole tree and the first transcript page again.
+  - `tree`: the history tree (`Tree`: roots, children, labels, leaf), built from `live/entries` and kept current from `live/entries { since }`. The leaf marks the active branch; the transcript is that branch. omp sends no tree-change event, so `turn_end`, `agent_end`, compaction end, and the replies to `live/navigateTree` and `live/label` set `tree_stale`; the UI then fetches entries since `tree_cursor`. `live/branch` and `live/fork` move the session onto a new file (`docs/rpc.md:235-247`), so after either the UI fetches the whole tree and the first transcript page again.
 - `Connection`: the client's connection state (`Connected`, `Reconnecting { attempt }`, `Lost`), set by the UI from `Client::connection_state()`. Its own enum: this crate does not depend on `alvin-client`.
 
 ## Operations
@@ -40,8 +40,8 @@ All are plain methods on owned state; none fail except on decoding, and decoding
 - `apply(&mut self, &Event)`: the fold. Events arrive in `EventId` order with no duplicates (the client guarantees it); this crate does not re-check order.
 - `load_page(live, MessagesPage)`, `set_state(live, LiveState)`, `set_projects(..)`, `set_sessions(checkout, page)`.
 - `resync(live)`: drops `transcript`, `streaming`, `tools`, and `tree` for that session and marks it reload-needed.
-- `set_tree(live, HistoryTree)`: replaces the tree; used on open, after a fork, and when `live/entries` answers omp's `unknown_since`.
-- `apply_entries(live, SessionEntries)`: inserts entries newer than the tree's newest under their `parentId` (a missing parent makes a root, as omp does), applies `label` entries to their `targetId` (empty label clears), and sets `leaf`. Same rules as omp's `tree()` and label index (`session-manager.ts:590-591,694-723`). New entries are newest, so appending keeps children in omp's timestamp order.
+- `set_entries(live, HistoryEntries)`: replaces the tree with the one these (all) entries make; used on open, after a fork, and when `live/entries` answers omp's `unknown_since`.
+- `apply_entries(live, HistoryEntries)`: inserts entries newer than the tree's newest under their `parentId` (a missing parent makes a root, as omp does), applies `label` entries to their `targetId` (empty label clears), and sets `leaf`. Same rules as omp's `tree()` and label index (`session-manager.ts:590-591,694-723`). New entries are newest, so appending keeps children in omp's timestamp order.
 - `tree_cursor(live)`: the newest entry id, the `since` for the next `live/entries`.
 - `close(live)`.
 

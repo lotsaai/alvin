@@ -11,11 +11,11 @@ use alvin_client::{ChannelPair, Client, ConnectionState, Endpoint, Error, EventS
 use alvin_gateway::{Gateway, GatewayConfig, WsServer};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
-  AnswersUiResponse, AskAnswer, BashRequest, CheckoutId, DialogApiClient, ErrorCode, ErrorData, Event, EventBody, EventId,
-  ExtensionUiRequest, ExtensionUiResponse, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesRequest, ModelApiClient,
-  OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient,
-  QueuedMessageQueue, RemoveQueuedRequest, RespondRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage, SessionStatus,
-  SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
+  AnswersUiResponse, AskAnswer, BashRequest, CheckoutId, DialogApiClient, EntriesRequest, EntryId, ErrorCode, ErrorData, Event, EventBody,
+  EventId, ExtensionUiRequest, ExtensionUiResponse, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesRequest,
+  ModelApiClient, OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromoteQueuedRequest, PromptRequest,
+  QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RespondRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage,
+  SessionStatus, SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
 };
 
 /// Session files written by real omp (the first two records of one run).
@@ -1131,6 +1131,149 @@ async fn an_ask_dialog_is_answered_over_both_transports_and_the_answer_reaches_o
   ));
 
   drop((stream, channel, ws));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn history_entries_agree_over_both_transports_and_since_cuts_them() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let ([channel, ws], server) = both_transports(&gateway).await;
+  let opened = open_new(&channel).await;
+  let mut stream = subscribe(&channel, opened.live, None).await.unwrap();
+  prompt(&channel, opened.live, "Reply with the single word ok.").await;
+  let mut seen = Vec::new();
+  until_settled(&mut stream, &mut seen).await;
+
+  let all = LiveApiClient::entries(
+    &ws,
+    EntriesRequest {
+      live: opened.live,
+      since: None,
+    },
+  )
+  .await
+  .unwrap();
+  let over_channel = LiveApiClient::entries(
+    &channel,
+    EntriesRequest {
+      live: opened.live,
+      since: None,
+    },
+  )
+  .await
+  .unwrap();
+  assert_eq!(all, over_channel);
+  assert!(all.entries.iter().any(|entry| entry.kind.as_str() == "message"));
+  let leaf = all.leaf.clone().expect("a session with a turn has a leaf");
+  assert!(all.entries.iter().any(|entry| entry.id == leaf));
+
+  // `since` cuts the entries after one.
+  let first = all.entries.first().expect("entries").id.clone();
+  let after_first = LiveApiClient::entries(
+    &channel,
+    EntriesRequest {
+      live: opened.live,
+      since: Some(first),
+    },
+  )
+  .await
+  .unwrap();
+  assert_eq!(after_first.entries, all.entries[1..]);
+
+  // An id omp does not know is its command error, with omp's code.
+  let unknown = LiveApiClient::entries(
+    &ws,
+    EntriesRequest {
+      live: opened.live,
+      since: Some(EntryId::from("no-such-entry".to_owned())),
+    },
+  )
+  .await
+  .unwrap_err();
+  assert!(matches!(
+    Error::from(unknown),
+    Error::Gateway {
+      code: ErrorCode::OmpCommandFailed,
+      data: Some(ErrorData::OmpCommandFailed { code: Some(code) }),
+      ..
+    } if code == "unknown_since"
+  ));
+
+  drop((stream, channel, ws));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+/// Appends `count` chained user messages to a session file real omp wrote: one branch as deep as a long conversation.
+/// Returns the id of the last entry and how many entries the file has now.
+fn extend_session(file: &Path, count: usize) -> (String, usize) {
+  let text = std::fs::read_to_string(file).unwrap();
+  let mut records: Vec<String> = text.lines().map(str::to_owned).collect();
+  let entry_id = |line: &str| -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    value.get("parentId")?;
+    value.get("id")?.as_str().map(str::to_owned)
+  };
+  let user = records
+    .iter()
+    .find(|line| line.contains("\"role\":\"user\""))
+    .expect("the turn wrote a user message")
+    .clone();
+  let mut parent = records
+    .iter()
+    .rev()
+    .find_map(|line| entry_id(line))
+    .expect("the turn wrote entries");
+  for n in 0..count {
+    let id = format!("{n:08x}");
+    let mut value = serde_json::from_str::<serde_json::Value>(&user).unwrap();
+    value["id"] = serde_json::Value::String(id.clone());
+    value["parentId"] = serde_json::Value::String(parent.clone());
+    records.push(value.to_string());
+    parent = id;
+  }
+  records.push(String::new());
+  std::fs::write(file, records.join("\n")).unwrap();
+  let entries = records.iter().filter(|line| entry_id(line).is_some()).count();
+  (parent, entries)
+}
+
+#[tokio::test]
+async fn a_long_session_history_crosses_the_wire() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let ([channel, ws], server) = both_transports(&gateway).await;
+
+  // A session real omp wrote, grown to hundreds of entries on one branch, then resumed.
+  let created = open_new(&channel).await;
+  let mut stream = subscribe(&channel, created.live, None).await.unwrap();
+  prompt(&channel, created.live, "Reply with the single word ok.").await;
+  until_settled(&mut stream, &mut Vec::new()).await;
+  drop(stream);
+  LiveApiClient::close(&channel, created.live).await.unwrap();
+  let (last, entries) = extend_session(&created.file, 300);
+  let (project_id, _checkout) = only_project(&channel).await;
+  let page = SessionsApiClient::list(&channel, request(project_id, None, 10)).await.unwrap();
+  let listed = page
+    .sessions
+    .iter()
+    .find(|session| session.path == created.file)
+    .expect("the turn wrote a session file");
+  let opened = open_session(&channel, listed.id.as_str()).await;
+
+  let request = || EntriesRequest {
+    live: opened.live,
+    since: None,
+  };
+  let over_channel = LiveApiClient::entries(&channel, request()).await.unwrap();
+  let over_ws = LiveApiClient::entries(&ws, request()).await.unwrap();
+  assert_eq!(over_channel, over_ws);
+  assert_eq!(over_ws.entries.len(), entries);
+  assert_eq!(over_ws.leaf, Some(EntryId::from(last)));
+
+  drop((channel, ws));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
 }

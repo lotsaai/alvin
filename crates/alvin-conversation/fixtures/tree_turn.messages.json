@@ -1,0 +1,107 @@
+{
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Reply with the single word ok.",
+          "type": "text"
+        }
+      ],
+      "timestamp": 1793438055567.0,
+      "attribution": "user",
+      "role": "user"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "ok",
+          "type": "text"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 92,
+        "output": 3,
+        "cacheRead": 3456,
+        "cacheWrite": 0,
+        "totalTokens": 3551,
+        "cost": {
+          "input": 0.0000138,
+          "output": 1.5e-6,
+          "cacheRead": 0.00010368,
+          "cacheWrite": 0.0,
+          "total": 0.00011898
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1793438056312.0,
+      "responseId": "2026103117141675492c32644644e1",
+      "errorId": 0.0,
+      "duration": 1256.9255,
+      "ttft": 1254.34475,
+      "completedAt": 1793438057570.0,
+      "credentialId": 1,
+      "contextSnapshot": {
+        "promptTokens": 3548,
+        "nonMessageTokens": 3112,
+        "toolSchemaTokens": 850,
+        "compactionEpoch": 0
+      }
+    },
+    {
+      "content": [
+        {
+          "text": "Reply with the single word again.",
+          "type": "text"
+        }
+      ],
+      "timestamp": 1793438057592.0,
+      "attribution": "user",
+      "role": "user"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "again",
+          "type": "text"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 40,
+        "output": 3,
+        "cacheRead": 3520,
+        "cacheWrite": 0,
+        "totalTokens": 3563,
+        "cost": {
+          "input": 6e-6,
+          "output": 1.5e-6,
+          "cacheRead": 0.0001056,
+          "cacheWrite": 0.0,
+          "total": 0.0001131
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1793438057920.0,
+      "responseId": "202610311714180490dbaa886f4101",
+      "errorId": 0.0,
+      "duration": 936.1437499999996,
+      "ttft": 931.6540410000002,
+      "completedAt": 1793438058857.0,
+      "credentialId": 1,
+      "contextSnapshot": {
+        "promptTokens": 3560,
+        "nonMessageTokens": 3112,
+        "toolSchemaTokens": 850,
+        "compactionEpoch": 0
+      }
+    }
+  ],
+  "totalMessages": 4
+}

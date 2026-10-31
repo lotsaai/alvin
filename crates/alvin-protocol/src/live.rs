@@ -6,6 +6,7 @@ use jsonrpsee::proc_macros::rpc;
 use serde::{Deserialize, Serialize};
 
 use crate::events::Event;
+use crate::history::{EntriesRequest, HistoryEntries};
 use crate::ids::{CheckoutId, EventId, LiveSessionId, ProjectId, SessionId};
 use crate::omp_wire::{BashResult, MessagesPage, SessionState};
 
@@ -148,6 +149,11 @@ pub trait LiveApi {
   /// Aborts the running `bash` command.
   #[method(name = "abortBash")]
   async fn abort_bash(&self, live: LiveSessionId) -> jsonrpsee::core::RpcResult<()>;
+
+  /// The entries omp appended after one it names, oldest first, or all of them. The branches follow from `parent_id`. omp
+  /// sends no event when history grows: read this after a turn.
+  #[method(name = "entries")]
+  async fn entries(&self, request: EntriesRequest) -> jsonrpsee::core::RpcResult<HistoryEntries>;
 }
 
 /// Live-session events.

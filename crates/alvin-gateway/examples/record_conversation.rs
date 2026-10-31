@@ -11,8 +11,9 @@ use alvin_client::{ChannelPair, Client, Endpoint};
 use alvin_gateway::{Gateway, GatewayConfig};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
-  AnswersUiResponse, AskAnswer, DialogApiClient, Event, EventBody, EventId, ExtensionUiRequest, ExtensionUiResponse, LiveApiClient,
-  MessagesRequest, OpenRequest, OpenTarget, ProjectsApiClient, PromptRequest, RespondRequest, RpcAgentEvent, SubscribeRequest,
+  AnswersUiResponse, AskAnswer, DialogApiClient, EntriesRequest, Event, EventBody, EventId, ExtensionUiRequest, ExtensionUiResponse,
+  LiveApiClient, MessagesRequest, OpenRequest, OpenTarget, ProjectsApiClient, PromptRequest, RespondRequest, RpcAgentEvent,
+  SubscribeRequest,
 };
 use eyre::{Result, eyre};
 
@@ -33,9 +34,11 @@ struct Scenario {
   follow_up: Option<&'static str>,
   /// Answer an `ask` dialog with its first option.
   answer_asks: bool,
+  /// A second prompt, sent once the first turn settles. The entries are recorded before it, after it, and as the delta between.
+  second_prompt: Option<&'static str>,
 }
 
-const SCENARIOS: [Scenario; 5] = [
+const SCENARIOS: [Scenario; 6] = [
   Scenario {
     name: "plain_turn",
     flags: &["--no-tools"],
@@ -43,6 +46,7 @@ const SCENARIOS: [Scenario; 5] = [
     abort: false,
     follow_up: None,
     answer_asks: false,
+    second_prompt: None,
   },
   Scenario {
     name: "tool_turn",
@@ -51,6 +55,7 @@ const SCENARIOS: [Scenario; 5] = [
     abort: false,
     follow_up: None,
     answer_asks: false,
+    second_prompt: None,
   },
   Scenario {
     name: "aborted_turn",
@@ -59,6 +64,7 @@ const SCENARIOS: [Scenario; 5] = [
     abort: true,
     follow_up: None,
     answer_asks: false,
+    second_prompt: None,
   },
   Scenario {
     name: "queue_turn",
@@ -67,6 +73,7 @@ const SCENARIOS: [Scenario; 5] = [
     abort: false,
     follow_up: Some("Now reply with the single word done."),
     answer_asks: false,
+    second_prompt: None,
   },
   Scenario {
     name: "ask_turn",
@@ -75,6 +82,16 @@ const SCENARIOS: [Scenario; 5] = [
     abort: false,
     follow_up: None,
     answer_asks: true,
+    second_prompt: None,
+  },
+  Scenario {
+    name: "tree_turn",
+    flags: &["--no-tools"],
+    prompt: "Reply with the single word ok.",
+    abort: false,
+    follow_up: None,
+    answer_asks: false,
+    second_prompt: Some("Reply with the single word again."),
   },
 ];
 
@@ -96,8 +113,10 @@ async fn main() -> Result<()> {
 async fn record(scenario: &Scenario, out: &Path) -> Result<()> {
   let base = std::env::temp_dir().join(format!("alvin-record-{}", EventId::new().as_uuid()));
   let result = run(scenario, out, &base).await;
-  std::fs::remove_dir_all(&base)?;
-  result
+  let removed = std::fs::remove_dir_all(&base);
+  // A failed recording says why before a failed cleanup does.
+  result?;
+  Ok(removed?)
 }
 
 async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
@@ -181,6 +200,11 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
   let mut events: Vec<Event> = Vec::new();
   let mut aborted = false;
   let mut queued = false;
+  let mut second_sent = false;
+  // A turn can announce its settling twice (the prompt result, then the session event): count prompts, not settles.
+  let mut prompt_results = 0;
+  let wanted = 1 + usize::from(scenario.second_prompt.is_some());
+  let mut entries_before = None;
   loop {
     let event = tokio::time::timeout(PATIENCE, stream.next())
       .await?
@@ -211,6 +235,9 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
       )
       .await?;
     }
+    if matches!(&event.body, EventBody::PromptResult(_)) {
+      prompt_results += 1;
+    }
     events.push(event);
     if let Some(message) = scenario.follow_up
       && streaming
@@ -231,10 +258,36 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
       LiveApiClient::abort(&client, opened.live).await?;
     }
     if settled {
-      break;
+      if let (Some(second), false, true) = (scenario.second_prompt, second_sent, prompt_results >= 1) {
+        second_sent = true;
+        entries_before = Some(
+          LiveApiClient::entries(
+            &client,
+            EntriesRequest {
+              live: opened.live,
+              since: None,
+            },
+          )
+          .await?,
+        );
+        LiveApiClient::prompt(
+          &client,
+          PromptRequest {
+            live: opened.live,
+            message: second.to_owned(),
+          },
+        )
+        .await?;
+        continue;
+      }
+      if prompt_results >= wanted {
+        break;
+      }
     }
   }
 
+  // omp refuses to page messages for a moment after a turn settles.
+  tokio::time::sleep(Duration::from_secs(1)).await;
   let mut messages = Vec::new();
   let mut cursor = None;
   let total = loop {
@@ -271,6 +324,25 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
     out.join(format!("{}.messages.json", scenario.name)),
     serde_json::to_string_pretty(&page)?,
   )?;
+
+  if let Some(before) = entries_before {
+    let since = before.entries.last().map(|entry| entry.id.clone());
+    let after = LiveApiClient::entries(
+      &client,
+      EntriesRequest {
+        live: opened.live,
+        since: None,
+      },
+    )
+    .await?;
+    let delta = LiveApiClient::entries(&client, EntriesRequest { live: opened.live, since }).await?;
+    for (name, entries) in [("before", &before), ("after", &after), ("delta", &delta)] {
+      std::fs::write(
+        out.join(format!("{}.entries_{name}.json", scenario.name)),
+        serde_json::to_string_pretty(entries)?,
+      )?;
+    }
+  }
 
   drop(stream);
   LiveApiClient::close(&client, opened.live).await?;

@@ -59,7 +59,7 @@ Reading a session's messages means opening it: `live/open` starts omp on that se
 
 ## History Tree
 
-omp's wire schema leaves tree nodes and entries open (`$defs/SessionTree.tree`, `$defs/SessionEntries.entries`: `{"type":"object","properties":{},"additionalProperties":{}}`), so the generator yields `Map<String, Value>`. What omp sends is its internal `SessionTreeNode { entry, children, label? }` (`session/session-entries.ts:392-397`), built from the same entries `get_entries` returns (`session-manager.ts:694-723`, `rpc-mode.ts:2351-2355`). The protocol types the parts every entry shares and keeps the rest open, as Gupi does (`crates/pi-rpc/src/protocol.rs:134-151`):
+omp's wire schema leaves entries open (`$defs/SessionEntries.entries`: `{"type":"object","properties":{},"additionalProperties":{}}`), so the generator yields `Map<String, Value>`. The protocol types the fields every entry shares (`SessionEntryBase`, `session-entries.ts:92-96`) and keeps the rest open, as Gupi does (`crates/pi-rpc/src/protocol.rs:134-151`):
 
 ```rust
 /// One omp session entry: shared fields typed, kind-specific fields kept as omp wrote them.
@@ -73,14 +73,13 @@ pub struct Entry {
     pub data: serde_json::Map<String, serde_json::Value>,
 }
 
-pub struct TreeNode { pub entry: Entry, pub children: Vec<TreeNode>, pub label: Option<String> }
-pub struct HistoryTree { pub roots: Vec<TreeNode>, pub leaf: Option<EntryId> }
+pub struct HistoryEntries { pub entries: Vec<Entry>, pub leaf: Option<EntryId> }
 ```
 
-- Shared fields come from omp's `SessionEntryBase` (`session-entries.ts:92-96`). The parse happens once, in `alvin-omp-host`, where omp's output is read; an entry missing them is a typed error naming the entry id. A serde round-trip test over recorded `get_tree` output catches a change when the omp version is bumped.
-- Children arrive ordered by timestamp, as omp sorts them (`session-manager.ts:715-720`). No re-sorting downstream.
-- `live/branchMessages` (`get_branch_messages`: `BranchMessage { entryId, text }`) lists the user messages a branch can start from.
-- `live/navigateTree`, `live/branch`, `live/fork`, `live/label`, `live/abortBranchSummary` take `EntryId`.
+- The tree is built from `live/entries` (`get_entries`), not carried by `get_tree`. omp nests a tree node's children inside it, one JSON level per entry on a branch, and omp-rpc decodes a frame with serde_json's recursion limit: `get_tree` fails with "recursion limit exceeded" for a session of a few dozen entries on one branch (reproduced with a 300-entry session). The entries carry `parentId`, so the same tree follows, built by `alvin-conversation` with omp's rules (`session-manager.ts:694-723`).
+- Shared fields are parsed once, in `alvin-omp-host`, where omp's output is read; an entry missing them is a typed error naming the entry id.
+- `live/entries` takes an optional `since` (an entry id); omp answers an id it does not know with the command error code `unknown_since`, which reaches the client as `OmpCommandFailed` with that code.
+- `live/branchMessages`, `live/navigateTree`, `live/branch`, `live/fork`, `live/label`, `live/abortBranchSummary` take `EntryId`.
 
 ## Omp Payload Types
 

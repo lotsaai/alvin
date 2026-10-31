@@ -1,16 +1,18 @@
 //! One live session: its transcript, its status line and its composer.
 
 use alvin_protocol::{LiveSessionId, WidgetPlacement};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{InputEvent, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
-use gpui_kit::component::{ActiveTheme as _, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
-  AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
+  AppContext as _, Context, ElementId, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
   StatefulInteractiveElement as _, Styled as _, Subscription, Window, div,
 };
 
 use crate::actions::{Abort, SESSION_CONTEXT};
 use crate::dialogs::{self, DialogHost};
+use crate::history_tree::HistoryTreeView;
 use crate::model::{Model, ModelEvent};
 use crate::pickers::Pickers;
 use crate::{composer, queue, status, transcript};
@@ -24,6 +26,9 @@ pub(crate) struct SessionView {
   composer: Entity<TextareaState>,
   pickers: Pickers,
   dialogs: Entity<DialogHost>,
+  /// The history panel, and whether it is open.
+  history: Entity<HistoryTreeView>,
+  history_open: bool,
   rows: usize,
   _subscriptions: Vec<Subscription>,
 }
@@ -34,6 +39,7 @@ impl SessionView {
     let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
     let pickers = Pickers::new(&model, live, window, cx);
     let dialogs = DialogHost::new(window, cx);
+    let history = cx.new(|cx| HistoryTreeView::new(model.clone(), live, cx));
     let subscriptions = vec![
       cx.observe(&scroller, |_, _, cx| cx.notify()),
       cx.observe_in(&model, window, |this, model, window, cx| {
@@ -67,6 +73,8 @@ impl SessionView {
       composer,
       pickers,
       dialogs,
+      history,
+      history_open: false,
       rows: 0,
       _subscriptions: subscriptions,
     };
@@ -114,12 +122,11 @@ impl Render for SessionView {
       line = format!("{line} · {statuses}").into();
     }
     let live = self.live;
-    v_flex()
-      .key_context(SESSION_CONTEXT)
-      .on_action(cx.listener(move |this, _: &Abort, _, cx| {
-        this.model.update(cx, |model, cx| model.abort(live, cx));
-      }))
-      .size_full()
+    let toggle_view = cx.entity();
+    let column = v_flex()
+      .flex_1()
+      .min_w_0()
+      .h_full()
       .child(transcript::transcript(&self.model, self.live, &self.scroller))
       .children(
         self
@@ -131,14 +138,32 @@ impl Render for SessionView {
       )
       .children(dialogs::view(&self.dialogs, &self.model, live, cx))
       .child(
-        div()
-          .id("session-status")
+        h_flex()
           .px_4()
-          .text_sm()
-          .text_color(cx.theme().muted_foreground)
-          .role(gpui_kit::Role::Status)
-          .aria_label(line.clone())
-          .child(line),
+          .gap_2()
+          .child(
+            div()
+              .id("session-status")
+              .flex_1()
+              .text_sm()
+              .text_color(cx.theme().muted_foreground)
+              .role(gpui_kit::Role::Status)
+              .aria_label(line.clone())
+              .child(line),
+          )
+          .child(
+            Button::new(ElementId::from("history-toggle"))
+              .small()
+              .ghost()
+              .selected(self.history_open)
+              .label("History")
+              .on_click(move |_, _, cx| {
+                toggle_view.update(cx, |view, cx| {
+                  view.history_open = !view.history_open;
+                  cx.notify();
+                });
+              }),
+          ),
       )
       .child(self.pickers.view(&self.model, live))
       .children(
@@ -157,6 +182,22 @@ impl Render for SessionView {
           .conversation()
           .live(live)
           .and_then(|view| status::widgets(view, WidgetPlacement::BelowEditor, cx)),
-      )
+      );
+    h_flex()
+      .key_context(SESSION_CONTEXT)
+      .on_action(cx.listener(move |this, _: &Abort, _, cx| {
+        this.model.update(cx, |model, cx| model.abort(live, cx));
+      }))
+      .size_full()
+      .child(column)
+      .children(self.history_open.then(|| self.history.clone()))
+  }
+}
+
+impl SessionView {
+  /// The rows the history panel lists, whether or not it is open.
+  #[cfg(test)]
+  pub(crate) fn history_row_list(&self, cx: &gpui_kit::App) -> Vec<crate::history_tree::Row> {
+    self.history.read(cx).rows().to_vec()
   }
 }

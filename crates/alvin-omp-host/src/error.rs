@@ -63,6 +63,16 @@ pub enum Error {
     source: Box<omp_rpc::Error>,
   },
 
+  /// An entry of omp's history lacks the fields every entry has.
+  #[error("history entry {entry} is malformed")]
+  Entry {
+    /// The entry's id, when it has one.
+    entry: String,
+    /// What is missing or wrong.
+    #[source]
+    source: serde_json::Error,
+  },
+
   /// A value could not be converted between `omp-rpc`'s generated types and the protocol's.
   #[error("converting {what} between omp-rpc and the protocol")]
   Convert {

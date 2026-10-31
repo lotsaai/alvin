@@ -2,6 +2,7 @@
 
 mod bridge;
 mod error;
+mod history;
 mod host;
 mod session;
 #[cfg(test)]

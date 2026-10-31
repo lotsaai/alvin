@@ -215,8 +215,8 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 13. **Files:** `alvin-protocol/src/dialog.rs`, host translate, gateway rpc + tests, `alvin-conversation/src/dialogs.rs`, `alvin-conversation-ui/src/{dialogs,status}.rs`. **Scope:** M.
 
 #### Task 17: History tree: read and render
-**Description:** Methods: `live/tree` and `live/entries`. The host parses `Entry`/`TreeNode`/`HistoryTree` and returns a typed error on a missing shared field. Conversation adds `set_tree`, `apply_entries`, `tree_cursor`, and `tree_stale`. Add the `HistoryTreeView` virtual list (single-child chains stay at one indent level).
-**Acceptance criteria:** [ ] applying recorded entries since the cursor gives the same tree as a fresh `live/tree` (labels and leaf included); [ ] after a turn the tree refreshes by coalesced `live/entries`; [ ] the active path is highlighted.
+**Description:** Methods: `live/tree` (not built: see SPEC-protocol, History Tree) and `live/entries`. The host parses `Entry`/`TreeNode`/`HistoryTree` and returns a typed error on a missing shared field. Conversation adds `set_tree`, `apply_entries`, `tree_cursor`, and `tree_stale`. Add the `HistoryTreeView` virtual list (single-child chains stay at one indent level).
+**Acceptance criteria:** [x] applying recorded entries since the cursor gives the same tree as a fresh `live/tree` (labels and leaf included); [x] after a turn the tree refreshes by coalesced `live/entries`; [x] the active path is highlighted.
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 13. **Files:** `alvin-protocol/src/live.rs` (tree types), `alvin-omp-host/src/session.rs`, gateway rpc + tests, `alvin-conversation/src/live.rs`, `alvin-conversation-ui/src/history_tree.rs`, fixtures. **Scope:** M.
 
 #### Task 18: History tree actions

@@ -4,15 +4,16 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use alvin_protocol::{
-  AgentMessage, AutoRetryStartEvent, AvailableSlashCommand, EventBody, ExtensionUiRequest, LiveSessionId, LiveSessionSummary,
-  MessageEndEvent, MessageStartEvent, MessageUpdateEvent, MessagesPage, ModelInfo, NotifyType, PromptStatus, RpcAgentEvent, SessionState,
-  ThinkingLevel, WidgetPlacement,
+  AgentMessage, AutoRetryStartEvent, AvailableSlashCommand, EventBody, ExtensionUiRequest, HistoryEntries, LiveSessionId,
+  LiveSessionSummary, MessageEndEvent, MessageStartEvent, MessageUpdateEvent, MessagesPage, ModelInfo, NotifyType, PromptStatus,
+  RpcAgentEvent, SessionState, ThinkingLevel, WidgetPlacement,
 };
 
 use crate::dialogs::Dialogs;
 use crate::queue::Queue;
 use crate::streaming::Streaming;
 use crate::tools::Tools;
+use crate::tree::Tree;
 
 /// Where the session stands.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -128,6 +129,10 @@ pub struct LiveView {
   pub reload_needed: bool,
   /// Set when omp said the model changed without saying to what: reload `live/state`.
   pub state_stale: bool,
+  /// The history tree, once loaded.
+  pub tree: Option<Tree>,
+  /// Set when something happened that can have added entries: read the entries after [`Tree::cursor`].
+  pub tree_stale: bool,
   /// The queued steering and follow-up messages.
   pub queue: Queue,
   /// Dialogs waiting for an answer.
@@ -165,6 +170,8 @@ impl LiveView {
       exited: summary.exited,
       reload_needed: false,
       state_stale: false,
+      tree: None,
+      tree_stale: false,
       queue: Queue::default(),
       dialogs: Dialogs::default(),
       commands: Vec::new(),
@@ -179,6 +186,22 @@ impl LiveView {
   /// The text an extension asked to put in the composer, once.
   pub fn take_editor_text(&mut self) -> Option<String> {
     self.editor_text.take()
+  }
+
+  /// Replaces the tree with the one the session's entries make.
+  pub(crate) fn set_entries(&mut self, entries: HistoryEntries) {
+    self.tree = Some(Tree::from_entries(entries));
+    self.tree_stale = false;
+  }
+
+  /// Adds the entries appended since the tree's newest. Without a tree there is nothing to add them to: they are the
+  /// whole history only if they start at the beginning, so the caller reads them with no `since` first.
+  pub(crate) fn apply_entries(&mut self, entries: HistoryEntries) {
+    match &mut self.tree {
+      Some(tree) => tree.apply(entries),
+      None => self.tree = Some(Tree::from_entries(entries)),
+    }
+    self.tree_stale = false;
   }
 
   /// Replaces the transcript with a page of `live/messages` and clears the reload-needed mark.
@@ -207,6 +230,8 @@ impl LiveView {
     self.streaming = None;
     self.tools.clear();
     self.reload_needed = true;
+    self.tree = None;
+    self.tree_stale = false;
   }
 
   /// The effect of one event. Every variant of [`EventBody`] has one; frames that change nothing a view shows say so.
@@ -266,12 +291,16 @@ impl LiveView {
     match event {
       RpcAgentEvent::AgentStart(_) => self.run = Run::Running,
       RpcAgentEvent::AgentEnd(end) => {
+        self.tree_stale = true;
         // A non-terminal end means a continuation or background work remains: the run goes on.
         if end.is_terminal != Some(false) && self.run != Run::Settled {
           self.run = Run::Idle;
         }
       }
-      RpcAgentEvent::TurnEnd(_) => self.tools.clear(),
+      RpcAgentEvent::TurnEnd(_) => {
+        self.tools.clear();
+        self.tree_stale = true;
+      }
       RpcAgentEvent::MessageStart(start) => self.message_start(start),
       RpcAgentEvent::MessageUpdate(update) => self.message_update(update),
       RpcAgentEvent::MessageEnd(end) => self.message_end(end),
@@ -282,6 +311,7 @@ impl LiveView {
       RpcAgentEvent::AutoCompactionStart(_) => self.compaction = Some(Compaction { manual: false }),
       RpcAgentEvent::AutoCompactionEnd(end) => {
         self.compaction = None;
+        self.tree_stale = true;
         if let Some(message) = &end.error_message
           && !end.aborted
           && end.skipped != Some(true)
@@ -292,6 +322,7 @@ impl LiveView {
       RpcAgentEvent::ManualCompactionStart(_) => self.compaction = Some(Compaction { manual: true }),
       RpcAgentEvent::ManualCompactionEnd(end) => {
         self.compaction = None;
+        self.tree_stale = true;
         if let Some(message) = &end.error_message
           && !end.aborted
         {

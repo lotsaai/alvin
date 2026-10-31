@@ -6,6 +6,7 @@ mod live;
 mod queue;
 mod streaming;
 mod tools;
+mod tree;
 mod workspace;
 
 pub use conversation::{Connection, Conversation};
@@ -14,4 +15,5 @@ pub use live::{Compaction, Level, LiveView, Notice, Origin, Retry, Run, Widget};
 pub use queue::Queue;
 pub use streaming::Streaming;
 pub use tools::{ToolExecution, ToolOutcome, Tools};
+pub use tree::{Node, Tree};
 pub use workspace::{SessionList, SessionsKey, Workspace};
