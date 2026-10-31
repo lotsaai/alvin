@@ -7,7 +7,7 @@
           "type": "text"
         }
       ],
-      "timestamp": 1793435114097.0,
+      "timestamp": 1793436288034.0,
       "attribution": "user",
       "role": "user"
     },
@@ -23,27 +23,27 @@
       "provider": "zai",
       "model": "glm-5.3-flash",
       "usage": {
-        "input": 100,
+        "input": 102,
         "output": 81,
         "cacheRead": 3456,
         "cacheWrite": 0,
-        "totalTokens": 3637,
+        "totalTokens": 3639,
         "cost": {
-          "input": 0.000015,
+          "input": 0.0000153,
           "output": 0.000040499999999999995,
           "cacheRead": 0.00010368,
           "cacheWrite": 0.0,
-          "total": 0.00015917999999999998
+          "total": 0.00015947999999999998
         }
       },
       "stopReason": "stop",
-      "timestamp": 1793435114743.0,
-      "responseId": "20261031162515638f6c8e34554b51",
-      "duration": 2838.1220839999996,
-      "ttft": 1779.693584,
-      "completedAt": 1793435117583.0,
+      "timestamp": 1793436288672.0,
+      "responseId": "202610311644488e0a028e7fbc47fc",
+      "duration": 3692.374667000001,
+      "ttft": 2742.3799999999997,
+      "completedAt": 1793436292367.0,
       "contextSnapshot": {
-        "promptTokens": 3556,
+        "promptTokens": 3558,
         "nonMessageTokens": 3112,
         "toolSchemaTokens": 850,
         "compactionEpoch": 0
@@ -57,7 +57,7 @@
           "type": "text"
         }
       ],
-      "timestamp": 1793435116532.0,
+      "timestamp": 1793436291421.0,
       "attribution": "user",
       "role": "user"
     },
@@ -73,29 +73,29 @@
       "provider": "zai",
       "model": "glm-5.3-flash",
       "usage": {
-        "input": 127,
+        "input": 129,
         "output": 3,
         "cacheRead": 3520,
         "cacheWrite": 0,
-        "totalTokens": 3650,
+        "totalTokens": 3652,
         "cost": {
-          "input": 0.00001905,
+          "input": 0.00001935,
           "output": 1.5e-6,
           "cacheRead": 0.0001056,
           "cacheWrite": 0.0,
-          "total": 0.00012615
+          "total": 0.00012644999999999998
         }
       },
       "stopReason": "stop",
-      "timestamp": 1793435117601.0,
-      "responseId": "20261031162517baa03fc844874a80",
+      "timestamp": 1793436292388.0,
+      "responseId": "2026103116445267699cd8dba24dfc",
       "errorId": 0.0,
-      "duration": 1621.3636659999993,
-      "ttft": 1618.9101249999994,
-      "completedAt": 1793435119223.0,
+      "duration": 1370.2668750000005,
+      "ttft": 1369.8442919999998,
+      "completedAt": 1793436293760.0,
       "credentialId": 1,
       "contextSnapshot": {
-        "promptTokens": 3647,
+        "promptTokens": 3649,
         "nonMessageTokens": 3112,
         "toolSchemaTokens": 850,
         "compactionEpoch": 0

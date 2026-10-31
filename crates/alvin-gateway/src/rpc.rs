@@ -3,11 +3,11 @@
 use std::time::Instant;
 
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashRequest, BashResult, EventsApiServer, ListSessions, LiveApiServer, LiveSessionId, LiveSessionSummary,
-  MessagesPage, MessagesRequest, ModelApiServer, ModelCycleResult, ModelInfo, OpenRequest, ProjectSummary, ProjectsApiServer,
-  PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer, RemoveQueuedMessageResult, RemoveQueuedRequest,
-  SessionPage, SessionState, SessionsApiServer, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
-  ThinkingLevelCycleResult,
+  AbortAndRestoreQueueResult, BashRequest, BashResult, DialogApiServer, EventsApiServer, ListSessions, LiveApiServer, LiveSessionId,
+  LiveSessionSummary, MessagesPage, MessagesRequest, ModelApiServer, ModelCycleResult, ModelInfo, OpenRequest, ProjectSummary,
+  ProjectsApiServer, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer, RemoveQueuedMessageResult,
+  RemoveQueuedRequest, RespondRequest, SessionPage, SessionState, SessionsApiServer, SetModelRequest, SetThinkingRequest, SubscribeRequest,
+  ThinkingLevel, ThinkingLevelCycleResult,
 };
 use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
 use jsonrpsee::server::{Methods, PendingSubscriptionSink, SubscriptionMessage};
@@ -98,6 +98,13 @@ impl QueueApiServer for Gateway {
 }
 
 #[async_trait]
+impl DialogApiServer for Gateway {
+  async fn respond(&self, request: RespondRequest) -> RpcResult<()> {
+    self.traced("dialog/respond", Gateway::respond(self, request)).await
+  }
+}
+
+#[async_trait]
 impl ModelApiServer for Gateway {
   async fn models(&self, live: LiveSessionId) -> RpcResult<Vec<ModelInfo>> {
     self.traced("model/list", Gateway::models(self, live)).await
@@ -175,6 +182,7 @@ impl Gateway {
     methods.merge(LiveApiServer::into_rpc(self.clone()))?;
     methods.merge(QueueApiServer::into_rpc(self.clone()))?;
     methods.merge(ModelApiServer::into_rpc(self.clone()))?;
+    methods.merge(DialogApiServer::into_rpc(self.clone()))?;
     methods.merge(EventsApiServer::into_rpc(self.clone()))?;
     Ok(methods)
   }
@@ -215,6 +223,7 @@ mod tests {
     assert_eq!(
       methods,
       [
+        "dialog/respond",
         "events/subscribe",
         "events/unsubscribe",
         "live/abort",

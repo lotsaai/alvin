@@ -11,8 +11,8 @@ use alvin_client::{ChannelPair, Client, Endpoint};
 use alvin_gateway::{Gateway, GatewayConfig};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
-  Event, EventBody, EventId, LiveApiClient, MessagesRequest, OpenRequest, OpenTarget, ProjectsApiClient, PromptRequest, RpcAgentEvent,
-  SubscribeRequest,
+  AnswersUiResponse, AskAnswer, DialogApiClient, Event, EventBody, EventId, ExtensionUiRequest, ExtensionUiResponse, LiveApiClient,
+  MessagesRequest, OpenRequest, OpenTarget, ProjectsApiClient, PromptRequest, RespondRequest, RpcAgentEvent, SubscribeRequest,
 };
 use eyre::{Result, eyre};
 
@@ -31,15 +31,18 @@ struct Scenario {
   abort: bool,
   /// A follow-up queued once the assistant starts streaming.
   follow_up: Option<&'static str>,
+  /// Answer an `ask` dialog with its first option.
+  answer_asks: bool,
 }
 
-const SCENARIOS: [Scenario; 4] = [
+const SCENARIOS: [Scenario; 5] = [
   Scenario {
     name: "plain_turn",
     flags: &["--no-tools"],
     prompt: "Reply with the single word ok.",
     abort: false,
     follow_up: None,
+    answer_asks: false,
   },
   Scenario {
     name: "tool_turn",
@@ -47,6 +50,7 @@ const SCENARIOS: [Scenario; 4] = [
     prompt: "Use your bash tool to run `echo alvin-tool-ok`, then reply with the single word done.",
     abort: false,
     follow_up: None,
+    answer_asks: false,
   },
   Scenario {
     name: "aborted_turn",
@@ -54,6 +58,7 @@ const SCENARIOS: [Scenario; 4] = [
     prompt: "Write the numbers from 1 to 400, one per line, nothing else.",
     abort: true,
     follow_up: None,
+    answer_asks: false,
   },
   Scenario {
     name: "queue_turn",
@@ -61,6 +66,15 @@ const SCENARIOS: [Scenario; 4] = [
     prompt: "Write the numbers from 1 to 40, one per line, nothing else.",
     abort: false,
     follow_up: Some("Now reply with the single word done."),
+    answer_asks: false,
+  },
+  Scenario {
+    name: "ask_turn",
+    flags: &["--tools", "ask"],
+    prompt: "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue. Then reply with the single word I chose.",
+    abort: false,
+    follow_up: None,
+    answer_asks: true,
   },
 ];
 
@@ -177,6 +191,26 @@ async fn run(scenario: &Scenario, out: &Path, base: &Path) -> Result<()> {
       _ => false,
     };
     let streaming = matches!(&event.body, EventBody::Agent(RpcAgentEvent::MessageUpdate(_)));
+    if let (true, EventBody::ExtensionUiRequest(ExtensionUiRequest::Ask(ask))) = (scenario.answer_asks, &event.body) {
+      let question = ask.questions.first().ok_or_else(|| eyre!("an ask without questions"))?;
+      let option = question.options.first().ok_or_else(|| eyre!("an ask question without options"))?;
+      let answers = vec![AskAnswer {
+        id: question.id.clone(),
+        selected_options: vec![option.label.clone()],
+        custom_input: None,
+      }];
+      DialogApiClient::respond(
+        &client,
+        RespondRequest {
+          live: opened.live,
+          response: ExtensionUiResponse::AnswersUiResponse(AnswersUiResponse {
+            id: ask.id.clone(),
+            answers,
+          }),
+        },
+      )
+      .await?;
+    }
     events.push(event);
     if let Some(message) = scenario.follow_up
       && streaming

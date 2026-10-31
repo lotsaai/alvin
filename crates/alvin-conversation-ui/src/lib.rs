@@ -3,11 +3,13 @@
 
 mod actions;
 mod composer;
+mod dialogs;
 mod model;
 mod pickers;
 mod queue;
 mod session;
 mod sidebar;
+mod status;
 #[cfg(test)]
 mod test_support;
 mod tool_card;

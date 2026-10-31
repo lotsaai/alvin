@@ -8,8 +8,8 @@ use alvin_omp_host::{Host, StartRequest};
 use alvin_protocol::{
   AbortAndRestoreQueueResult, BashRequest, BashResult, ListSessions, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
   ModelCycleResult, ModelInfo, OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest,
-  RemoveQueuedMessageResult, RemoveQueuedRequest, SessionPage, SessionState, SetModelRequest, SetThinkingRequest, SubscribeRequest,
-  ThinkingLevel, ThinkingLevelCycleResult,
+  RemoveQueuedMessageResult, RemoveQueuedRequest, RespondRequest, SessionPage, SessionState, SetModelRequest, SetThinkingRequest,
+  SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use tokio::sync::broadcast;
 
@@ -225,6 +225,11 @@ impl Gateway {
   pub(crate) async fn restore_queue(&self, id: LiveSessionId) -> Result<AbortAndRestoreQueueResult> {
     let live = self.live.get(id)?;
     self.timed("abort_and_restore_queue", live.session.restore_queue()).await
+  }
+
+  pub(crate) async fn respond(&self, request: RespondRequest) -> Result<()> {
+    let live = self.live.get(request.live)?;
+    self.timed("extension_ui_response", live.session.respond(request.response)).await
   }
 
   pub(crate) async fn models(&self, id: LiveSessionId) -> Result<Vec<ModelInfo>> {

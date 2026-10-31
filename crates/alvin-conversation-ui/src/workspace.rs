@@ -1,6 +1,7 @@
 //! The window's root view: the sidebar, the open sessions as tabs, and the active session.
 
 use alvin_client::Client;
+use alvin_conversation::Level;
 use alvin_protocol::LiveSessionId;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
@@ -75,8 +76,17 @@ impl Workspace {
         let title = code.map_or_else(|| "Error".to_owned(), |code| format!("{code:?}"));
         window.push_notification(Notification::error(message.clone()).title(SharedString::from(title)), cx);
       }
-      // The session's own view puts the text back in its composer.
-      ModelEvent::Restored { .. } => {}
+      // The session's own view puts the text in its composer.
+      ModelEvent::ComposerText { .. } => {}
+      ModelEvent::Notice { notice, .. } => {
+        let message = SharedString::from(notice.text.clone());
+        let notification = match notice.level {
+          Level::Info => Notification::info(message),
+          Level::Warning => Notification::warning(message),
+          Level::Error => Notification::error(message),
+        };
+        window.push_notification(notification, cx);
+      }
     }
     cx.notify();
   }
@@ -525,6 +535,72 @@ mod tests {
       assert!(window.find("thinking-picker").visible());
     })
     .unwrap();
+    fixture.finish().await;
+  }
+
+  const ASK_PROMPT: &str = "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue. \
+                            Then reply with the single word I chose.";
+
+  fn asking(cx: &mut TestAppContext, workspace: &Entity<Workspace>) -> bool {
+    with_active(cx, workspace, |view| !view.dialogs.pending().is_empty()).unwrap_or(false)
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn an_ask_opens_a_dialog_and_answering_it_lets_the_turn_finish(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::with_tools(&["--tools", "ask"]);
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    type_and_send(cx, window, ASK_PROMPT);
+    until(cx, "the ask dialog to open", |cx| asking(cx, &workspace));
+
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert!(window.find("dialog-ask-0-0").visible());
+      window.click("dialog-ask-0-0", cx);
+    })
+    .unwrap();
+    // The click changed what the dialog shows; render it again before the next click.
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      window.click("dialog-ask-submit", cx);
+    })
+    .unwrap();
+
+    until(cx, "the dialog to close", |cx| !asking(cx, &workspace));
+    until(cx, "the turn to settle", |cx| {
+      with_active(cx, &workspace, |view| view.run == Run::Settled).unwrap_or(false)
+    });
+    let results = with_active(cx, &workspace, |view| {
+      view
+        .transcript
+        .iter()
+        .filter(|message| matches!(message, AgentMessage::ToolResult(_)))
+        .count()
+    })
+    .unwrap();
+    assert_eq!(results, 1);
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn cancelling_an_ask_closes_the_dialog(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::with_tools(&["--tools", "ask"]);
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    type_and_send(cx, window, ASK_PROMPT);
+    until(cx, "the ask dialog to open", |cx| asking(cx, &workspace));
+
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      window.click("dialog-cancel", cx);
+    })
+    .unwrap();
+
+    until(cx, "the dialog to close", |cx| !asking(cx, &workspace));
     fixture.finish().await;
   }
 }

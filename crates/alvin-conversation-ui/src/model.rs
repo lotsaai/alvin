@@ -4,12 +4,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alvin_client::{Client, ConnectionState, Error, ResyncReason};
-use alvin_conversation::{Connection, Conversation, Run, SessionsKey};
+use alvin_conversation::{Connection, Conversation, Notice, Run, SessionsKey};
 use alvin_protocol::{
-  BashRequest, CheckoutId, ErrorCode, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
-  ModelApiClient, ModelInfo, OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient,
-  QueuedMessageQueue, RemoveQueuedRequest, SessionCursor, SessionId, SessionsApiClient, SetModelRequest, SetThinkingRequest,
-  SubscribeRequest, ThinkingLevel,
+  BashRequest, CheckoutId, DialogApiClient, ErrorCode, ExtensionUiResponse, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary,
+  MessagesPage, MessagesRequest, ModelApiClient, ModelInfo, OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest,
+  PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RespondRequest, SessionCursor, SessionId, SessionsApiClient,
+  SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
 };
 use gpui_kit::{AsyncApp, Context, EventEmitter, SharedString, Task, WeakEntity};
 
@@ -30,12 +30,20 @@ pub enum ModelEvent {
   Opened(LiveSessionId),
   /// A live session was closed.
   Closed(LiveSessionId),
-  /// Aborting withdrew queued messages. They are the user's text: put them back in the composer.
-  Restored {
+  /// Text for a session's composer: queued messages an abort withdrew (one per line), or what an extension asked to put
+  /// there.
+  ComposerText {
     /// The live session.
     live: LiveSessionId,
-    /// The withdrawn messages, oldest first, one per line.
+    /// The text.
     text: String,
+  },
+  /// An extension or omp has something to tell the user.
+  Notice {
+    /// The live session.
+    live: LiveSessionId,
+    /// What to tell.
+    notice: Notice,
   },
 }
 
@@ -243,7 +251,9 @@ impl Model {
             Some(Ok(event)) => {
               if this
                 .update(cx, |model, cx| {
+                  let seen = model.conversation.live(live).map_or(0, |view| view.notices.len());
                   model.conversation.apply(&event);
+                  model.announce(live, seen, cx);
                   // omp said the model changed without saying to what.
                   if model.conversation.live(live).is_some_and(|view| view.state_stale) {
                     model.refresh_state(live, cx);
@@ -332,7 +342,7 @@ impl Model {
   }
 
   /// Aborts what is running: the `!` command when there is one, else the turn. Queued messages the abort withdraws come back
-  /// as [`ModelEvent::Restored`].
+  /// as [`ModelEvent::ComposerText`].
   pub fn abort(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
     let client = self.client.clone();
     let bash = self.bash_running.contains(&live);
@@ -351,7 +361,7 @@ impl Model {
               .map(|message| message.text.as_str())
               .collect::<Vec<_>>()
               .join("\n");
-            drop(this.update(cx, |_, cx| cx.emit(ModelEvent::Restored { live, text })));
+            drop(this.update(cx, |_, cx| cx.emit(ModelEvent::ComposerText { live, text })));
           }
           Err(error) => fail(&this, cx, &error),
         }
@@ -390,6 +400,44 @@ impl Model {
         .map_err(Error::from)
       {
         fail(&this, cx, &error);
+      }
+    })
+    .detach();
+  }
+
+  /// Tells the views what arrived for the user since `seen` notices: the new notices, and text an extension put in the
+  /// composer.
+  fn announce(&mut self, live: LiveSessionId, seen: usize, cx: &mut Context<Self>) {
+    let Some(view) = self.conversation.live_mut(live) else { return };
+    let notices: Vec<Notice> = view.notices.iter().skip(seen).cloned().collect();
+    let text = view.take_editor_text();
+    for notice in notices {
+      cx.emit(ModelEvent::Notice { live, notice });
+    }
+    if let Some(text) = text {
+      cx.emit(ModelEvent::ComposerText { live, text });
+    }
+  }
+
+  /// Answers or dismisses a dialog. The dialog closes once omp has the answer.
+  pub fn respond(&mut self, live: LiveSessionId, response: ExtensionUiResponse, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    let id = match &response {
+      ExtensionUiResponse::ValueUiResponse(response) => response.id.clone(),
+      ExtensionUiResponse::ConfirmUiResponse(response) => response.id.clone(),
+      ExtensionUiResponse::CancelUiResponse(response) => response.id.clone(),
+      ExtensionUiResponse::AnswersUiResponse(response) => response.id.clone(),
+    };
+    cx.spawn(async move |this, cx| {
+      match DialogApiClient::respond(&client, RespondRequest { live, response })
+        .await
+        .map_err(Error::from)
+      {
+        Ok(()) => drop(this.update(cx, |model, cx| {
+          model.conversation.dialog_answered(live, &id);
+          cx.notify();
+        })),
+        Err(error) => fail(&this, cx, &error),
       }
     })
     .detach();

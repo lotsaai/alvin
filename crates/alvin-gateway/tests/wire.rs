@@ -11,10 +11,11 @@ use alvin_client::{ChannelPair, Client, ConnectionState, Endpoint, Error, EventS
 use alvin_gateway::{Gateway, GatewayConfig, WsServer};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
-  BashRequest, CheckoutId, ErrorCode, ErrorData, Event, EventBody, EventId, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary,
-  MessagesRequest, ModelApiClient, OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromoteQueuedRequest,
-  PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage,
-  SessionStatus, SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
+  AnswersUiResponse, AskAnswer, BashRequest, CheckoutId, DialogApiClient, ErrorCode, ErrorData, Event, EventBody, EventId,
+  ExtensionUiRequest, ExtensionUiResponse, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesRequest, ModelApiClient,
+  OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient,
+  QueuedMessageQueue, RemoveQueuedRequest, RespondRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage, SessionStatus,
+  SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
 };
 
 /// Session files written by real omp (the first two records of one run).
@@ -70,21 +71,30 @@ impl Project {
   /// A gateway that starts real omp. omp reads the machine's agent configuration so model credentials resolve; this code
   /// never opens or prints anything in it. Its sessions go where the index looks for them.
   fn live_gateway(&self) -> Gateway {
+    self.gateway_with(&["--no-tools"])
+  }
+
+  /// A live gateway whose omp has the `ask` tool, which opens a dialog and waits for its answer.
+  fn ask_gateway(&self) -> Gateway {
+    self.gateway_with(&["--tools", "ask"])
+  }
+
+  fn gateway_with(&self, tools: &[&str]) -> Gateway {
     let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
       .map(PathBuf::from)
       .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".omp/agent"));
-    let args = [
-      "--no-tools",
-      "--no-skills",
-      "--no-rules",
-      "--no-extensions",
-      "--no-context-files",
-      "--session-dir",
-    ]
-    .map(OsString::from)
-    .into_iter()
-    .chain([self.sessions.join("-repo").into_os_string()])
-    .collect();
+    let args = tools
+      .iter()
+      .chain(&[
+        "--no-skills",
+        "--no-rules",
+        "--no-extensions",
+        "--no-context-files",
+        "--session-dir",
+      ])
+      .map(OsString::from)
+      .chain([self.sessions.join("-repo").into_os_string()])
+      .collect();
     let omp = HostConfig::builder()
       .omp(PathBuf::from("omp"))
       .extra_args(args)
@@ -1041,6 +1051,86 @@ async fn model_and_thinking_level_change_and_show_in_state_over_both_transports(
   );
 
   drop((channel, ws));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+/// Reads events until omp opens an `ask` dialog, and returns its request.
+async fn until_ask(stream: &mut EventStream) -> alvin_protocol::AskUiRequest {
+  loop {
+    if let EventBody::ExtensionUiRequest(ExtensionUiRequest::Ask(ask)) = next_event(stream).await.body {
+      return ask;
+    }
+  }
+}
+
+#[tokio::test]
+async fn an_ask_dialog_is_answered_over_both_transports_and_the_answer_reaches_omp() {
+  let project = Project::new(1);
+  let gateway = project.ask_gateway();
+  let ([channel, ws], server) = both_transports(&gateway).await;
+  let opened = open_new(&channel).await;
+  let mut stream = subscribe(&channel, opened.live, None).await.unwrap();
+  prompt(
+    &channel,
+    opened.live,
+    "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue. \
+     Then reply with the single word I chose.",
+  )
+  .await;
+
+  let ask = until_ask(&mut stream).await;
+  let question = ask.questions.first().expect("one question");
+  let answers = vec![AskAnswer {
+    id: question.id.clone(),
+    selected_options: vec![question.options.first().expect("an option").label.clone()],
+    custom_input: None,
+  }];
+  // One transport answers; the other sees the dialog's outcome in the same event log.
+  DialogApiClient::respond(
+    &ws,
+    RespondRequest {
+      live: opened.live,
+      response: ExtensionUiResponse::AnswersUiResponse(AnswersUiResponse {
+        id: ask.id.clone(),
+        answers,
+      }),
+    },
+  )
+  .await
+  .unwrap();
+
+  // omp got the answer: the turn goes on past the dialog and settles.
+  let mut seen = Vec::new();
+  until_settled(&mut stream, &mut seen).await;
+  assert!(
+    seen
+      .iter()
+      .any(|event| matches!(&event.body, EventBody::Agent(RpcAgentEvent::ToolExecutionEnd(_))))
+  );
+
+  // An unknown live session is a typed error.
+  let error = DialogApiClient::respond(
+    &channel,
+    RespondRequest {
+      live: LiveSessionId::new(),
+      response: ExtensionUiResponse::ConfirmUiResponse(alvin_protocol::ConfirmUiResponse {
+        id: "none".to_owned(),
+        confirmed: true,
+      }),
+    },
+  )
+  .await
+  .unwrap_err();
+  assert!(matches!(
+    Error::from(error),
+    Error::Gateway {
+      code: ErrorCode::UnknownLiveSession,
+      ..
+    }
+  ));
+
+  drop((stream, channel, ws));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
 }

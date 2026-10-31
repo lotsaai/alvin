@@ -1,6 +1,6 @@
 //! One live session: its transcript, its status line and its composer.
 
-use alvin_protocol::LiveSessionId;
+use alvin_protocol::{LiveSessionId, WidgetPlacement};
 use gpui_kit::component::input::{InputEvent, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::{ActiveTheme as _, v_flex};
@@ -10,9 +10,10 @@ use gpui_kit::{
 };
 
 use crate::actions::{Abort, SESSION_CONTEXT};
+use crate::dialogs::{self, DialogHost};
 use crate::model::{Model, ModelEvent};
 use crate::pickers::Pickers;
-use crate::{composer, queue, transcript};
+use crate::{composer, queue, status, transcript};
 
 /// A live session's view. Holds only what is local to the view: the scroll state, the composer and how many rows the
 /// scroller was last told about. Everything else is read from the model.
@@ -22,6 +23,7 @@ pub(crate) struct SessionView {
   scroller: Entity<MessageScrollerState>,
   composer: Entity<TextareaState>,
   pickers: Pickers,
+  dialogs: Entity<DialogHost>,
   rows: usize,
   _subscriptions: Vec<Subscription>,
 }
@@ -31,15 +33,17 @@ impl SessionView {
     let composer = composer::state(window, cx);
     let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
     let pickers = Pickers::new(&model, live, window, cx);
+    let dialogs = DialogHost::new(window, cx);
     let subscriptions = vec![
       cx.observe(&scroller, |_, _, cx| cx.notify()),
       cx.observe_in(&model, window, |this, model, window, cx| {
         this.sync_rows(cx);
         this.pickers.sync(&model, this.live, window, cx);
+        DialogHost::sync(&this.dialogs, &model, this.live, window, cx);
         cx.notify();
       }),
       cx.subscribe_in(&model, window, |this, _, event: &ModelEvent, window, cx| {
-        if let ModelEvent::Restored { live, text } = event
+        if let ModelEvent::ComposerText { live, text } = event
           && *live == this.live
         {
           this
@@ -62,6 +66,7 @@ impl SessionView {
       scroller,
       composer,
       pickers,
+      dialogs,
       rows: 0,
       _subscriptions: subscriptions,
     };
@@ -94,7 +99,7 @@ impl SessionView {
 impl Render for SessionView {
   fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
     let model = self.model.read(cx);
-    let status: SharedString = match model.conversation().live(self.live) {
+    let mut line: SharedString = match model.conversation().live(self.live) {
       Some(view) if view.exited => "omp exited".into(),
       Some(view) if view.reload_needed => "reload needed".into(),
       Some(_) if model.bash_running(self.live) => "running a command".into(),
@@ -105,6 +110,9 @@ impl Render for SessionView {
       },
       None => "closed".into(),
     };
+    if let Some(statuses) = model.conversation().live(self.live).and_then(status::statuses) {
+      line = format!("{line} · {statuses}").into();
+    }
     let live = self.live;
     v_flex()
       .key_context(SESSION_CONTEXT)
@@ -121,6 +129,7 @@ impl Render for SessionView {
           .live(self.live)
           .and_then(|view| queue::view(&self.model, self.live, &view.queue, cx)),
       )
+      .children(dialogs::view(&self.dialogs, &self.model, live, cx))
       .child(
         div()
           .id("session-status")
@@ -128,10 +137,26 @@ impl Render for SessionView {
           .text_sm()
           .text_color(cx.theme().muted_foreground)
           .role(gpui_kit::Role::Status)
-          .aria_label(status.clone())
-          .child(status),
+          .aria_label(line.clone())
+          .child(line),
       )
       .child(self.pickers.view(&self.model, live))
+      .children(
+        self
+          .model
+          .read(cx)
+          .conversation()
+          .live(live)
+          .and_then(|view| status::widgets(view, WidgetPlacement::AboveEditor, cx)),
+      )
       .child(div().p_2().child(composer::view(&self.composer)))
+      .children(
+        self
+          .model
+          .read(cx)
+          .conversation()
+          .live(live)
+          .and_then(|view| status::widgets(view, WidgetPlacement::BelowEditor, cx)),
+      )
   }
 }

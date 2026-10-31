@@ -1,0 +1,2410 @@
+[
+  {
+    "id": "01a19122-1ed1-713a-9fab-0639f01ecd35",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:44:54.865031Z",
+    "body": {
+      "kind": "extensionUiRequest",
+      "frame": {
+        "id": "15bb95dbaae5f14e",
+        "widgetKey": "autoresearch",
+        "type": "extension_ui_request",
+        "method": "setWidget"
+      }
+    }
+  },
+  {
+    "id": "01a19122-1ed1-713a-9fab-063afe9bd476",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:44:54.865038Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "advisor_cost_changed"
+      }
+    }
+  },
+  {
+    "id": "01a19122-1ed1-713a-9fab-063b3533aab5",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:44:54.86504Z",
+    "body": {
+      "kind": "availableCommandsUpdate",
+      "frame": {
+        "commands": [
+          {
+            "name": "security",
+            "source": "builtin",
+            "description": "Plan, run, inspect, import, and compare OMP-native security scans",
+            "input": {
+              "hint": "<plan|scan|status|cancel|scans|show|import|export|validate|compare|disposition>"
+            },
+            "subcommands": [
+              {
+                "name": "plan",
+                "description": "Create an immutable security scan plan"
+              },
+              {
+                "name": "scan",
+                "description": "Start a planned or newly planned native scan"
+              },
+              {
+                "name": "status",
+                "description": "Show native scan operation status"
+              },
+              {
+                "name": "cancel",
+                "description": "Cancel a running native scan"
+              },
+              {
+                "name": "scans",
+                "description": "List stored project security scans"
+              },
+              {
+                "name": "show",
+                "description": "Render a scan or security:// resource"
+              },
+              {
+                "name": "import",
+                "description": "Import SARIF or a Codex Security bundle"
+              },
+              {
+                "name": "export",
+                "description": "Export a canonical bundle, SARIF, or report"
+              },
+              {
+                "name": "validate",
+                "description": "Validate one finding with OMP-native tools"
+              },
+              {
+                "name": "compare",
+                "description": "Compare finding lineage across two scans"
+              },
+              {
+                "name": "disposition",
+                "description": "Set a finding disposition with rationale"
+              }
+            ]
+          },
+          {
+            "name": "model",
+            "source": "builtin",
+            "aliases": [
+              "models"
+            ],
+            "description": "Show current model selection"
+          },
+          {
+            "name": "switch",
+            "source": "builtin",
+            "description": "Switch model for this session only",
+            "input": {
+              "hint": "[model]"
+            }
+          },
+          {
+            "name": "fast",
+            "source": "builtin",
+            "description": "Toggle fast mode",
+            "input": {
+              "hint": "[on|ultra|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable fast mode (priority tier)"
+              },
+              {
+                "name": "ultra",
+                "description": "Enable Ultrafast (OpenAI API, or Codex models that offer it)"
+              },
+              {
+                "name": "off",
+                "description": "Disable fast mode"
+              },
+              {
+                "name": "status",
+                "description": "Show fast mode status"
+              }
+            ]
+          },
+          {
+            "name": "slow",
+            "source": "builtin",
+            "description": "Toggle slow mode",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Flex tier, or Anthropic low priority at the session limit (auto)"
+              },
+              {
+                "name": "off",
+                "description": "Standard service; stop Anthropic low priority"
+              },
+              {
+                "name": "status",
+                "description": "Show slow mode status"
+              }
+            ]
+          },
+          {
+            "name": "skillful",
+            "source": "builtin",
+            "description": "Toggle skill listing",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "List skills in the prompt for this session"
+              },
+              {
+                "name": "off",
+                "description": "Omit the skills listing for this session"
+              },
+              {
+                "name": "status",
+                "description": "Show skill listing status"
+              }
+            ]
+          },
+          {
+            "name": "extended-context",
+            "source": "builtin",
+            "description": "Toggle extended context",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable larger context windows"
+              },
+              {
+                "name": "off",
+                "description": "Use default or standard-pricing context windows"
+              },
+              {
+                "name": "status",
+                "description": "Show extended context status"
+              }
+            ]
+          },
+          {
+            "name": "computer",
+            "source": "builtin",
+            "description": "Toggle computer use",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable computer use for this session"
+              },
+              {
+                "name": "off",
+                "description": "Disable computer use for this session"
+              },
+              {
+                "name": "status",
+                "description": "Show computer use status"
+              }
+            ]
+          },
+          {
+            "name": "ratchet",
+            "source": "builtin",
+            "description": "Build (or reuse) an eval for an LLM flow, then hillclimb it unattended",
+            "input": {
+              "hint": "[flow and goal]"
+            }
+          },
+          {
+            "name": "prewalk",
+            "source": "builtin",
+            "description": "Arm, restart, or cancel prewalk",
+            "input": {
+              "hint": "[into] | restart [from] [into] | off"
+            },
+            "subcommands": [
+              {
+                "name": "restart",
+                "description": "Return to the planning model and re-arm the handoff (default prewalk.from → prewalk.into)",
+                "usage": "[from] [into]"
+              },
+              {
+                "name": "off",
+                "description": "Cancel this session's handoff without changing the active model"
+              }
+            ]
+          },
+          {
+            "name": "modelpreset",
+            "source": "builtin",
+            "description": "Manage model presets",
+            "input": {
+              "hint": "[list|save|switch|delete] [name]"
+            },
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "List saved presets"
+              },
+              {
+                "name": "save",
+                "description": "Save the current role models and thinking level",
+                "usage": "<name>"
+              },
+              {
+                "name": "switch",
+                "description": "Apply a saved preset",
+                "usage": "<name>"
+              },
+              {
+                "name": "delete",
+                "description": "Delete a saved preset",
+                "usage": "<name>"
+              }
+            ]
+          },
+          {
+            "name": "effort",
+            "source": "builtin",
+            "description": "Set or show reasoning effort (thinking level, intelligence)",
+            "input": {
+              "hint": "[level]"
+            },
+            "subcommands": [
+              {
+                "name": "off",
+                "description": "No reasoning"
+              },
+              {
+                "name": "minimal",
+                "description": "Very brief reasoning (~1k tokens)"
+              },
+              {
+                "name": "low",
+                "description": "Light reasoning (~2k tokens)"
+              },
+              {
+                "name": "medium",
+                "description": "Moderate reasoning (~8k tokens)"
+              },
+              {
+                "name": "high",
+                "description": "Deep reasoning (~16k tokens)"
+              },
+              {
+                "name": "xhigh",
+                "description": "Extended reasoning (~32k tokens)"
+              },
+              {
+                "name": "max",
+                "description": "Maximum reasoning the model supports"
+              },
+              {
+                "name": "auto",
+                "description": "Auto-detect per prompt"
+              }
+            ]
+          },
+          {
+            "name": "advisor",
+            "source": "builtin",
+            "description": "Toggle advisor",
+            "input": {
+              "hint": "[on|off|status|dump [raw]|configure]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable the advisor"
+              },
+              {
+                "name": "off",
+                "description": "Disable the advisor"
+              },
+              {
+                "name": "status",
+                "description": "Show advisor status"
+              },
+              {
+                "name": "dump",
+                "description": "Copy the advisor's transcript to clipboard",
+                "usage": "[raw]"
+              },
+              {
+                "name": "configure",
+                "description": "Open the advisor configuration editor (TUI)"
+              }
+            ]
+          },
+          {
+            "name": "export",
+            "source": "builtin",
+            "description": "Export session to HTML file",
+            "input": {
+              "hint": "[--themes] [path]"
+            }
+          },
+          {
+            "name": "trace",
+            "source": "builtin",
+            "description": "Open this session's trace in the stats dashboard"
+          },
+          {
+            "name": "dump",
+            "source": "builtin",
+            "description": "Return full transcript as plain text, with LLM request JSON path",
+            "input": {
+              "hint": "[all|anon]"
+            },
+            "subcommands": [
+              {
+                "name": "all",
+                "description": "Write a zip with the main transcript, LLM request JSON, and one file per subagent"
+              },
+              {
+                "name": "anon",
+                "description": "Write a zip of anonymized session JSONL (contents redacted, metadata kept) plus subagents"
+              }
+            ]
+          },
+          {
+            "name": "share",
+            "source": "builtin",
+            "description": "Share session via an encrypted link (share server or secret gist)"
+          },
+          {
+            "name": "browser",
+            "source": "builtin",
+            "description": "Toggle browser eval-prelude headless vs visible mode",
+            "input": {
+              "hint": "[headless|visible]"
+            },
+            "subcommands": [
+              {
+                "name": "headless",
+                "description": "Switch to headless mode"
+              },
+              {
+                "name": "visible",
+                "description": "Switch to visible mode"
+              }
+            ]
+          },
+          {
+            "name": "todo",
+            "source": "builtin",
+            "description": "Manage todos",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "edit",
+                "description": "Open todos in $EDITOR (Markdown round-trip)"
+              },
+              {
+                "name": "copy",
+                "description": "Copy todos as Markdown to clipboard"
+              },
+              {
+                "name": "expand",
+                "description": "Show every phase and task in the HUD"
+              },
+              {
+                "name": "collapse",
+                "description": "Restore the bounded HUD preview"
+              },
+              {
+                "name": "export",
+                "description": "Write todos as Markdown to a file (default: TODO.md)",
+                "usage": "[<path>]"
+              },
+              {
+                "name": "import",
+                "description": "Replace todos from a Markdown file (default: TODO.md)",
+                "usage": "[<path>]"
+              },
+              {
+                "name": "append",
+                "description": "Append a task; phase fuzzy-matched or auto-created",
+                "usage": "[<phase>] <task...>"
+              },
+              {
+                "name": "start",
+                "description": "Mark task in_progress (fuzzy-matched)",
+                "usage": "<task>"
+              },
+              {
+                "name": "done",
+                "description": "Mark task/phase/all completed (fuzzy-matched)",
+                "usage": "[<task|phase>]"
+              },
+              {
+                "name": "drop",
+                "description": "Mark task/phase/all abandoned (fuzzy-matched)",
+                "usage": "[<task|phase>]"
+              },
+              {
+                "name": "rm",
+                "description": "Remove task/phase/all (fuzzy-matched)",
+                "usage": "[<task|phase>]"
+              }
+            ]
+          },
+          {
+            "name": "session",
+            "source": "builtin",
+            "description": "Show or configure the current session",
+            "input": {
+              "hint": "[info|delete|pin [account]]"
+            },
+            "subcommands": [
+              {
+                "name": "info",
+                "description": "Show session info and stats"
+              },
+              {
+                "name": "delete",
+                "description": "Delete current session and return to selector"
+              },
+              {
+                "name": "pin",
+                "description": "Pin a stored OAuth account to the current provider for this session",
+                "usage": "[account]"
+              }
+            ]
+          },
+          {
+            "name": "jobs",
+            "source": "builtin",
+            "description": "Show background jobs",
+            "input": {
+              "hint": "[full|kill <id>|kill all]"
+            },
+            "subcommands": [
+              {
+                "name": "full",
+                "description": "Show full, untruncated command lines"
+              },
+              {
+                "name": "kill",
+                "description": "Cancel a running background job",
+                "usage": "<id>|all"
+              }
+            ]
+          },
+          {
+            "name": "usage",
+            "source": "builtin",
+            "description": "Show token usage",
+            "input": {
+              "hint": "[show|reset [provider/credential-id|provider/active]]"
+            },
+            "subcommands": [
+              {
+                "name": "show",
+                "description": "Show provider usage and limits"
+              },
+              {
+                "name": "reset",
+                "description": "Spend a saved provider rate-limit reset",
+                "usage": "[provider/credential-id|provider/active]"
+              }
+            ]
+          },
+          {
+            "name": "stats",
+            "source": "builtin",
+            "description": "Launch the local stats dashboard",
+            "input": {
+              "hint": "[--port <port>] [--host <host>]"
+            }
+          },
+          {
+            "name": "changelog",
+            "source": "builtin",
+            "description": "Show changelog",
+            "input": {
+              "hint": "[full|last [N]]"
+            },
+            "subcommands": [
+              {
+                "name": "full",
+                "description": "Show complete changelog"
+              },
+              {
+                "name": "last",
+                "description": "Show the last N releases (default 1)",
+                "usage": "[N]"
+              }
+            ]
+          },
+          {
+            "name": "tools",
+            "source": "builtin",
+            "description": "Show available tools"
+          },
+          {
+            "name": "context",
+            "source": "builtin",
+            "description": "Show context usage"
+          },
+          {
+            "name": "mcp",
+            "source": "builtin",
+            "description": "Manage MCP servers",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "Add a new MCP server",
+                "usage": "<name> [--scope project|user] [--url <url>] [-- <command...>]"
+              },
+              {
+                "name": "list",
+                "description": "List all configured MCP servers"
+              },
+              {
+                "name": "remove",
+                "description": "Remove an MCP server",
+                "usage": "<name> [--scope project|user]"
+              },
+              {
+                "name": "test",
+                "description": "Test connection to a server",
+                "usage": "<name>"
+              },
+              {
+                "name": "reauth",
+                "description": "Reauthorize OAuth for a server",
+                "usage": "<name>"
+              },
+              {
+                "name": "unauth",
+                "description": "Remove OAuth auth from a server",
+                "usage": "<name>"
+              },
+              {
+                "name": "enable",
+                "description": "Enable an MCP server",
+                "usage": "<name>"
+              },
+              {
+                "name": "disable",
+                "description": "Disable an MCP server",
+                "usage": "<name>"
+              },
+              {
+                "name": "smithery-search",
+                "description": "Search Smithery registry and deploy an MCP server",
+                "usage": "<keyword> [--scope project|user] [--limit <1-100>] [--semantic]"
+              },
+              {
+                "name": "smithery-login",
+                "description": "Login to Smithery and cache API key"
+              },
+              {
+                "name": "smithery-logout",
+                "description": "Remove cached Smithery API key"
+              },
+              {
+                "name": "reconnect",
+                "description": "Reconnect to a specific MCP server",
+                "usage": "<name>"
+              },
+              {
+                "name": "reload",
+                "description": "Force reload MCP runtime tools"
+              },
+              {
+                "name": "resources",
+                "description": "List available resources from connected servers"
+              },
+              {
+                "name": "prompts",
+                "description": "List available prompts from connected servers"
+              },
+              {
+                "name": "notifications",
+                "description": "Show notification capabilities and subscriptions"
+              },
+              {
+                "name": "help",
+                "description": "Show help message"
+              }
+            ]
+          },
+          {
+            "name": "ssh",
+            "source": "builtin",
+            "description": "Manage SSH connections",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "Add an SSH host",
+                "usage": "<name> --host <host> [--user <user>] [--port <port>] [--key <keyPath>] [--scope project|user]"
+              },
+              {
+                "name": "list",
+                "description": "List all configured SSH hosts"
+              },
+              {
+                "name": "remove",
+                "description": "Remove an SSH host",
+                "usage": "<name> [--scope project|user]"
+              },
+              {
+                "name": "help",
+                "description": "Show help message"
+              }
+            ]
+          },
+          {
+            "name": "fresh",
+            "source": "builtin",
+            "description": "Reset provider stream state without changing the local transcript"
+          },
+          {
+            "name": "compact",
+            "source": "builtin",
+            "description": "Compact the conversation",
+            "input": {
+              "hint": "[soft|remote|snapcompact] [focus]"
+            },
+            "subcommands": [
+              {
+                "name": "soft",
+                "description": "Summarize locally with the active model (skip server compaction)",
+                "usage": "[focus]"
+              },
+              {
+                "name": "remote",
+                "description": "Summarize via OpenAI-compatible server compaction, then fall back to a local summary",
+                "usage": "[focus]"
+              },
+              {
+                "name": "snapcompact",
+                "description": "Archive history onto dense bitmap images the model reads back (no LLM call)"
+              }
+            ]
+          },
+          {
+            "name": "shake",
+            "source": "builtin",
+            "description": "Shake heavy content out of the conversation context",
+            "input": {
+              "hint": "[elide|images|thinking]"
+            },
+            "subcommands": [
+              {
+                "name": "elide",
+                "description": "Strip tool results + large blocks (default)"
+              },
+              {
+                "name": "images",
+                "description": "Strip image blocks"
+              },
+              {
+                "name": "thinking",
+                "description": "Drop all thinking blocks"
+              }
+            ]
+          },
+          {
+            "name": "handoff",
+            "source": "builtin",
+            "description": "Summarize the session into a handoff document and compact in place",
+            "input": {
+              "hint": "[focus instructions]"
+            }
+          },
+          {
+            "name": "pin",
+            "source": "builtin",
+            "description": "Pin or unpin a session at the top of the resume list",
+            "input": {
+              "hint": "[session id]"
+            }
+          },
+          {
+            "name": "retry",
+            "source": "builtin",
+            "description": "Retry the last failed agent turn"
+          },
+          {
+            "name": "memory",
+            "source": "builtin",
+            "description": "Manage memory",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "view",
+                "description": "Show current memory injection payload"
+              },
+              {
+                "name": "stats",
+                "description": "Show memory backend statistics"
+              },
+              {
+                "name": "diagnose",
+                "description": "Run memory backend diagnostics"
+              },
+              {
+                "name": "queue",
+                "description": "Show pending memory deltas awaiting consolidation"
+              },
+              {
+                "name": "sync",
+                "description": "Run memory consolidation now"
+              },
+              {
+                "name": "clear",
+                "description": "Clear persisted memory data and artifacts"
+              },
+              {
+                "name": "reset",
+                "description": "Alias for clear"
+              },
+              {
+                "name": "enqueue",
+                "description": "Enqueue memory consolidation maintenance"
+              },
+              {
+                "name": "rebuild",
+                "description": "Alias for enqueue"
+              },
+              {
+                "name": "mm list",
+                "description": "List mental models on the active bank"
+              },
+              {
+                "name": "mm show",
+                "description": "Show one mental model (id required)"
+              },
+              {
+                "name": "mm refresh",
+                "description": "Refresh auto-refresh models bank-wide, or one model by id"
+              },
+              {
+                "name": "mm history",
+                "description": "Diff the change history of a mental model"
+              },
+              {
+                "name": "mm seed",
+                "description": "Create any built-in mental models that are missing"
+              },
+              {
+                "name": "mm delete",
+                "description": "Delete a mental model from the bank (id required)"
+              },
+              {
+                "name": "mm reload",
+                "description": "Re-pull the cached <mental_models> block"
+              }
+            ]
+          },
+          {
+            "name": "rename",
+            "source": "builtin",
+            "description": "Rename the current session (omit title to generate)",
+            "input": {
+              "hint": "[title]"
+            }
+          },
+          {
+            "name": "move",
+            "source": "builtin",
+            "description": "Move the current session to a different directory",
+            "input": {
+              "hint": "[<path>]"
+            }
+          },
+          {
+            "name": "wt",
+            "source": "builtin",
+            "aliases": [
+              "worktree"
+            ],
+            "description": "Move this session into a new worktree, changes included",
+            "input": {
+              "hint": "[<branch>]"
+            }
+          },
+          {
+            "name": "add-dir",
+            "source": "builtin",
+            "description": "Add a workspace directory to this session",
+            "input": {
+              "hint": "<path>"
+            }
+          },
+          {
+            "name": "remove-dir",
+            "source": "builtin",
+            "description": "Remove a workspace directory from this session",
+            "input": {
+              "hint": "<path>"
+            }
+          },
+          {
+            "name": "dirs",
+            "source": "builtin",
+            "description": "List this session's workspace directories"
+          },
+          {
+            "name": "marketplace",
+            "source": "builtin",
+            "description": "Manage plugins from marketplaces",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "Add a marketplace source",
+                "usage": "<source>"
+              },
+              {
+                "name": "remove",
+                "description": "Remove a marketplace source",
+                "usage": "<name>"
+              },
+              {
+                "name": "update",
+                "description": "Update marketplace catalog(s)",
+                "usage": "[name]"
+              },
+              {
+                "name": "list",
+                "description": "List configured marketplaces"
+              },
+              {
+                "name": "discover",
+                "description": "Browse available plugins",
+                "usage": "[marketplace]"
+              },
+              {
+                "name": "install",
+                "description": "Install a plugin (interactive browser if no args)",
+                "usage": "[--force] [name@marketplace]"
+              },
+              {
+                "name": "uninstall",
+                "description": "Uninstall a plugin (selector if no args)",
+                "usage": "[name@marketplace]"
+              },
+              {
+                "name": "installed",
+                "description": "List installed marketplace plugins"
+              },
+              {
+                "name": "upgrade",
+                "description": "Upgrade outdated plugins",
+                "usage": "[name@marketplace]"
+              },
+              {
+                "name": "help",
+                "description": "Show usage guide"
+              }
+            ]
+          },
+          {
+            "name": "plugins",
+            "source": "builtin",
+            "aliases": [
+              "plugin"
+            ],
+            "description": "Manage plugins",
+            "input": {
+              "hint": "[list|enable|disable]"
+            },
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "List all installed plugins (npm + marketplace)"
+              },
+              {
+                "name": "enable",
+                "description": "Enable an installed plugin",
+                "usage": "<plugin>"
+              },
+              {
+                "name": "disable",
+                "description": "Disable an installed plugin",
+                "usage": "<plugin>"
+              }
+            ]
+          },
+          {
+            "name": "reload-plugins",
+            "source": "builtin",
+            "description": "Reload all plugins"
+          },
+          {
+            "name": "force",
+            "source": "builtin",
+            "aliases": [
+              "force:"
+            ],
+            "description": "Force next turn to use a specific tool",
+            "input": {
+              "hint": "<tool-name> [prompt]"
+            }
+          },
+          {
+            "name": "forget-approvals",
+            "source": "builtin",
+            "description": "Forget every file and folder approval Ask and remember has recorded"
+          },
+          {
+            "name": "autoresearch",
+            "source": "extension",
+            "description": "Toggle builtin autoresearch mode, or pass off / clear, or a goal message.",
+            "input": {
+              "hint": "arguments"
+            }
+          },
+          {
+            "name": "init",
+            "source": "file",
+            "description": "Generate AGENTS.md for current codebase"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "01a19122-2210-7626-a8f9-5c0a4c5fa068",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:44:55.696208Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "thinkingLevel": "low",
+        "configured": "auto",
+        "resolved": "low",
+        "type": "thinking_level_changed"
+      }
+    }
+  },
+  {
+    "id": "01a19122-2210-7626-a8f9-5c0bd8886f0e",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:44:55.696837Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "agent_start"
+      }
+    }
+  },
+  {
+    "id": "01a19122-2211-72f5-8ce3-877f9306b575",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:44:55.697575Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a19122-2211-72f5-8ce3-878072cd3519",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:44:55.69775Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "content": [
+            {
+              "text": "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue. Then reply with the single word I chose.",
+              "type": "text"
+            }
+          ],
+          "timestamp": 1793436294867.0,
+          "attribution": "user",
+          "role": "user"
+        },
+        "messageId": "msg-1",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a19122-2211-72f5-8ce3-87817df698cf",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:44:55.697797Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "content": [
+            {
+              "text": "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue. Then reply with the single word I chose.",
+              "type": "text"
+            }
+          ],
+          "timestamp": 1793436294867.0,
+          "attribution": "user",
+          "role": "user"
+        },
+        "messageId": "msg-1",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a19122-396c-71af-9fcb-f59d26e6701f",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.676621Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_2c8c501b715b458ea0c002cf",
+              "name": "ask",
+              "arguments": {
+                "i": "Asking colour preference",
+                "questions": [
+                  {
+                    "header": "Colour",
+                    "id": "colour",
+                    "options": [
+                      {
+                        "description": "Warm, bold",
+                        "label": "Red"
+                      },
+                      {
+                        "description": "Cool, calm",
+                        "label": "Blue"
+                      }
+                    ],
+                    "question": "Which colour do you prefer?"
+                  }
+                ]
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793436295698.0,
+          "responseId": "20261031164455a87f37c7867b45de",
+          "credentialId": 1
+        },
+        "messageId": "msg-2",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a19122-396d-7282-83e8-68abfa1aab79",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.677362Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_2c8c501b715b458ea0c002cf",
+              "name": "ask",
+              "arguments": {
+                "i": "Asking colour preference",
+                "questions": [
+                  {
+                    "header": "Colour",
+                    "id": "colour",
+                    "options": [
+                      {
+                        "description": "Warm, bold",
+                        "label": "Red"
+                      },
+                      {
+                        "description": "Cool, calm",
+                        "label": "Blue"
+                      }
+                    ],
+                    "question": "Which colour do you prefer?"
+                  }
+                ]
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793436295698.0,
+          "responseId": "20261031164455a87f37c7867b45de",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_2c8c501b715b458ea0c002cf",
+                "name": "ask",
+                "arguments": {
+                  "i": "Asking colour preference",
+                  "questions": [
+                    {
+                      "header": "Colour",
+                      "id": "colour",
+                      "options": [
+                        {
+                          "description": "Warm, bold",
+                          "label": "Red"
+                        },
+                        {
+                          "description": "Cool, calm",
+                          "label": "Blue"
+                        }
+                      ],
+                      "question": "Which colour do you prefer?"
+                    }
+                  ]
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793436295698.0,
+            "responseId": "20261031164455a87f37c7867b45de",
+            "credentialId": 1
+          },
+          "type": "toolcall_start"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a19122-396d-7282-83e8-68acb7e3dbc0",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.677928Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_2c8c501b715b458ea0c002cf",
+              "name": "ask",
+              "arguments": {
+                "i": "Asking colour preference",
+                "questions": [
+                  {
+                    "header": "Colour",
+                    "id": "colour",
+                    "options": [
+                      {
+                        "description": "Warm, bold",
+                        "label": "Red"
+                      },
+                      {
+                        "description": "Cool, calm",
+                        "label": "Blue"
+                      }
+                    ],
+                    "question": "Which colour do you prefer?"
+                  }
+                ]
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793436295698.0,
+          "responseId": "20261031164455a87f37c7867b45de",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_2c8c501b715b458ea0c002cf",
+                "name": "ask",
+                "arguments": {
+                  "i": "Asking colour preference",
+                  "questions": [
+                    {
+                      "header": "Colour",
+                      "id": "colour",
+                      "options": [
+                        {
+                          "description": "Warm, bold",
+                          "label": "Red"
+                        },
+                        {
+                          "description": "Cool, calm",
+                          "label": "Blue"
+                        }
+                      ],
+                      "question": "Which colour do you prefer?"
+                    }
+                  ]
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793436295698.0,
+            "responseId": "20261031164455a87f37c7867b45de",
+            "credentialId": 1
+          },
+          "type": "toolcall_delta"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a19122-39bd-721e-b9c5-dbd4bb22cf63",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.757609Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_2c8c501b715b458ea0c002cf",
+              "name": "ask",
+              "arguments": {
+                "i": "Asking colour preference",
+                "questions": [
+                  {
+                    "header": "Colour",
+                    "id": "colour",
+                    "options": [
+                      {
+                        "description": "Warm, bold",
+                        "label": "Red"
+                      },
+                      {
+                        "description": "Cool, calm",
+                        "label": "Blue"
+                      }
+                    ],
+                    "question": "Which colour do you prefer?"
+                  }
+                ]
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 4029,
+            "output": 75,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 4104,
+            "cost": {
+              "input": 0.00060435,
+              "output": 0.0000375,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.00064185
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793436295698.0,
+          "responseId": "20261031164455a87f37c7867b45de",
+          "duration": 6057.252624999999,
+          "ttft": 5977.021083,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "type": "toolCall",
+            "id": "call_2c8c501b715b458ea0c002cf",
+            "name": "ask",
+            "arguments": {
+              "i": "Asking colour preference",
+              "questions": [
+                {
+                  "header": "Colour",
+                  "id": "colour",
+                  "options": [
+                    {
+                      "description": "Warm, bold",
+                      "label": "Red"
+                    },
+                    {
+                      "description": "Cool, calm",
+                      "label": "Blue"
+                    }
+                  ],
+                  "question": "Which colour do you prefer?"
+                }
+              ]
+            },
+            "streamIndex": 0,
+            "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}"
+          },
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_2c8c501b715b458ea0c002cf",
+                "name": "ask",
+                "arguments": {
+                  "i": "Asking colour preference",
+                  "questions": [
+                    {
+                      "header": "Colour",
+                      "id": "colour",
+                      "options": [
+                        {
+                          "description": "Warm, bold",
+                          "label": "Red"
+                        },
+                        {
+                          "description": "Cool, calm",
+                          "label": "Blue"
+                        }
+                      ],
+                      "question": "Which colour do you prefer?"
+                    }
+                  ]
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 4029,
+              "output": 75,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 4104,
+              "cost": {
+                "input": 0.00060435,
+                "output": 0.0000375,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.00064185
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793436295698.0,
+            "responseId": "20261031164455a87f37c7867b45de",
+            "duration": 6057.252624999999,
+            "ttft": 5977.021083,
+            "credentialId": 1
+          },
+          "type": "toolcall_end"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a19122-39bd-721e-b9c5-dbd50165615e",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.757837Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_2c8c501b715b458ea0c002cf",
+              "name": "ask",
+              "arguments": {
+                "i": "Asking colour preference",
+                "questions": [
+                  {
+                    "header": "Colour",
+                    "id": "colour",
+                    "options": [
+                      {
+                        "description": "Warm, bold",
+                        "label": "Red"
+                      },
+                      {
+                        "description": "Cool, calm",
+                        "label": "Blue"
+                      }
+                    ],
+                    "question": "Which colour do you prefer?"
+                  }
+                ]
+              },
+              "intent": "Asking colour preference",
+              "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}",
+              "streamIndex": 0
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 4029,
+            "output": 75,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 4104,
+            "cost": {
+              "input": 0.00060435,
+              "output": 0.0000375,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.00064185
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793436295698.0,
+          "responseId": "20261031164455a87f37c7867b45de",
+          "duration": 6057.252624999999,
+          "ttft": 5977.021083,
+          "completedAt": 1793436301757.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-2",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a19122-39bf-723c-999a-1d79733aa4d6",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.759282Z",
+    "body": {
+      "kind": "extensionUiRequest",
+      "frame": {
+        "id": "15bb95e26fe5f150",
+        "questions": [
+          {
+            "id": "colour",
+            "question": "Which colour do you prefer?",
+            "options": [
+              {
+                "label": "Red",
+                "description": "Warm, bold"
+              },
+              {
+                "label": "Blue",
+                "description": "Cool, calm"
+              }
+            ],
+            "header": "Colour",
+            "multi": false
+          }
+        ],
+        "type": "extension_ui_request",
+        "method": "ask"
+      }
+    }
+  },
+  {
+    "id": "01a19122-39bf-723c-999a-1d7a4aa61419",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.759731Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_2c8c501b715b458ea0c002cf",
+        "toolName": "ask",
+        "args": {
+          "questions": [
+            {
+              "header": "Colour",
+              "id": "colour",
+              "options": [
+                {
+                  "description": "Warm, bold",
+                  "label": "Red"
+                },
+                {
+                  "description": "Cool, calm",
+                  "label": "Blue"
+                }
+              ],
+              "question": "Which colour do you prefer?"
+            }
+          ]
+        },
+        "intent": "Asking colour preference",
+        "type": "tool_execution_start"
+      }
+    }
+  },
+  {
+    "id": "01a19122-39c0-70cc-9c3e-51cdd1626d1f",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.76002Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_2c8c501b715b458ea0c002cf",
+        "toolName": "ask",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "User selected: Red"
+            }
+          ],
+          "details": {
+            "question": "Which colour do you prefer?",
+            "options": [
+              "Red",
+              "Blue"
+            ],
+            "multi": false,
+            "selectedOptions": [
+              "Red"
+            ]
+          }
+        },
+        "isError": false,
+        "type": "tool_execution_end"
+      }
+    }
+  },
+  {
+    "id": "01a19122-39c0-70cc-9c3e-51ceea74e849",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.760154Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_2c8c501b715b458ea0c002cf",
+          "toolName": "ask",
+          "content": [
+            {
+              "text": "User selected: Red",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793436301759.0,
+          "details": {
+            "question": "Which colour do you prefer?",
+            "options": [
+              "Red",
+              "Blue"
+            ],
+            "multi": false,
+            "selectedOptions": [
+              "Red"
+            ]
+          }
+        },
+        "messageId": "msg-3",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a19122-39c0-70cc-9c3e-51cfc858b978",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.760245Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_2c8c501b715b458ea0c002cf",
+          "toolName": "ask",
+          "content": [
+            {
+              "text": "User selected: Red",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793436301759.0,
+          "details": {
+            "question": "Which colour do you prefer?",
+            "options": [
+              "Red",
+              "Blue"
+            ],
+            "multi": false,
+            "selectedOptions": [
+              "Red"
+            ]
+          }
+        },
+        "messageId": "msg-3",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a19122-39c1-70a1-9905-c1c5ea314513",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.761054Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_2c8c501b715b458ea0c002cf",
+              "name": "ask",
+              "arguments": {
+                "i": "Asking colour preference",
+                "questions": [
+                  {
+                    "header": "Colour",
+                    "id": "colour",
+                    "options": [
+                      {
+                        "description": "Warm, bold",
+                        "label": "Red"
+                      },
+                      {
+                        "description": "Cool, calm",
+                        "label": "Blue"
+                      }
+                    ],
+                    "question": "Which colour do you prefer?"
+                  }
+                ]
+              },
+              "intent": "Asking colour preference",
+              "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}",
+              "streamIndex": 0
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 4029,
+            "output": 75,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 4104,
+            "cost": {
+              "input": 0.00060435,
+              "output": 0.0000375,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.00064185
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793436295698.0,
+          "responseId": "20261031164455a87f37c7867b45de",
+          "duration": 6057.252624999999,
+          "ttft": 5977.021083,
+          "credentialId": 1
+        },
+        "toolResults": [
+          {
+            "role": "toolResult",
+            "toolCallId": "call_2c8c501b715b458ea0c002cf",
+            "toolName": "ask",
+            "content": [
+              {
+                "text": "User selected: Red",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793436301759.0,
+            "details": {
+              "question": "Which colour do you prefer?",
+              "options": [
+                "Red",
+                "Blue"
+              ],
+              "multi": false,
+              "selectedOptions": [
+                "Red"
+              ]
+            }
+          }
+        ],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a19122-39c1-70a1-9905-c1c6bbfdee0f",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:01.761082Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a19122-497f-753b-9b99-7562f654c3ac",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:05.791977Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "Red",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793436301761.0,
+          "responseId": "2026103116450129ba5a10cd904502",
+          "credentialId": 1
+        },
+        "messageId": "msg-4",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a19122-4981-755e-a5c6-d3d4c912dc56",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:05.793837Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "Red",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793436301761.0,
+          "responseId": "2026103116450129ba5a10cd904502",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "Red",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793436301761.0,
+            "responseId": "2026103116450129ba5a10cd904502",
+            "credentialId": 1
+          },
+          "type": "text_start"
+        },
+        "messageId": "msg-4",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a19122-4983-706a-83ab-b8c1d78eba0a",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:05.795904Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "Red",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793436301761.0,
+          "responseId": "2026103116450129ba5a10cd904502",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "Red",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "Red",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793436301761.0,
+            "responseId": "2026103116450129ba5a10cd904502",
+            "credentialId": 1
+          },
+          "type": "text_delta"
+        },
+        "messageId": "msg-4",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a19122-4985-73f4-a9ba-1c04689ca9ff",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:05.797959Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "Red",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 208,
+            "output": 3,
+            "cacheRead": 3904,
+            "cacheWrite": 0,
+            "totalTokens": 4115,
+            "cost": {
+              "input": 0.0000312,
+              "output": 1.5e-6,
+              "cacheRead": 0.00011712,
+              "cacheWrite": 0.0,
+              "total": 0.00014982
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793436301761.0,
+          "responseId": "2026103116450129ba5a10cd904502",
+          "duration": 4033.331125,
+          "ttft": 4028.662916,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "content": "Red",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "Red",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 208,
+              "output": 3,
+              "cacheRead": 3904,
+              "cacheWrite": 0,
+              "totalTokens": 4115,
+              "cost": {
+                "input": 0.0000312,
+                "output": 1.5e-6,
+                "cacheRead": 0.00011712,
+                "cacheWrite": 0.0,
+                "total": 0.00014982
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793436301761.0,
+            "responseId": "2026103116450129ba5a10cd904502",
+            "duration": 4033.331125,
+            "ttft": 4028.662916,
+            "credentialId": 1
+          },
+          "type": "text_end"
+        },
+        "messageId": "msg-4",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a19122-4986-7752-818e-bae73bb3c918",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:05.798667Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "Red",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 208,
+            "output": 3,
+            "cacheRead": 3904,
+            "cacheWrite": 0,
+            "totalTokens": 4115,
+            "cost": {
+              "input": 0.0000312,
+              "output": 1.5e-6,
+              "cacheRead": 0.00011712,
+              "cacheWrite": 0.0,
+              "total": 0.00014982
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793436301761.0,
+          "responseId": "2026103116450129ba5a10cd904502",
+          "duration": 4033.331125,
+          "ttft": 4028.662916,
+          "completedAt": 1793436305795.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-4",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a19122-4986-7752-818e-bae8bb7a604f",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:05.798931Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "Red",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 208,
+            "output": 3,
+            "cacheRead": 3904,
+            "cacheWrite": 0,
+            "totalTokens": 4115,
+            "cost": {
+              "input": 0.0000312,
+              "output": 1.5e-6,
+              "cacheRead": 0.00011712,
+              "cacheWrite": 0.0,
+              "total": 0.00014982
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793436301761.0,
+          "responseId": "2026103116450129ba5a10cd904502",
+          "duration": 4033.331125,
+          "ttft": 4028.662916,
+          "credentialId": 1
+        },
+        "toolResults": [],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a19122-4987-7756-952c-c019c77e5db2",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:05.799865Z",
+    "body": {
+      "kind": "extensionUiRequest",
+      "frame": {
+        "id": "15bb95e661e5f151",
+        "widgetKey": "autoresearch",
+        "type": "extension_ui_request",
+        "method": "setWidget"
+      }
+    }
+  },
+  {
+    "id": "01a19122-498b-7566-aa9a-338582dd104a",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:05.803746Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "messages": [
+          {
+            "content": [
+              {
+                "text": "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue. Then reply with the single word I chose.",
+                "type": "text"
+              }
+            ],
+            "timestamp": 1793436294867.0,
+            "attribution": "user",
+            "role": "user"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_2c8c501b715b458ea0c002cf",
+                "name": "ask",
+                "arguments": {
+                  "i": "Asking colour preference",
+                  "questions": [
+                    {
+                      "header": "Colour",
+                      "id": "colour",
+                      "options": [
+                        {
+                          "description": "Warm, bold",
+                          "label": "Red"
+                        },
+                        {
+                          "description": "Cool, calm",
+                          "label": "Blue"
+                        }
+                      ],
+                      "question": "Which colour do you prefer?"
+                    }
+                  ]
+                },
+                "intent": "Asking colour preference",
+                "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}",
+                "streamIndex": 0
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 4029,
+              "output": 75,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 4104,
+              "cost": {
+                "input": 0.00060435,
+                "output": 0.0000375,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.00064185
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793436295698.0,
+            "responseId": "20261031164455a87f37c7867b45de",
+            "duration": 6057.252624999999,
+            "ttft": 5977.021083,
+            "credentialId": 1
+          },
+          {
+            "role": "toolResult",
+            "toolCallId": "call_2c8c501b715b458ea0c002cf",
+            "toolName": "ask",
+            "content": [
+              {
+                "text": "User selected: Red",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793436301759.0,
+            "details": {
+              "question": "Which colour do you prefer?",
+              "options": [
+                "Red",
+                "Blue"
+              ],
+              "multi": false,
+              "selectedOptions": [
+                "Red"
+              ]
+            }
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "Red",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 208,
+              "output": 3,
+              "cacheRead": 3904,
+              "cacheWrite": 0,
+              "totalTokens": 4115,
+              "cost": {
+                "input": 0.0000312,
+                "output": 1.5e-6,
+                "cacheRead": 0.00011712,
+                "cacheWrite": 0.0,
+                "total": 0.00014982
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793436301761.0,
+            "responseId": "2026103116450129ba5a10cd904502",
+            "duration": 4033.331125,
+            "ttft": 4028.662916,
+            "credentialId": 1
+          }
+        ],
+        "isTerminal": true,
+        "yielded": true,
+        "type": "agent_end"
+      }
+    }
+  },
+  {
+    "id": "01a19122-498b-7566-aa9a-33866f6e238e",
+    "live": "01a19122-1ed0-7492-a7dd-013d28f9acec",
+    "at": "2026-10-31T08:45:05.803804Z",
+    "body": {
+      "kind": "promptResult",
+      "frame": {
+        "agentInvoked": true,
+        "status": "completed",
+        "sessionSettled": true,
+        "id": "req_4"
+      }
+    }
+  }
+]

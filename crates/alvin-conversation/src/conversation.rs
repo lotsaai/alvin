@@ -106,6 +106,13 @@ impl Conversation {
     }
   }
 
+  /// Closes the dialog a request named, after the user answered or dismissed it.
+  pub fn dialog_answered(&mut self, live: LiveSessionId, request: &str) {
+    if let Some(view) = self.live.get_mut(&live) {
+      view.dialogs.close(request);
+    }
+  }
+
   /// The event stream cannot continue without a gap: drops the transcript, the message and tools in progress, and marks
   /// the session reload-needed. The session stays tracked and listed.
   pub fn resync(&mut self, live: LiveSessionId) {
@@ -117,7 +124,7 @@ impl Conversation {
 
 #[cfg(test)]
 mod tests {
-  use alvin_protocol::{AgentMessage, EventBody, MessagesPage, PromptStatus, RpcAgentEvent};
+  use alvin_protocol::{AgentMessage, EventBody, ExtensionUiRequest, MessagesPage, PromptStatus, RpcAgentEvent};
 
   use super::*;
   use crate::live::{Origin, Run};
@@ -146,6 +153,13 @@ mod tests {
     Recorded {
       events: serde_json::from_str(include_str!("../fixtures/queue_turn.events.json")).unwrap(),
       messages: serde_json::from_str(include_str!("../fixtures/queue_turn.messages.json")).unwrap(),
+    }
+  }
+
+  fn asked() -> Recorded {
+    Recorded {
+      events: serde_json::from_str(include_str!("../fixtures/ask_turn.events.json")).unwrap(),
+      messages: serde_json::from_str(include_str!("../fixtures/ask_turn.messages.json")).unwrap(),
     }
   }
 
@@ -445,5 +459,60 @@ mod tests {
     assert_eq!(view.queue.live_steered, 0);
     assert_eq!(comparable(&view.transcript), comparable(&recorded.messages.messages));
     assert_eq!(view.run, Run::Settled);
+  }
+
+  #[test]
+  fn an_ask_opens_a_dialog_that_stays_until_it_is_answered() {
+    let recorded = asked();
+    let live = summary(&recorded).live;
+    let mut conversation = Conversation::default();
+    conversation.open(&summary(&recorded));
+
+    let mut opened = None;
+    for event in &recorded.events {
+      conversation.apply(event);
+      if let EventBody::ExtensionUiRequest(ExtensionUiRequest::Ask(ask)) = &event.body {
+        let pending = conversation.live(live).unwrap().dialogs.pending();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(crate::request_id(&pending[0]), ask.id);
+        opened = Some(ask.id.clone());
+      }
+    }
+
+    // The widget requests around the dialog show nothing; the dialog is still waiting.
+    let id = opened.expect("the run asked a question");
+    assert_eq!(conversation.live(live).unwrap().dialogs.pending().len(), 1);
+    conversation.dialog_answered(live, &id);
+    assert!(conversation.live(live).unwrap().dialogs.pending().is_empty());
+    assert_eq!(
+      comparable(&conversation.live(live).unwrap().transcript),
+      comparable(&recorded.messages.messages)
+    );
+  }
+
+  #[test]
+  fn an_extension_cancel_closes_the_dialog_it_names() {
+    let recorded = asked();
+    let live = summary(&recorded).live;
+    let mut conversation = Conversation::default();
+    conversation.open(&summary(&recorded));
+    let ask = recorded
+      .events
+      .iter()
+      .find(|event| matches!(&event.body, EventBody::ExtensionUiRequest(ExtensionUiRequest::Ask(_))))
+      .expect("the run asked a question");
+    conversation.apply(ask);
+    let EventBody::ExtensionUiRequest(ExtensionUiRequest::Ask(request)) = &ask.body else {
+      unreachable!()
+    };
+
+    let mut cancel = ask.clone();
+    cancel.body = EventBody::ExtensionUiRequest(ExtensionUiRequest::Cancel(alvin_protocol::CancelUiRequest {
+      id: "cancel".to_owned(),
+      target_id: request.id.clone(),
+    }));
+    conversation.apply(&cancel);
+
+    assert!(conversation.live(live).unwrap().dialogs.pending().is_empty());
   }
 }

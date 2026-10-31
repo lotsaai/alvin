@@ -1,12 +1,12 @@
 [
   {
-    "id": "01a19110-0e7f-7016-96df-41cdea60eebd",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:11.039208Z",
+    "id": "01a19121-fa14-770f-9626-edbf26dcb589",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:45.460171Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb9157963a27e7",
+        "id": "15bb95d2798ff833",
         "widgetKey": "autoresearch",
         "type": "extension_ui_request",
         "method": "setWidget"
@@ -14,9 +14,9 @@
     }
   },
   {
-    "id": "01a19110-0e7f-7016-96df-41ce906c334c",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:11.039216Z",
+    "id": "01a19121-fa14-770f-9626-edc01d3aed0e",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:45.460178Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -25,9 +25,9 @@
     }
   },
   {
-    "id": "01a19110-0e7f-7016-96df-41cfcf96b06c",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:11.039218Z",
+    "id": "01a19121-fa14-770f-9626-edc1ce3e8e29",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:45.46018Z",
     "body": {
       "kind": "availableCommandsUpdate",
       "frame": {
@@ -990,9 +990,9 @@
     }
   },
   {
-    "id": "01a19110-11b5-76bf-8b74-29499ac5a7fd",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:11.861352Z",
+    "id": "01a19121-fc40-728e-9a2c-b9901a74e0df",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.016211Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1004,9 +1004,9 @@
     }
   },
   {
-    "id": "01a19110-11b6-7468-a9c6-ac057fadb224",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:11.862155Z",
+    "id": "01a19121-fc41-7511-81e1-f4aad665c4cc",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.017842Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1015,9 +1015,9 @@
     }
   },
   {
-    "id": "01a19110-11b7-7695-a97d-31f0bdcd771a",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:11.863136Z",
+    "id": "01a19121-fc43-7421-84fa-40c119d372f9",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.019372Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1026,9 +1026,9 @@
     }
   },
   {
-    "id": "01a19110-11b7-7695-a97d-31f16abb6e7e",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:11.863358Z",
+    "id": "01a19121-fc43-7421-84fa-40c2cb22611e",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.019659Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1039,7 +1039,7 @@
               "type": "text"
             }
           ],
-          "timestamp": 1793435111039.0,
+          "timestamp": 1793436285460.0,
           "attribution": "user",
           "role": "user"
         },
@@ -1049,9 +1049,9 @@
     }
   },
   {
-    "id": "01a19110-11b7-7695-a97d-31f2523e31cb",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:11.86342Z",
+    "id": "01a19121-fc43-7421-84fa-40c3792016e4",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.019725Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1062,7 +1062,7 @@
               "type": "text"
             }
           ],
-          "timestamp": 1793435111039.0,
+          "timestamp": 1793436285460.0,
           "attribution": "user",
           "role": "user"
         },
@@ -1072,9 +1072,9 @@
     }
   },
   {
-    "id": "01a19110-164f-7146-884b-20426a25b45f",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:13.039826Z",
+    "id": "01a19121-ffbc-777c-8d6a-5373f88c1ed7",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.908481Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1082,8 +1082,10 @@
           "role": "assistant",
           "content": [
             {
-              "text": "1\n",
-              "type": "text"
+              "thinking": "The",
+              "thinkingSignature": "reasoning_content",
+              "type": "thinking",
+              "summary": false
             }
           ],
           "api": "openai-completions",
@@ -1104,8 +1106,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793435111864.0,
-          "responseId": "20261031162512af6db1768c2742e9",
+          "timestamp": 1793436286021.0,
+          "responseId": "20261031164446161a6c08a32b4a28",
           "credentialId": 1
         },
         "messageId": "msg-2",
@@ -1114,9 +1116,9 @@
     }
   },
   {
-    "id": "01a19110-1650-71b8-a59f-b47b301897be",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:13.04025Z",
+    "id": "01a19121-ffbe-769a-a512-b9d6fba00eaf",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.910723Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1124,8 +1126,10 @@
           "role": "assistant",
           "content": [
             {
-              "text": "1\n",
-              "type": "text"
+              "thinking": "The",
+              "thinkingSignature": "reasoning_content",
+              "type": "thinking",
+              "summary": false
             }
           ],
           "api": "openai-completions",
@@ -1146,8 +1150,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793435111864.0,
-          "responseId": "20261031162512af6db1768c2742e9",
+          "timestamp": 1793436286021.0,
+          "responseId": "20261031164446161a6c08a32b4a28",
           "credentialId": 1
         },
         "assistantMessageEvent": {
@@ -1156,8 +1160,10 @@
             "role": "assistant",
             "content": [
               {
-                "text": "1\n",
-                "type": "text"
+                "thinking": "The",
+                "thinkingSignature": "reasoning_content",
+                "type": "thinking",
+                "summary": false
               }
             ],
             "api": "openai-completions",
@@ -1178,11 +1184,11 @@
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793435111864.0,
-            "responseId": "20261031162512af6db1768c2742e9",
+            "timestamp": 1793436286021.0,
+            "responseId": "20261031164446161a6c08a32b4a28",
             "credentialId": 1
           },
-          "type": "text_start"
+          "type": "thinking_start"
         },
         "messageId": "msg-2",
         "type": "message_update"
@@ -1190,9 +1196,9 @@
     }
   },
   {
-    "id": "01a19110-1650-71b8-a59f-b47c5f3623bd",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:13.040567Z",
+    "id": "01a19121-ffbf-728a-a2f0-2fd97e5fa46f",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.911958Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1200,8 +1206,10 @@
           "role": "assistant",
           "content": [
             {
-              "text": "1\n",
-              "type": "text"
+              "thinking": "The",
+              "thinkingSignature": "reasoning_content",
+              "type": "thinking",
+              "summary": false
             }
           ],
           "api": "openai-completions",
@@ -1222,19 +1230,21 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793435111864.0,
-          "responseId": "20261031162512af6db1768c2742e9",
+          "timestamp": 1793436286021.0,
+          "responseId": "20261031164446161a6c08a32b4a28",
           "credentialId": 1
         },
         "assistantMessageEvent": {
           "contentIndex": 0,
-          "delta": "1",
+          "delta": "The",
           "partial": {
             "role": "assistant",
             "content": [
               {
-                "text": "1\n",
-                "type": "text"
+                "thinking": "The",
+                "thinkingSignature": "reasoning_content",
+                "type": "thinking",
+                "summary": false
               }
             ],
             "api": "openai-completions",
@@ -1255,11 +1265,11 @@
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793435111864.0,
-            "responseId": "20261031162512af6db1768c2742e9",
+            "timestamp": 1793436286021.0,
+            "responseId": "20261031164446161a6c08a32b4a28",
             "credentialId": 1
           },
-          "type": "text_delta"
+          "type": "thinking_delta"
         },
         "messageId": "msg-2",
         "type": "message_update"
@@ -1267,9 +1277,9 @@
     }
   },
   {
-    "id": "01a19110-1650-71b8-a59f-b47d04273c75",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:13.040886Z",
+    "id": "01a19121-ffc7-72ff-9dbc-3d50856dd627",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.919071Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1277,85 +1287,10 @@
           "role": "assistant",
           "content": [
             {
-              "text": "1\n",
-              "type": "text"
-            }
-          ],
-          "api": "openai-completions",
-          "provider": "zai",
-          "model": "glm-5.3-flash",
-          "usage": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0,
-            "totalTokens": 0,
-            "cost": {
-              "input": 0.0,
-              "output": 0.0,
-              "cacheRead": 0.0,
-              "cacheWrite": 0.0,
-              "total": 0.0
-            }
-          },
-          "stopReason": "stop",
-          "timestamp": 1793435111864.0,
-          "responseId": "20261031162512af6db1768c2742e9",
-          "credentialId": 1
-        },
-        "assistantMessageEvent": {
-          "contentIndex": 0,
-          "delta": "\n",
-          "partial": {
-            "role": "assistant",
-            "content": [
-              {
-                "text": "1\n",
-                "type": "text"
-              }
-            ],
-            "api": "openai-completions",
-            "provider": "zai",
-            "model": "glm-5.3-flash",
-            "usage": {
-              "input": 0,
-              "output": 0,
-              "cacheRead": 0,
-              "cacheWrite": 0,
-              "totalTokens": 0,
-              "cost": {
-                "input": 0.0,
-                "output": 0.0,
-                "cacheRead": 0.0,
-                "cacheWrite": 0.0,
-                "total": 0.0
-              }
-            },
-            "stopReason": "stop",
-            "timestamp": 1793435111864.0,
-            "responseId": "20261031162512af6db1768c2742e9",
-            "credentialId": 1
-          },
-          "type": "text_delta"
-        },
-        "messageId": "msg-2",
-        "type": "message_update"
-      }
-    }
-  },
-  {
-    "id": "01a19110-1652-7289-ae77-7634cd649a8b",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:13.042173Z",
-    "body": {
-      "kind": "agent",
-      "frame": {
-        "message": {
-          "role": "assistant",
-          "content": [
-            {
-              "text": "1\n",
-              "type": "text"
+              "thinking": "The",
+              "thinkingSignature": "reasoning_content",
+              "type": "thinking",
+              "summary": false
             }
           ],
           "api": "openai-completions",
@@ -1376,11 +1311,11 @@
             }
           },
           "stopReason": "aborted",
-          "timestamp": 1793435111864.0,
-          "responseId": "20261031162512af6db1768c2742e9",
+          "timestamp": 1793436286021.0,
+          "responseId": "20261031164446161a6c08a32b4a28",
           "errorMessage": "Interrupted by user",
           "errorId": 67112960.0,
-          "completedAt": 1793435113041.0,
+          "completedAt": 1793436286917.0,
           "credentialId": 1
         },
         "messageId": "msg-2",
@@ -1389,9 +1324,9 @@
     }
   },
   {
-    "id": "01a19110-1653-73a6-b28d-d48717ad2422",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:13.043535Z",
+    "id": "01a19121-ffcf-75f3-8cc2-3c0e25432ddf",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.92745Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1399,8 +1334,10 @@
           "role": "assistant",
           "content": [
             {
-              "text": "1\n",
-              "type": "text"
+              "thinking": "The",
+              "thinkingSignature": "reasoning_content",
+              "type": "thinking",
+              "summary": false
             }
           ],
           "api": "openai-completions",
@@ -1421,8 +1358,8 @@
             }
           },
           "stopReason": "aborted",
-          "timestamp": 1793435111864.0,
-          "responseId": "20261031162512af6db1768c2742e9",
+          "timestamp": 1793436286021.0,
+          "responseId": "20261031164446161a6c08a32b4a28",
           "errorMessage": "Interrupted by user",
           "credentialId": 1
         },
@@ -1432,9 +1369,9 @@
     }
   },
   {
-    "id": "01a19110-1654-7247-9de0-62a8fd1719f3",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:13.044119Z",
+    "id": "01a19121-ffd1-75f1-8a42-5873147b0329",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.92953Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1446,7 +1383,7 @@
                 "type": "text"
               }
             ],
-            "timestamp": 1793435111039.0,
+            "timestamp": 1793436285460.0,
             "attribution": "user",
             "role": "user"
           },
@@ -1454,8 +1391,10 @@
             "role": "assistant",
             "content": [
               {
-                "text": "1\n",
-                "type": "text"
+                "thinking": "The",
+                "thinkingSignature": "reasoning_content",
+                "type": "thinking",
+                "summary": false
               }
             ],
             "api": "openai-completions",
@@ -1476,8 +1415,8 @@
               }
             },
             "stopReason": "aborted",
-            "timestamp": 1793435111864.0,
-            "responseId": "20261031162512af6db1768c2742e9",
+            "timestamp": 1793436286021.0,
+            "responseId": "20261031164446161a6c08a32b4a28",
             "errorMessage": "Interrupted by user",
             "credentialId": 1
           }
@@ -1489,13 +1428,13 @@
     }
   },
   {
-    "id": "01a19110-1654-7247-9de0-62a9f1a5ffe7",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:13.044128Z",
+    "id": "01a19121-ffd1-75f1-8a42-5874d66f879b",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.929561Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bb915994fa27e9",
+        "id": "15bb95d3f40ff835",
         "widgetKey": "autoresearch",
         "type": "extension_ui_request",
         "method": "setWidget"
@@ -1503,9 +1442,9 @@
     }
   },
   {
-    "id": "01a19110-1654-7247-9de0-62aab30b2ca1",
-    "live": "01a19110-0e7f-7016-96df-41cccde259f6",
-    "at": "2026-10-31T08:25:13.044146Z",
+    "id": "01a19121-ffd1-75f1-8a42-5875b4a14f75",
+    "live": "01a19121-fa14-770f-9626-edbe5fde6dd9",
+    "at": "2026-10-31T08:44:46.92957Z",
     "body": {
       "kind": "promptResult",
       "frame": {

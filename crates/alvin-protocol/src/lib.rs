@@ -1,5 +1,6 @@
 //! Wire contract between the alvin gateway and its clients.
 
+mod dialog;
 mod error;
 mod error_codes;
 mod events;
@@ -11,6 +12,9 @@ mod projects;
 mod queue;
 mod sessions;
 
+#[cfg(feature = "server")]
+pub use dialog::DialogApiServer;
+pub use dialog::{DialogApiClient, RespondRequest};
 pub use error::{Error, Result};
 pub use error_codes::{ErrorCode, ErrorData};
 pub use events::{Event, EventBody};

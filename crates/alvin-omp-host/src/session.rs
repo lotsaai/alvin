@@ -6,14 +6,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashResult, MessagesPage, ModelCycleResult, ModelInfo, PromoteQueuedMessageResult, PromptAck,
-  QueuedMessageQueue, RemoveQueuedMessageResult, SessionState, ThinkingLevel, ThinkingLevelCycleResult,
+  AbortAndRestoreQueueResult, BashResult, ExtensionUiResponse, MessagesPage, ModelCycleResult, ModelInfo, PromoteQueuedMessageResult,
+  PromptAck, QueuedMessageQueue, RemoveQueuedMessageResult, SessionState, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use omp_rpc::{
   AbortAndPromptCommand, AbortAndRestoreQueueCommand, AbortBashCommand, AbortCommand, BashCommand, Client, Command, CycleModelCommand,
   CycleThinkingLevelCommand, FollowUpCommand, GetAvailableModelsCommand, GetAvailableThinkingLevelsCommand, GetMessagesPageCommand,
-  GetStateCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, SetModelCommand, SetThinkingLevelCommand,
-  SteerCommand,
+  GetStateCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, RpcInbound, SetModelCommand,
+  SetThinkingLevelCommand, SteerCommand,
 };
 
 use crate::translate::convert;
@@ -108,6 +108,19 @@ impl Session {
   pub async fn restore_queue(&self) -> Result<AbortAndRestoreQueueResult> {
     let result = self.call(AbortAndRestoreQueueCommand::default()).await?;
     convert("restored queue", &result)
+  }
+
+  /// Answers or dismisses an extension dialog. omp ignores an answer to a dialog it already closed.
+  pub async fn respond(&self, response: ExtensionUiResponse) -> Result<()> {
+    let response = convert("dialog response", &response)?;
+    let client = self
+      .client
+      .clone()
+      .ok_or_else(|| Error::from_rpc(&self.cwd, "extension_ui_response", omp_rpc::Error::Closed))?;
+    let cwd = self.cwd.clone();
+    // Queueing a frame does not wait for omp, but the client's lock is blocking.
+    let outcome = tokio::task::spawn_blocking(move || client.send(&RpcInbound::ExtensionUiResponse(response))).await?;
+    outcome.map_err(|source| Error::from_rpc(&cwd, "extension_ui_response", source))
   }
 
   /// The models omp can use.

@@ -1,0 +1,143 @@
+{
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue. Then reply with the single word I chose.",
+          "type": "text"
+        }
+      ],
+      "timestamp": 1793436294867.0,
+      "attribution": "user",
+      "role": "user"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_2c8c501b715b458ea0c002cf",
+          "name": "ask",
+          "arguments": {
+            "i": "Asking colour preference",
+            "questions": [
+              {
+                "header": "Colour",
+                "id": "colour",
+                "options": [
+                  {
+                    "description": "Warm, bold",
+                    "label": "Red"
+                  },
+                  {
+                    "description": "Cool, calm",
+                    "label": "Blue"
+                  }
+                ],
+                "question": "Which colour do you prefer?"
+              }
+            ]
+          },
+          "intent": "Asking colour preference",
+          "partialArgs": "{\"i\":\"Asking colour preference\",\"questions\":[{\"header\": \"Colour\", \"id\": \"colour\", \"options\": [{\"description\": \"Warm, bold\", \"label\": \"Red\"}, {\"description\": \"Cool, calm\", \"label\": \"Blue\"}], \"question\": \"Which colour do you prefer?\"}]}",
+          "streamIndex": 0
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 4029,
+        "output": 75,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 4104,
+        "cost": {
+          "input": 0.00060435,
+          "output": 0.0000375,
+          "cacheRead": 0.0,
+          "cacheWrite": 0.0,
+          "total": 0.00064185
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793436295698.0,
+      "responseId": "20261031164455a87f37c7867b45de",
+      "duration": 6057.252624999999,
+      "ttft": 5977.021083,
+      "completedAt": 1793436301757.0,
+      "contextSnapshot": {
+        "promptTokens": 4029,
+        "nonMessageTokens": 3460,
+        "toolSchemaTokens": 1193,
+        "compactionEpoch": 0
+      },
+      "credentialId": 1
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_2c8c501b715b458ea0c002cf",
+      "toolName": "ask",
+      "content": [
+        {
+          "text": "User selected: Red",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "timestamp": 1793436301759.0,
+      "details": {
+        "question": "Which colour do you prefer?",
+        "options": [
+          "Red",
+          "Blue"
+        ],
+        "multi": false,
+        "selectedOptions": [
+          "Red"
+        ]
+      }
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "Red",
+          "type": "text"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 208,
+        "output": 3,
+        "cacheRead": 3904,
+        "cacheWrite": 0,
+        "totalTokens": 4115,
+        "cost": {
+          "input": 0.0000312,
+          "output": 1.5e-6,
+          "cacheRead": 0.00011712,
+          "cacheWrite": 0.0,
+          "total": 0.00014982
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1793436301761.0,
+      "responseId": "2026103116450129ba5a10cd904502",
+      "errorId": 0.0,
+      "duration": 4033.331125,
+      "ttft": 4028.662916,
+      "completedAt": 1793436305795.0,
+      "credentialId": 1,
+      "contextSnapshot": {
+        "promptTokens": 4112,
+        "nonMessageTokens": 3460,
+        "toolSchemaTokens": 1193,
+        "compactionEpoch": 0
+      }
+    }
+  ],
+  "totalMessages": 4
+}

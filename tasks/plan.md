@@ -211,7 +211,7 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 
 #### Task 16: Extension dialogs
 **Description:** `dialog/respond`; extension UI request and `cancel` events; `DialogHost` (one dialog at a time per session, queued); `notify` → Notification; `setStatus` → status bar; `setWidget` → widget lines; `set_editor_text` → composer.
-**Acceptance criteria:** [ ] an `ask` tool call opens a dialog and the answer reaches omp; [ ] a second test cancels the dialog and it closes; [ ] status and widget updates render.
+**Acceptance criteria:** [x] an `ask` tool call opens a dialog and the answer reaches omp; [x] a second test cancels the dialog and it closes; [x] status and widget updates render.
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 13. **Files:** `alvin-protocol/src/dialog.rs`, host translate, gateway rpc + tests, `alvin-conversation/src/dialogs.rs`, `alvin-conversation-ui/src/{dialogs,status}.rs`. **Scope:** M.
 
 #### Task 17: History tree: read and render

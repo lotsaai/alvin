@@ -35,6 +35,11 @@ pub(crate) struct Fixture {
 
 impl Fixture {
   pub(crate) fn new() -> Self {
+    Self::with_tools(&["--no-tools"])
+  }
+
+  /// A fixture whose omp runs with these tool flags: `--no-tools`, or `--tools ask` for a tool that opens a dialog.
+  pub(crate) fn with_tools(tools: &[&str]) -> Self {
     let base = std::env::temp_dir().join(format!("alvin-ui-{}", EventId::new().as_uuid()));
     std::fs::create_dir_all(&base).unwrap();
     let base = base.canonicalize().unwrap();
@@ -53,18 +58,19 @@ impl Fixture {
     let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
       .map(PathBuf::from)
       .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".omp/agent"));
-    let args = [
-      "--no-tools",
-      "--no-skills",
-      "--no-rules",
-      "--no-extensions",
-      "--no-context-files",
-      "--session-dir",
-    ]
-    .map(OsString::from)
-    .into_iter()
-    .chain([session_dir.into_os_string()])
-    .collect();
+    let args = tools
+      .iter()
+      .copied()
+      .chain([
+        "--no-skills",
+        "--no-rules",
+        "--no-extensions",
+        "--no-context-files",
+        "--session-dir",
+      ])
+      .map(OsString::from)
+      .chain([session_dir.into_os_string()])
+      .collect();
     let omp = HostConfig::builder()
       .omp(PathBuf::from("omp"))
       .extra_args(args)
