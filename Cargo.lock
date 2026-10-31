@@ -32,6 +32,8 @@ dependencies = [
  "alvin-workspace-hack",
  "blake3",
  "code-workspace",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 

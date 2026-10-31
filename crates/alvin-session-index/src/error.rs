@@ -24,6 +24,54 @@ pub enum Error {
     #[source]
     source: std::io::Error,
   },
+
+  /// A directory could not be listed.
+  #[error("reading directory {path}")]
+  ReadDir {
+    /// The directory.
+    path: PathBuf,
+    /// The underlying IO error.
+    #[source]
+    source: std::io::Error,
+  },
+
+  /// A session file could not be opened or read.
+  #[error("reading session file {path}")]
+  ReadFile {
+    /// The session file.
+    path: PathBuf,
+    /// The underlying IO error.
+    #[source]
+    source: std::io::Error,
+  },
+
+  /// A record at the head of a session file is not valid JSON of the expected shape.
+  #[error("decoding record at byte {offset} of {path}")]
+  DecodeRecord {
+    /// The session file.
+    path: PathBuf,
+    /// Byte offset of the record's line.
+    offset: usize,
+    /// The decoding error.
+    #[source]
+    source: serde_json::Error,
+  },
+
+  /// A title slot record appeared after the first line of a session file.
+  #[error("title slot at byte {offset} of {path} is not the first record")]
+  MisplacedTitleSlot {
+    /// The session file.
+    path: PathBuf,
+    /// Byte offset of the record's line.
+    offset: usize,
+  },
+
+  /// The head window ends before a complete session header.
+  #[error("no complete session header in the head of {path}")]
+  HeaderIncomplete {
+    /// The session file.
+    path: PathBuf,
+  },
 }
 
 /// Result alias for this crate.

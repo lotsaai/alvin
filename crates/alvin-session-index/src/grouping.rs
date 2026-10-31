@@ -99,7 +99,8 @@ mod tests {
   use alvin_protocol::{CheckoutId, ProjectId, SessionId};
 
   use super::group;
-  use crate::test_support::{TempDir, run};
+  use crate::scan;
+  use crate::test_support::{TempDir, run, run_omp};
 
   fn project_id(root: &Path) -> ProjectId {
     ProjectId::from_digest(*blake3::hash(root.as_os_str().as_encoded_bytes()).as_bytes())
@@ -247,5 +248,42 @@ mod tests {
         checkouts: vec![checkout(&plain, None)]
       }]
     );
+  }
+
+  #[test]
+  fn real_omp_sessions_in_git_and_jj_checkouts_group_into_two_projects() {
+    let tmp = TempDir::new();
+    let git = tmp.path().join("git-repo");
+    std::fs::create_dir(&git).unwrap();
+    run(&git, "git", &["init", "--quiet"]);
+    run(&git, "git", &["commit", "--quiet", "--allow-empty", "-m", "init"]);
+    run(&git, "git", &["worktree", "add", "--quiet", "../git-wt1", "-b", "one"]);
+    run(&git, "git", &["worktree", "add", "--quiet", "../git-wt2", "-b", "two"]);
+    run(tmp.path(), "jj", &["git", "init", "jj-repo"]);
+    let jj = tmp.path().join("jj-repo");
+    run(&jj, "jj", &["workspace", "add", "../jj-ws1"]);
+    run(&jj, "jj", &["workspace", "add", "../jj-ws2"]);
+    let names = ["git-repo", "git-wt1", "git-wt2", "jj-repo", "jj-ws1", "jj-ws2"];
+    let cwds: Vec<PathBuf> = names.iter().map(|name| tmp.path().join(name)).collect();
+
+    let root = tmp.path().join("sessions");
+    std::thread::scope(|scope| {
+      for cwd in &cwds {
+        let dir = root.join(cwd.file_name().unwrap());
+        scope.spawn(move || run_omp(cwd, &dir, "Reply with the single word ok."));
+      }
+    });
+
+    let heads: Vec<_> = scan(&root).unwrap().into_iter().map(|head| head.unwrap()).collect();
+    let projects = group(heads.into_iter().map(|head| (head.cwd, head.id))).unwrap();
+
+    let resolved: Vec<_> = projects
+      .iter()
+      .map(|project| match project {
+        ProjectSummary::Resolved { root, checkouts, .. } => (root.clone(), checkouts.len()),
+        ProjectSummary::Unresolved { cwd, .. } => panic!("unresolved: {}", cwd.display()),
+      })
+      .collect();
+    assert_eq!(resolved, vec![(git, 3), (jj, 3)]);
   }
 }

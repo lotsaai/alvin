@@ -7,10 +7,10 @@ Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mis
 - [x] Task 2: Generate omp wire types into `alvin-protocol` (risk spike)
 
 ### Checkpoint 1: Foundation
-- [ ] format/test/check clean; spike findings recorded; human approves generated types
+- [x] format/test/check clean; spike findings recorded; human approves generated types
 
 ## Phase 2: Read-only path
-- [ ] Task 3: Scan session headers and group projects
+- [x] Task 3: Scan session headers and group projects
 - [ ] Task 4: `projects/list` end to end over channel and `ws://`
 - [ ] Task 5: `sessions/list` with status and paging
 - [ ] Task 6: `alvind` face with telemetry and `wss://`

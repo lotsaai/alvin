@@ -88,9 +88,9 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 #### Task 3: Scan session headers and group projects
 **Description:** Create `alvin-session-index` with `scan.rs` (directory walk, `*.jsonl` only, 4 KiB head reads), `header.rs` (title slot + header), and `grouping.rs` (`Workspace::discover` cached per `cwd`, blake3 ids, an unresolved group carrying the typed error). Add `ProjectSummary`/`CheckoutSummary` and `ProjectId`/`CheckoutId` to `alvin-protocol` (`projects.rs`). Check the omp file facts against real files first and record any differences in `SPEC-session-index.md`.
 **Acceptance criteria:**
-- [ ] Real omp sessions under a git repository with 2 worktrees and a jj repository with 2 workspaces group into 2 projects with the right checkouts.
-- [ ] A session whose `cwd` was deleted shows up in an unresolved group with its discovery error.
-- [ ] A torn last line does not fail the scan.
+- [x] Real omp sessions under a git repository with 2 worktrees and a jj repository with 2 workspaces group into 2 projects with the right checkouts.
+- [x] A session whose `cwd` was deleted shows up in an unresolved group with its discovery error.
+- [x] A torn last line does not fail the scan.
 **Verification:** `mise format`; `mise run --force test`.
 **Dependencies:** 2. **Files:** `crates/alvin-session-index/{Cargo.toml,src/{lib,error,scan,header,grouping}.rs}`, `crates/alvin-protocol/src/projects.rs`, `AGENTS.md` (no row change). **Scope:** M.
 

@@ -49,3 +49,46 @@ pub fn run(dir: &Path, program: &str, args: &[&str]) {
     String::from_utf8_lossy(&output.stderr)
   );
 }
+
+/// Runs real `omp` once in `cwd` and returns the session file it wrote under `session_dir`.
+///
+/// The run is isolated: `HOME` is a throwaway directory, so omp reads and writes nothing under the real home
+/// (the sandbox denies parts of it, and tests must not touch it). omp still reads the machine's agent
+/// configuration, so its model credentials resolve; this code never opens or prints anything in it.
+pub fn run_omp(cwd: &Path, session_dir: &Path, prompt: &str) -> PathBuf {
+  let home = TempDir::new();
+  let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
+    .map(PathBuf::from)
+    .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".omp/agent"));
+  let output = Command::new("omp")
+    .args([
+      "-p",
+      prompt,
+      "--model",
+      "zai/glm-5.3-flash",
+      "--no-tools",
+      "--no-skills",
+      "--no-rules",
+      "--no-extensions",
+    ])
+    .args(["--no-context-files", "--no-title", "--session-dir"])
+    .arg(session_dir)
+    .current_dir(cwd)
+    .env("HOME", home.path())
+    .env("PI_CODING_AGENT_DIR", agent_dir)
+    .output()
+    .unwrap();
+  assert!(
+    output.status.success(),
+    "omp failed in {}: {}",
+    cwd.display(),
+    String::from_utf8_lossy(&output.stderr)
+  );
+  let mut files: Vec<PathBuf> = std::fs::read_dir(session_dir)
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .filter(|path| path.extension().is_some_and(|extension| extension == "jsonl"))
+    .collect();
+  files.sort();
+  files.pop().unwrap()
+}

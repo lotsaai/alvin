@@ -30,6 +30,17 @@ Read from omp source, to be confirmed against real files in the first slice:
 - Only `*.jsonl` files are read; backups (`*.jsonl.<id>.bak`) and other files are skipped. Sessions with zero turns and no title are omitted, as omp's picker does (`isEmptySession`, `filterSessionsForPicker`).
 - Session files grow while omp runs. Reads tolerate a torn last line.
 
+Confirmed against real files (omp 18.14.1, written by `omp -p` into a temporary `--session-dir`):
+
+- The file starts with the title slot (`{"type":"title","v":1,"title":"","updatedAt":…,"pad":"   …"}`, about 300 bytes with padding), then the header (`type:"session"`, `version:3`, `id`, `timestamp`, `cwd`); a fresh session has an empty slot title, so the title is `None`. omp writes the header with no `title` field.
+- The header `cwd` is the spelling the OS gave omp, not a canonical path: a temp dir created as `/private/var/...` was recorded as `/var/...`. Grouping therefore canonicalizes the checkout root before hashing.
+- Header ids are UUIDv7 strings today; the index still accepts any string.
+- `code-workspace` 0.2.0 returns a plain (non-VCS) checkout root as given, not canonicalized, and reports the nearest existing ancestor as `NoWorkspaceMarker.start` when the `cwd` was deleted.
+
+## Test Isolation
+
+Tests that start omp set `HOME` to a throwaway directory, pass `--session-dir` to a temporary directory, and set `PI_CODING_AGENT_DIR` to the machine's existing agent directory so model credentials resolve. omp then touches nothing under the real home: with the real `HOME` it stats `~/.aws/credentials` during provider discovery, which a sandbox may deny. Tests never open, read, or print files in the agent directory.
+
 ## Grouping
 
 For each distinct `cwd` in headers, call `Workspace::discover(cwd)` (code-workspace 0.2.0, read from the published source). `Workspace::repository_root()` returns the primary repository for a linked git worktree (`.git` file, `gitdir:` then `commondir`) or a secondary jj workspace (`.jj/repo` pointer); `Workspace::root()` is the checkout itself; `Workspace::vcs()` reports git, jj, or colocated jj. Sessions group by (repository root, checkout root). A `cwd` is resolved once per scan and cached by path.
