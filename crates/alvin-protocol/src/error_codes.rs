@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::ids::{CheckoutId, ProjectId};
+
 /// A stable gateway error code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCode {
@@ -74,6 +76,13 @@ pub enum ErrorData {
   SessionIndex {
     /// The directory, session file, or working directory the index was reading.
     path: PathBuf,
+  },
+  /// No known project, or no such checkout in it.
+  UnknownProject {
+    /// The requested project.
+    project: ProjectId,
+    /// The requested checkout, when the request named one.
+    checkout: Option<CheckoutId>,
   },
 }
 

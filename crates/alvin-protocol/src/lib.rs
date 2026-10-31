@@ -5,6 +5,7 @@ mod error_codes;
 mod ids;
 mod omp_wire;
 mod projects;
+mod sessions;
 
 pub use error::{Error, Result};
 pub use error_codes::{ErrorCode, ErrorData};
@@ -13,6 +14,9 @@ pub use omp_wire::*;
 #[cfg(feature = "server")]
 pub use projects::ProjectsApiServer;
 pub use projects::{CheckoutSummary, ProjectSummary, ProjectsApiClient, UnresolvedCause, Vcs};
+#[cfg(feature = "server")]
+pub use sessions::SessionsApiServer;
+pub use sessions::{ListSessions, SessionCursor, SessionPage, SessionStatus, SessionSummary, SessionsApiClient};
 
 #[cfg(test)]
 mod client_tests {

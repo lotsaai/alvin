@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use alvin_protocol::{CheckoutId, CheckoutSummary, ProjectId, ProjectSummary, SessionId, UnresolvedCause, Vcs};
 use code_workspace::Workspace;
 
+use crate::header::SessionHead;
 use crate::{Error, Result};
 
 /// Where a `cwd` led: a checkout of a repository, or the reason it did not resolve.
@@ -91,6 +92,32 @@ pub fn group(sessions: impl IntoIterator<Item = (PathBuf, SessionId)>) -> Result
   });
   Ok(resolved.chain(unresolved).collect())
 }
+/// The sessions of one project, or of one checkout of it, resolving each distinct `cwd` once.
+///
+/// Empty when no resolved project has that id, or the project has no such checkout: a project and a checkout
+/// only exist through their sessions.
+pub fn select(heads: Vec<SessionHead>, project: &ProjectId, checkout: Option<&CheckoutId>) -> Result<Vec<SessionHead>> {
+  let mut resolutions: BTreeMap<PathBuf, Resolution> = BTreeMap::new();
+  let mut selected = Vec::new();
+  for head in heads {
+    if !resolutions.contains_key(&head.cwd) {
+      resolutions.insert(head.cwd.clone(), resolve(&head.cwd)?);
+    }
+    let Some(Resolution::Resolved {
+      repository,
+      checkout: root,
+      ..
+    }) = resolutions.get(&head.cwd)
+    else {
+      continue;
+    };
+    if path_id(repository) == project.as_str() && checkout.is_none_or(|wanted| path_id(root) == wanted.as_str()) {
+      selected.push(head);
+    }
+  }
+  Ok(selected)
+}
+
 #[cfg(test)]
 mod tests {
   use std::path::{Path, PathBuf};

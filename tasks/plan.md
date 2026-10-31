@@ -106,9 +106,9 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 #### Task 5: `sessions/list` with status and paging
 **Description:** Add `status.rs` (last 32 KiB tail, omp's status rules), display titles (slot → header → compaction summary → first user message), empty-session filtering, and the (modified, id) cursor. Add `SessionSummary` and paging types to `alvin-protocol`, plus the `SessionsApi` server and its pinned-list entry.
 **Acceptance criteria:**
-- [ ] Paging over many real session files returns each session exactly once, newest first.
-- [ ] A multi-MB session file is scanned by reading only the head and tail windows (read offsets asserted).
-- [ ] Round-trips over both transports.
+- [x] Paging over many real session files returns each session exactly once, newest first.
+- [x] A multi-MB session file is scanned by reading only the head and tail windows (read offsets asserted).
+- [x] Round-trips over both transports.
 **Verification:** `mise format`; `mise run --force test`.
 **Dependencies:** 4. **Files:** `crates/alvin-session-index/src/{status,scan,header}.rs`, `crates/alvin-protocol/src/sessions.rs`, `crates/alvin-gateway/src/rpc/*`, gateway tests. **Scope:** M.
 

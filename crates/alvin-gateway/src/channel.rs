@@ -5,7 +5,7 @@
 use jsonrpsee::server::Methods;
 use tokio::sync::mpsc;
 
-use crate::Gateway;
+use crate::{Gateway, Result};
 
 /// What a server answers to a frame that is not JSON-RPC at all.
 const PARSE_ERROR: &str = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
@@ -15,11 +15,11 @@ impl Gateway {
   /// for response and subscription frames. `capacity` bounds both channels and each subscription's buffer.
   ///
   /// Must be called inside a tokio runtime.
-  pub fn connect_channel(&self, capacity: usize) -> (mpsc::Sender<String>, mpsc::Receiver<String>) {
+  pub fn connect_channel(&self, capacity: usize) -> Result<(mpsc::Sender<String>, mpsc::Receiver<String>)> {
     let (to_server, from_client) = mpsc::channel(capacity);
     let (to_client, from_server) = mpsc::channel(capacity);
-    tokio::spawn(serve(self.methods(), from_client, to_client, capacity));
-    (to_server, from_server)
+    tokio::spawn(serve(self.methods()?, from_client, to_client, capacity));
+    Ok((to_server, from_server))
   }
 }
 

@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::server::{Server, ServerHandle, StopHandle, serve_with_graceful_shutdown, stop_channel};
+use jsonrpsee::server::{Methods, Server, ServerHandle, StopHandle, serve_with_graceful_shutdown, stop_channel};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 
@@ -35,12 +35,12 @@ impl Gateway {
     let listener = TcpListener::bind(addr).await.map_err(Error::Bind)?;
     let local_addr = listener.local_addr().map_err(Error::Bind)?;
     let (stop, handle) = stop_channel();
-    tokio::spawn(accept(self.clone(), listener, stop));
+    tokio::spawn(accept(self.methods()?, listener, stop));
     Ok(WsServer { local_addr, handle })
   }
 }
 
-async fn accept(gateway: Gateway, listener: TcpListener, stop: StopHandle) {
+async fn accept(methods: Methods, listener: TcpListener, stop: StopHandle) {
   loop {
     let stream = tokio::select! {
       accepted = listener.accept() => match accepted {
@@ -52,16 +52,16 @@ async fn accept(gateway: Gateway, listener: TcpListener, stop: StopHandle) {
       },
       () = stop.clone().shutdown() => return,
     };
-    tokio::spawn(serve_connection(stream, gateway.clone(), stop.clone()));
+    tokio::spawn(serve_connection(stream, methods.clone(), stop.clone()));
   }
 }
 
 /// Serves one connection of any transport stream: a TLS acceptor wraps the stream before it gets here.
-async fn serve_connection<I>(io: I, gateway: Gateway, stop: StopHandle)
+async fn serve_connection<I>(io: I, methods: Methods, stop: StopHandle)
 where
   I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
-  let service = Server::builder().to_service_builder().build(gateway.methods(), stop.clone());
+  let service = Server::builder().to_service_builder().build(methods, stop.clone());
   if let Err(error) = serve_with_graceful_shutdown(io, service, stop.shutdown()).await {
     tracing::debug!(%error, "WebSocket connection ended with an error");
   }

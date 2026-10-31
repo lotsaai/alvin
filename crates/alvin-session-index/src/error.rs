@@ -45,6 +45,16 @@ pub enum Error {
     source: std::io::Error,
   },
 
+  /// A file's modification time is outside the range of a timestamp.
+  #[error("converting the modification time of {path}")]
+  ModifiedTime {
+    /// The session file.
+    path: PathBuf,
+    /// The conversion error.
+    #[source]
+    source: jiff::Error,
+  },
+
   /// A record at the head of a session file is not valid JSON of the expected shape.
   #[error("decoding record at byte {offset} of {path}")]
   DecodeRecord {
@@ -82,6 +92,7 @@ impl Error {
       Self::CanonicalizeRoot { root, .. } => root,
       Self::ReadDir { path, .. }
       | Self::ReadFile { path, .. }
+      | Self::ModifiedTime { path, .. }
       | Self::DecodeRecord { path, .. }
       | Self::MisplacedTitleSlot { path, .. }
       | Self::HeaderIncomplete { path } => path,

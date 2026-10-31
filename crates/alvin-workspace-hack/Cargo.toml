@@ -12,7 +12,6 @@ description = "workspace-hack package, managed by hakari"
 [dependencies]
 memchr = { version = "2" }
 serde = { version = "1", features = ["alloc", "derive"] }
-serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
 serde_json = { version = "1", features = ["alloc", "raw_value"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]

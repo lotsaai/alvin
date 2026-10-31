@@ -74,6 +74,12 @@ crates/alvin-session-index/src/grouping.rs   projects and checkouts from cwds
 - Large files: a test writes a multi-megabyte real session file and asserts the scan finishes with bounded memory and reads only the head and tail windows, measured through the file handle's reported read offsets.
 - Cursors: paging over many real files returns each session exactly once in order.
 
+## Listing Rules (as built)
+
+- `select(heads, project, checkout)` keeps the sessions whose `cwd` resolves to that repository (and checkout); empty means the project or checkout does not exist. Unresolved groups carry no `ProjectId`, so `sessions/list` cannot address them yet.
+- `list_page(heads, after, limit)` sorts by (modified, id) newest first, reads the 32 KiB tail only of files it reaches, and skips sessions with no title whose status is `Pending` or `Unknown`. omp's picker also consults an assistant-turn count; the index does not, so a session whose only evidence is a final message over 32 KiB and a first prompt past the 4 KiB head would be hidden.
+- Display title: slot or header title, else the latest compaction `shortSummary` in the head window, else the first user message in the head window (a message cut off by the window still names the session), each reduced to its first line.
+
 ## Boundaries
 
 - Always: open files read-only; follow `AGENTS.md`.

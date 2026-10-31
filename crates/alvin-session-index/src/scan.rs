@@ -4,11 +4,13 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use jiff::Timestamp;
+
 use crate::header::{SessionHead, parse};
 use crate::{Error, Result};
 
 /// omp reads the first 4 KiB of a session file for its header; so does the index.
-const HEAD_BYTES: u64 = 4096;
+pub(crate) const HEAD_BYTES: u64 = 4096;
 
 fn entries(dir: &Path) -> Result<Vec<(PathBuf, std::fs::FileType)>> {
   let read_dir = |source| Error::ReadDir {
@@ -25,15 +27,26 @@ fn entries(dir: &Path) -> Result<Vec<(PathBuf, std::fs::FileType)>> {
     .collect()
 }
 
-fn read_head(path: &Path) -> Result<SessionHead> {
+/// Reads the head window of a session file: its first [`HEAD_BYTES`].
+pub(crate) fn head_bytes(file: impl Read) -> std::io::Result<Vec<u8>> {
   let mut head = Vec::new();
-  File::open(path)
-    .and_then(|file| file.take(HEAD_BYTES).read_to_end(&mut head))
-    .map_err(|source| Error::ReadFile {
-      path: path.to_path_buf(),
-      source,
-    })?;
-  parse(path, &head)
+  file.take(HEAD_BYTES).read_to_end(&mut head)?;
+  Ok(head)
+}
+
+/// Reads the head window of the session file at `path`, with the file's modification time.
+fn read_head(path: &Path) -> Result<SessionHead> {
+  let read_file = |source| Error::ReadFile {
+    path: path.to_path_buf(),
+    source,
+  };
+  let file = File::open(path).map_err(read_file)?;
+  let modified = file.metadata().and_then(|metadata| metadata.modified()).map_err(read_file)?;
+  let modified = Timestamp::try_from(modified).map_err(|source| Error::ModifiedTime {
+    path: path.to_path_buf(),
+    source,
+  })?;
+  parse(path, &head_bytes(file).map_err(read_file)?, modified)
 }
 
 /// Reads the head of every session file under `dir`, which has omp's layout `<dir>/<encoded cwd>/<name>.jsonl`.
@@ -92,7 +105,7 @@ mod tests {
     // omp records the cwd as the OS reported it, which may be a symlinked spelling (`/var` for `/private/var`).
     assert_eq!(head.cwd.canonicalize().unwrap(), project);
     assert_eq!(head.path, file);
-    assert_eq!(head.title, None);
+    assert_eq!(head.title.as_deref(), Some("Reply with the single word ok."));
   }
 
   #[test]
