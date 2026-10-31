@@ -121,19 +121,19 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 **Dependencies:** 4. **Files:** `crates/alvin-gateway/src/{main,settings,telemetry,omp_dirs}.rs`, `Cargo.toml` (bin target). **Scope:** M.
 
 ### Checkpoint 2a: Read path
-- [ ] Projects and sessions list over channel and `ws://`. The pinned list matches.
-- [ ] Human review of the protocol shapes before live methods build on them.
+- [x] Projects and sessions list over channel and `ws://`. The pinned list matches.
+- [x] Human review of the protocol shapes before live methods build on them.
 
 ### Phase 3: Live sessions (CLI-proven)
 
 #### Task 7: omp-host core: start, events, prompt, abort, bash, teardown (risk)
-**Description:** Create `alvin-omp-host`: `host.rs` (`Host`, `StartRequest`, launch flags, `set_ask_dialog` after ready), `session.rs` (async methods over `spawn_blocking`), `bridge.rs` (a bounded mpsc pump that never drops), and `translate.rs` (frame → `EventBody` | `Untranslated`). Unix teardown uses the process group. Add `EventBody` and the live request types to `alvin-protocol` (`events.rs`, `live.rs`).
+**Description:** Create `alvin-omp-host`: `host.rs` (`Host`, `HostConfig`, `StartRequest`, launch flags, `set_ask_dialog` on ready), `session.rs` (async methods over `spawn_blocking`), `bridge.rs` (bounded mpsc pump, never drops), `translate.rs` (frame → `EventBody` | `Untranslated`). Unix teardown aborts running work, then closes omp's process group. Add `EventBody` to `alvin-protocol` (`events.rs`). Request types for `live/*` methods arrive with the gateway methods in Task 8.
 **Acceptance criteria:**
-- [ ] A real prompt streams text deltas in order and ends with a prompt result. Abort stops a running turn. `bash` returns output.
-- [ ] After close and after drop, the omp pid and a long-running `bash` child of omp are gone.
-- [ ] Killing omp from the test yields a process-exited event, and the next call returns a typed error. A slow consumer loses no events.
-**Verification:** `mise format`; `mise run --force test`.
-**Dependencies:** 2. **Files:** `crates/alvin-omp-host/{Cargo.toml,src/{lib,error,host,session,bridge,translate}.rs,fixtures/*}`, `crates/alvin-protocol/src/{events,live}.rs`. **Scope:** L.
+- [x] A real prompt streams text deltas in order and ends with its prompt result. Abort stops a running turn. `bash` returns its output.
+- [x] After close or drop, the omp pid and a running `bash` command's process are gone. (A process a command left running in the background after it returned is not reachable on Unix; see `SPEC-omp-host.md`.)
+- [x] Killing omp from a test yields a process-exited event, and the next call returns a typed error. A slow consumer loses no events.
+**Verification:** `mise format`; `mise run --force test`; `mise check`.
+**Dependencies:** 2. **Files:** `crates/alvin-omp-host/{Cargo.toml,src/{lib,error,host,session,bridge,translate,test_support}.rs,fixtures/frames.jsonl}`, `crates/alvin-protocol/src/{events,lib}.rs`, `.mise/tasks/check` (omp-rpc tag pin). **Scope:** L.
 
 #### Task 8: Live turn end to end: open, prompt, subscribe, close
 **Description:** Gateway `live.rs` holds the registry (two indexes, idempotent open), the event log (stamp UUIDv7, broadcast, clear on settle), and `events/subscribe` replay under the lock with stale-cursor handling. Methods: `live/open` (new and listed), `close`, `list`, `state`, `messages`, `prompt`, `abort`, `bash`, `abortBash`. Semantic validation lives in the gateway only. `Client::events(live)` returns a stream with no reconnect yet. Add the live metrics.

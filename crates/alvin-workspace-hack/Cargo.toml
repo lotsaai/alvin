@@ -15,7 +15,9 @@ log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std"] }
 serde = { version = "1", features = ["alloc", "derive"] }
+serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
 serde_json = { version = "1", features = ["alloc", "raw_value"] }
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 toml_parser = { version = "1" }
 tracing-core = { version = "0.1" }
 winnow = { version = "1" }

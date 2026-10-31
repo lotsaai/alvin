@@ -23,3 +23,10 @@ if cargo tree --quiet -p alvin-client --target all --edges normal | grep -E 'alv
 fi
 
 mise run generate:omp-wire -- --check
+
+# The omp-rpc git tag in alvin-omp-host must name the same release as the pinned omp package.
+omp_version=$(bun -e 'console.log(JSON.parse(await Bun.file("package.json").text()).devDependencies["@oh-my-pi/pi-coding-agent"])')
+if ! grep -q "tag = \"v${omp_version}\"" crates/alvin-omp-host/Cargo.toml; then
+	echo "crates/alvin-omp-host/Cargo.toml: the omp-rpc tag must be v${omp_version}, the version pinned in package.json" >&2
+	exit 1
+fi
