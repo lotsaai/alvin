@@ -19,8 +19,9 @@ enum Resolution {
   Unresolved(UnresolvedCause),
 }
 
-fn digest(path: &Path) -> [u8; 32] {
-  *blake3::hash(path.as_os_str().as_encoded_bytes()).as_bytes()
+/// An id for a canonical root path: the hex of its blake3 hash.
+fn path_id(path: &Path) -> String {
+  blake3::hash(path.as_os_str().as_encoded_bytes()).to_hex().to_string()
 }
 
 fn resolve(cwd: &Path) -> Result<Resolution> {
@@ -78,12 +79,12 @@ pub fn group(sessions: impl IntoIterator<Item = (PathBuf, SessionId)>) -> Result
   }
 
   let resolved = repositories.into_iter().map(|(root, checkouts)| ProjectSummary::Resolved {
-    id: ProjectId::from_digest(digest(&root)),
+    id: ProjectId::from(path_id(&root)),
     root,
     checkouts: checkouts
       .into_iter()
       .map(|(root, vcs)| CheckoutSummary {
-        id: CheckoutId::from_digest(digest(&root)),
+        id: CheckoutId::from(path_id(&root)),
         root,
         vcs,
       })
@@ -102,12 +103,16 @@ mod tests {
   use crate::scan;
   use crate::test_support::{TempDir, run, run_omp};
 
+  fn blake3_hex(root: &Path) -> String {
+    blake3::hash(root.as_os_str().as_encoded_bytes()).to_hex().to_string()
+  }
+
   fn project_id(root: &Path) -> ProjectId {
-    ProjectId::from_digest(*blake3::hash(root.as_os_str().as_encoded_bytes()).as_bytes())
+    ProjectId::from(blake3_hex(root))
   }
 
   fn checkout(root: &Path, vcs: Option<Vcs>) -> CheckoutSummary {
-    let id = CheckoutId::from_digest(*blake3::hash(root.as_os_str().as_encoded_bytes()).as_bytes());
+    let id = CheckoutId::from(blake3_hex(root));
     CheckoutSummary {
       id,
       root: root.to_path_buf(),
