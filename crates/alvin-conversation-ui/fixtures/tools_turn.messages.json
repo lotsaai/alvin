@@ -1,0 +1,475 @@
+{
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Do these in order with your tools, one call each, and then reply with the single word done: write a file notes.txt containing exactly the two lines `alpha` and `beta`; read notes.txt; edit notes.txt so `beta` becomes `gamma`; grep for `gamma` in the current directory; glob for `*.txt`; run `echo alvin-bash` with bash.",
+          "type": "text"
+        }
+      ],
+      "timestamp": 1793446267030.0,
+      "attribution": "user",
+      "role": "user"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_e0a69f1b915c462d9da18e3d",
+          "name": "write",
+          "arguments": {
+            "content": "alpha\nbeta\n",
+            "i": "Writing notes.txt",
+            "path": "notes.txt"
+          },
+          "intent": "Writing notes.txt"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 4883,
+        "output": 29,
+        "cacheRead": 704,
+        "cacheWrite": 0,
+        "totalTokens": 5616,
+        "cost": {
+          "input": 0.0007324499999999999,
+          "output": 0.0000145,
+          "cacheRead": 0.00002112,
+          "cacheWrite": 0.0,
+          "total": 0.0007680699999999999
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793446267673.0,
+      "responseId": "20261031193107df5fa0892ade4491",
+      "duration": 11169.179042,
+      "ttft": 11168.926042,
+      "completedAt": 1793446278843.0,
+      "contextSnapshot": {
+        "promptTokens": 5587,
+        "nonMessageTokens": 4764,
+        "toolSchemaTokens": 2213,
+        "compactionEpoch": 0
+      },
+      "credentialId": 1
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_e0a69f1b915c462d9da18e3d",
+      "toolName": "write",
+      "content": [
+        {
+          "text": "Successfully wrote 11 bytes to notes.txt",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "timestamp": 1793446278848.0,
+      "details": {
+        "resolvedPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+      }
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_f60470a74bf240769f660a89",
+          "name": "read",
+          "arguments": {
+            "i": "Reading notes.txt",
+            "path": "notes.txt"
+          },
+          "intent": "Reading notes.txt",
+          "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}",
+          "streamIndex": 0
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 3964,
+        "output": 20,
+        "cacheRead": 1664,
+        "cacheWrite": 0,
+        "totalTokens": 5648,
+        "cost": {
+          "input": 0.0005945999999999999,
+          "output": 0.00001,
+          "cacheRead": 0.00004992,
+          "cacheWrite": 0.0,
+          "total": 0.0006545199999999999
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793446278850.0,
+      "responseId": "2026103119311877f22c3d298e4901",
+      "duration": 11831.470875,
+      "ttft": 10986.279042,
+      "completedAt": 1793446290682.0,
+      "contextSnapshot": {
+        "promptTokens": 5628,
+        "nonMessageTokens": 4764,
+        "toolSchemaTokens": 2213,
+        "compactionEpoch": 0
+      },
+      "credentialId": 1
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_f60470a74bf240769f660a89",
+      "toolName": "read",
+      "content": [
+        {
+          "text": "alpha\nbeta",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "timestamp": 1793446290684.0,
+      "details": {
+        "totalLines": 2,
+        "rowPrefixes": false,
+        "displayContent": {
+          "text": "alpha\nbeta",
+          "startLine": 1,
+          "lineNumbers": [
+            1,
+            2
+          ]
+        },
+        "fileSize": 11,
+        "meta": {
+          "source": {
+            "type": "path",
+            "value": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+          },
+          "pagedSource": true
+        }
+      }
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_b218006726534078bba5918c",
+          "name": "edit",
+          "arguments": {
+            "i": "Changing beta to gamma",
+            "new_string": "gamma",
+            "old_string": "beta",
+            "path": "notes.txt"
+          },
+          "intent": "Changing beta to gamma"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 87,
+        "output": 35,
+        "cacheRead": 5568,
+        "cacheWrite": 0,
+        "totalTokens": 5690,
+        "cost": {
+          "input": 0.00001305,
+          "output": 0.0000175,
+          "cacheRead": 0.00016703999999999997,
+          "cacheWrite": 0.0,
+          "total": 0.00019759
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793446290685.0,
+      "responseId": "20261031193130191e268b8a1b4eb5",
+      "duration": 4683.096292000002,
+      "ttft": 4683.007000000001,
+      "completedAt": 1793446295369.0,
+      "contextSnapshot": {
+        "promptTokens": 5655,
+        "nonMessageTokens": 4764,
+        "toolSchemaTokens": 2213,
+        "compactionEpoch": 0
+      },
+      "credentialId": 1
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_b218006726534078bba5918c",
+      "toolName": "edit",
+      "content": [
+        {
+          "text": "[notes.txt]\n1:alpha\n2:gamma",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "timestamp": 1793446295372.0,
+      "details": {
+        "diff": " 1|alpha\n-2|beta\n+2|gamma",
+        "firstChangedLine": 2,
+        "op": "update",
+        "path": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt",
+        "oldText": "alpha\nbeta\n",
+        "newText": "alpha\ngamma\n"
+      }
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_9f532eb921ca45ea90877953",
+          "name": "grep",
+          "arguments": {
+            "i": "Searching for gamma",
+            "path": ".",
+            "pattern": "gamma"
+          },
+          "intent": "Searching for gamma",
+          "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}",
+          "streamIndex": 0
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 73,
+        "output": 25,
+        "cacheRead": 5632,
+        "cacheWrite": 0,
+        "totalTokens": 5730,
+        "cost": {
+          "input": 0.00001095,
+          "output": 0.0000125,
+          "cacheRead": 0.00016895999999999998,
+          "cacheWrite": 0.0,
+          "total": 0.00019241
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793446295373.0,
+      "responseId": "20261031193135b38437bcf72c4bcf",
+      "duration": 4146.621792000002,
+      "ttft": 4131.642374999999,
+      "completedAt": 1793446299520.0,
+      "contextSnapshot": {
+        "promptTokens": 5705,
+        "nonMessageTokens": 4764,
+        "toolSchemaTokens": 2213,
+        "compactionEpoch": 0
+      },
+      "credentialId": 1
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_9f532eb921ca45ea90877953",
+      "toolName": "grep",
+      "content": [
+        {
+          "text": "# notes.txt\n 1|alpha\n*2|gamma",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "timestamp": 1793446299523.0,
+      "details": {
+        "scopePath": ".",
+        "searchPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+        "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+        "matchCount": 1,
+        "fileCount": 1,
+        "files": [
+          "notes.txt"
+        ],
+        "fileMatches": [
+          {
+            "path": "notes.txt",
+            "count": 1
+          }
+        ],
+        "truncated": false,
+        "displayContent": "# notes.txt\n 1│alpha\n*2│gamma"
+      }
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_bda1554adc0348b68f6a01e7",
+          "name": "glob",
+          "arguments": {
+            "i": "Listing txt files",
+            "path": "*.txt"
+          },
+          "intent": "Listing txt files"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 51,
+        "output": 20,
+        "cacheRead": 5696,
+        "cacheWrite": 0,
+        "totalTokens": 5767,
+        "cost": {
+          "input": 7.65e-6,
+          "output": 0.00001,
+          "cacheRead": 0.00017088,
+          "cacheWrite": 0.0,
+          "total": 0.00018853
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793446299524.0,
+      "responseId": "2026103119313962cb4a2a92844ddb",
+      "duration": 4158.143917000001,
+      "ttft": 4158.055124999999,
+      "completedAt": 1793446303682.0,
+      "contextSnapshot": {
+        "promptTokens": 5747,
+        "nonMessageTokens": 4764,
+        "toolSchemaTokens": 2213,
+        "compactionEpoch": 0
+      },
+      "credentialId": 1
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_bda1554adc0348b68f6a01e7",
+      "toolName": "glob",
+      "content": [
+        {
+          "text": "notes.txt",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "timestamp": 1793446303684.0,
+      "details": {
+        "scopePath": ".",
+        "fileCount": 1,
+        "files": [
+          "notes.txt"
+        ],
+        "truncated": false,
+        "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo"
+      }
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_5f87cee83f0f42dc8cf51476",
+          "name": "bash",
+          "arguments": {
+            "command": "echo alvin-bash",
+            "i": "Echoing alvin-bash"
+          },
+          "intent": "Echoing alvin-bash"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 77,
+        "output": 26,
+        "cacheRead": 5696,
+        "cacheWrite": 0,
+        "totalTokens": 5799,
+        "cost": {
+          "input": 0.00001155,
+          "output": 0.000013,
+          "cacheRead": 0.00017088,
+          "cacheWrite": 0.0,
+          "total": 0.00019543
+        }
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793446303685.0,
+      "responseId": "2026103119314377de51a01ff14aed",
+      "duration": 4597.91575,
+      "ttft": 4597.797207999996,
+      "completedAt": 1793446308284.0,
+      "contextSnapshot": {
+        "promptTokens": 5773,
+        "nonMessageTokens": 4764,
+        "toolSchemaTokens": 2213,
+        "compactionEpoch": 0
+      },
+      "credentialId": 1
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_5f87cee83f0f42dc8cf51476",
+      "toolName": "bash",
+      "content": [
+        {
+          "text": "alvin-bash\n",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "timestamp": 1793446308297.0,
+      "details": {
+        "wallTimeNoticeEmitted": false,
+        "timeoutSeconds": 300,
+        "wallTimeMs": 10.476000000002388
+      }
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "done",
+          "type": "text"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "zai",
+      "model": "glm-5.3-flash",
+      "usage": {
+        "input": 48,
+        "output": 3,
+        "cacheRead": 5760,
+        "cacheWrite": 0,
+        "totalTokens": 5811,
+        "cost": {
+          "input": 7.2e-6,
+          "output": 1.5e-6,
+          "cacheRead": 0.00017279999999999997,
+          "cacheWrite": 0.0,
+          "total": 0.00018149999999999997
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1793446308298.0,
+      "responseId": "20261031193148245e7eae424649bc",
+      "errorId": 0.0,
+      "duration": 4547.988749999997,
+      "ttft": 4544.240250000003,
+      "completedAt": 1793446312846.0,
+      "credentialId": 1,
+      "contextSnapshot": {
+        "promptTokens": 5808,
+        "nonMessageTokens": 4764,
+        "toolSchemaTokens": 2213,
+        "compactionEpoch": 0
+      }
+    }
+  ],
+  "totalMessages": 14
+}

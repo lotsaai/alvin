@@ -8,4 +8,4 @@ cd "$proj_dir" || exit 1
 
 set -euo pipefail
 
-cargo run --quiet -p alvin-gateway --example record_conversation -- crates/alvin-conversation/fixtures
+cargo run --quiet -p alvin-gateway --example record_conversation -- crates/alvin-conversation/fixtures crates/alvin-conversation-ui/fixtures

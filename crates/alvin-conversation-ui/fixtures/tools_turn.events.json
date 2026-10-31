@@ -1,0 +1,5596 @@
+[
+  {
+    "id": "01a191ba-4896-7504-bf0d-14abeb65b29c",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:07.030448Z",
+    "body": {
+      "kind": "extensionUiRequest",
+      "frame": {
+        "id": "15bbbbe61b098af9",
+        "widgetKey": "autoresearch",
+        "type": "extension_ui_request",
+        "method": "setWidget"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-4896-7504-bf0d-14acac4d2c44",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:07.030455Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "advisor_cost_changed"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-4896-7504-bf0d-14ad025fcb00",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:07.030457Z",
+    "body": {
+      "kind": "availableCommandsUpdate",
+      "frame": {
+        "commands": [
+          {
+            "name": "security",
+            "source": "builtin",
+            "description": "Plan, run, inspect, import, and compare OMP-native security scans",
+            "input": {
+              "hint": "<plan|scan|status|cancel|scans|show|import|export|validate|compare|disposition>"
+            },
+            "subcommands": [
+              {
+                "name": "plan",
+                "description": "Create an immutable security scan plan"
+              },
+              {
+                "name": "scan",
+                "description": "Start a planned or newly planned native scan"
+              },
+              {
+                "name": "status",
+                "description": "Show native scan operation status"
+              },
+              {
+                "name": "cancel",
+                "description": "Cancel a running native scan"
+              },
+              {
+                "name": "scans",
+                "description": "List stored project security scans"
+              },
+              {
+                "name": "show",
+                "description": "Render a scan or security:// resource"
+              },
+              {
+                "name": "import",
+                "description": "Import SARIF or a Codex Security bundle"
+              },
+              {
+                "name": "export",
+                "description": "Export a canonical bundle, SARIF, or report"
+              },
+              {
+                "name": "validate",
+                "description": "Validate one finding with OMP-native tools"
+              },
+              {
+                "name": "compare",
+                "description": "Compare finding lineage across two scans"
+              },
+              {
+                "name": "disposition",
+                "description": "Set a finding disposition with rationale"
+              }
+            ]
+          },
+          {
+            "name": "model",
+            "source": "builtin",
+            "aliases": [
+              "models"
+            ],
+            "description": "Show current model selection"
+          },
+          {
+            "name": "switch",
+            "source": "builtin",
+            "description": "Switch model for this session only",
+            "input": {
+              "hint": "[model]"
+            }
+          },
+          {
+            "name": "fast",
+            "source": "builtin",
+            "description": "Toggle fast mode",
+            "input": {
+              "hint": "[on|ultra|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable fast mode (priority tier)"
+              },
+              {
+                "name": "ultra",
+                "description": "Enable Ultrafast (OpenAI API, or Codex models that offer it)"
+              },
+              {
+                "name": "off",
+                "description": "Disable fast mode"
+              },
+              {
+                "name": "status",
+                "description": "Show fast mode status"
+              }
+            ]
+          },
+          {
+            "name": "slow",
+            "source": "builtin",
+            "description": "Toggle slow mode",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Flex tier, or Anthropic low priority at the session limit (auto)"
+              },
+              {
+                "name": "off",
+                "description": "Standard service; stop Anthropic low priority"
+              },
+              {
+                "name": "status",
+                "description": "Show slow mode status"
+              }
+            ]
+          },
+          {
+            "name": "skillful",
+            "source": "builtin",
+            "description": "Toggle skill listing",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "List skills in the prompt for this session"
+              },
+              {
+                "name": "off",
+                "description": "Omit the skills listing for this session"
+              },
+              {
+                "name": "status",
+                "description": "Show skill listing status"
+              }
+            ]
+          },
+          {
+            "name": "extended-context",
+            "source": "builtin",
+            "description": "Toggle extended context",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable larger context windows"
+              },
+              {
+                "name": "off",
+                "description": "Use default or standard-pricing context windows"
+              },
+              {
+                "name": "status",
+                "description": "Show extended context status"
+              }
+            ]
+          },
+          {
+            "name": "computer",
+            "source": "builtin",
+            "description": "Toggle computer use",
+            "input": {
+              "hint": "[on|off|status]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable computer use for this session"
+              },
+              {
+                "name": "off",
+                "description": "Disable computer use for this session"
+              },
+              {
+                "name": "status",
+                "description": "Show computer use status"
+              }
+            ]
+          },
+          {
+            "name": "ratchet",
+            "source": "builtin",
+            "description": "Build (or reuse) an eval for an LLM flow, then hillclimb it unattended",
+            "input": {
+              "hint": "[flow and goal]"
+            }
+          },
+          {
+            "name": "prewalk",
+            "source": "builtin",
+            "description": "Arm, restart, or cancel prewalk",
+            "input": {
+              "hint": "[into] | restart [from] [into] | off"
+            },
+            "subcommands": [
+              {
+                "name": "restart",
+                "description": "Return to the planning model and re-arm the handoff (default prewalk.from → prewalk.into)",
+                "usage": "[from] [into]"
+              },
+              {
+                "name": "off",
+                "description": "Cancel this session's handoff without changing the active model"
+              }
+            ]
+          },
+          {
+            "name": "modelpreset",
+            "source": "builtin",
+            "description": "Manage model presets",
+            "input": {
+              "hint": "[list|save|switch|delete] [name]"
+            },
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "List saved presets"
+              },
+              {
+                "name": "save",
+                "description": "Save the current role models and thinking level",
+                "usage": "<name>"
+              },
+              {
+                "name": "switch",
+                "description": "Apply a saved preset",
+                "usage": "<name>"
+              },
+              {
+                "name": "delete",
+                "description": "Delete a saved preset",
+                "usage": "<name>"
+              }
+            ]
+          },
+          {
+            "name": "effort",
+            "source": "builtin",
+            "description": "Set or show reasoning effort (thinking level, intelligence)",
+            "input": {
+              "hint": "[level]"
+            },
+            "subcommands": [
+              {
+                "name": "off",
+                "description": "No reasoning"
+              },
+              {
+                "name": "minimal",
+                "description": "Very brief reasoning (~1k tokens)"
+              },
+              {
+                "name": "low",
+                "description": "Light reasoning (~2k tokens)"
+              },
+              {
+                "name": "medium",
+                "description": "Moderate reasoning (~8k tokens)"
+              },
+              {
+                "name": "high",
+                "description": "Deep reasoning (~16k tokens)"
+              },
+              {
+                "name": "xhigh",
+                "description": "Extended reasoning (~32k tokens)"
+              },
+              {
+                "name": "max",
+                "description": "Maximum reasoning the model supports"
+              },
+              {
+                "name": "auto",
+                "description": "Auto-detect per prompt"
+              }
+            ]
+          },
+          {
+            "name": "advisor",
+            "source": "builtin",
+            "description": "Toggle advisor",
+            "input": {
+              "hint": "[on|off|status|dump [raw]|configure]"
+            },
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "Enable the advisor"
+              },
+              {
+                "name": "off",
+                "description": "Disable the advisor"
+              },
+              {
+                "name": "status",
+                "description": "Show advisor status"
+              },
+              {
+                "name": "dump",
+                "description": "Copy the advisor's transcript to clipboard",
+                "usage": "[raw]"
+              },
+              {
+                "name": "configure",
+                "description": "Open the advisor configuration editor (TUI)"
+              }
+            ]
+          },
+          {
+            "name": "export",
+            "source": "builtin",
+            "description": "Export session to HTML file",
+            "input": {
+              "hint": "[--themes] [path]"
+            }
+          },
+          {
+            "name": "trace",
+            "source": "builtin",
+            "description": "Open this session's trace in the stats dashboard"
+          },
+          {
+            "name": "dump",
+            "source": "builtin",
+            "description": "Return full transcript as plain text, with LLM request JSON path",
+            "input": {
+              "hint": "[all|anon]"
+            },
+            "subcommands": [
+              {
+                "name": "all",
+                "description": "Write a zip with the main transcript, LLM request JSON, and one file per subagent"
+              },
+              {
+                "name": "anon",
+                "description": "Write a zip of anonymized session JSONL (contents redacted, metadata kept) plus subagents"
+              }
+            ]
+          },
+          {
+            "name": "share",
+            "source": "builtin",
+            "description": "Share session via an encrypted link (share server or secret gist)"
+          },
+          {
+            "name": "browser",
+            "source": "builtin",
+            "description": "Toggle browser eval-prelude headless vs visible mode",
+            "input": {
+              "hint": "[headless|visible]"
+            },
+            "subcommands": [
+              {
+                "name": "headless",
+                "description": "Switch to headless mode"
+              },
+              {
+                "name": "visible",
+                "description": "Switch to visible mode"
+              }
+            ]
+          },
+          {
+            "name": "todo",
+            "source": "builtin",
+            "description": "Manage todos",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "edit",
+                "description": "Open todos in $EDITOR (Markdown round-trip)"
+              },
+              {
+                "name": "copy",
+                "description": "Copy todos as Markdown to clipboard"
+              },
+              {
+                "name": "expand",
+                "description": "Show every phase and task in the HUD"
+              },
+              {
+                "name": "collapse",
+                "description": "Restore the bounded HUD preview"
+              },
+              {
+                "name": "export",
+                "description": "Write todos as Markdown to a file (default: TODO.md)",
+                "usage": "[<path>]"
+              },
+              {
+                "name": "import",
+                "description": "Replace todos from a Markdown file (default: TODO.md)",
+                "usage": "[<path>]"
+              },
+              {
+                "name": "append",
+                "description": "Append a task; phase fuzzy-matched or auto-created",
+                "usage": "[<phase>] <task...>"
+              },
+              {
+                "name": "start",
+                "description": "Mark task in_progress (fuzzy-matched)",
+                "usage": "<task>"
+              },
+              {
+                "name": "done",
+                "description": "Mark task/phase/all completed (fuzzy-matched)",
+                "usage": "[<task|phase>]"
+              },
+              {
+                "name": "drop",
+                "description": "Mark task/phase/all abandoned (fuzzy-matched)",
+                "usage": "[<task|phase>]"
+              },
+              {
+                "name": "rm",
+                "description": "Remove task/phase/all (fuzzy-matched)",
+                "usage": "[<task|phase>]"
+              }
+            ]
+          },
+          {
+            "name": "session",
+            "source": "builtin",
+            "description": "Show or configure the current session",
+            "input": {
+              "hint": "[info|delete|pin [account]]"
+            },
+            "subcommands": [
+              {
+                "name": "info",
+                "description": "Show session info and stats"
+              },
+              {
+                "name": "delete",
+                "description": "Delete current session and return to selector"
+              },
+              {
+                "name": "pin",
+                "description": "Pin a stored OAuth account to the current provider for this session",
+                "usage": "[account]"
+              }
+            ]
+          },
+          {
+            "name": "jobs",
+            "source": "builtin",
+            "description": "Show background jobs",
+            "input": {
+              "hint": "[full|kill <id>|kill all]"
+            },
+            "subcommands": [
+              {
+                "name": "full",
+                "description": "Show full, untruncated command lines"
+              },
+              {
+                "name": "kill",
+                "description": "Cancel a running background job",
+                "usage": "<id>|all"
+              }
+            ]
+          },
+          {
+            "name": "usage",
+            "source": "builtin",
+            "description": "Show token usage",
+            "input": {
+              "hint": "[show|reset [provider/credential-id|provider/active]]"
+            },
+            "subcommands": [
+              {
+                "name": "show",
+                "description": "Show provider usage and limits"
+              },
+              {
+                "name": "reset",
+                "description": "Spend a saved provider rate-limit reset",
+                "usage": "[provider/credential-id|provider/active]"
+              }
+            ]
+          },
+          {
+            "name": "stats",
+            "source": "builtin",
+            "description": "Launch the local stats dashboard",
+            "input": {
+              "hint": "[--port <port>] [--host <host>]"
+            }
+          },
+          {
+            "name": "changelog",
+            "source": "builtin",
+            "description": "Show changelog",
+            "input": {
+              "hint": "[full|last [N]]"
+            },
+            "subcommands": [
+              {
+                "name": "full",
+                "description": "Show complete changelog"
+              },
+              {
+                "name": "last",
+                "description": "Show the last N releases (default 1)",
+                "usage": "[N]"
+              }
+            ]
+          },
+          {
+            "name": "tools",
+            "source": "builtin",
+            "description": "Show available tools"
+          },
+          {
+            "name": "context",
+            "source": "builtin",
+            "description": "Show context usage"
+          },
+          {
+            "name": "mcp",
+            "source": "builtin",
+            "description": "Manage MCP servers",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "Add a new MCP server",
+                "usage": "<name> [--scope project|user] [--url <url>] [-- <command...>]"
+              },
+              {
+                "name": "list",
+                "description": "List all configured MCP servers"
+              },
+              {
+                "name": "remove",
+                "description": "Remove an MCP server",
+                "usage": "<name> [--scope project|user]"
+              },
+              {
+                "name": "test",
+                "description": "Test connection to a server",
+                "usage": "<name>"
+              },
+              {
+                "name": "reauth",
+                "description": "Reauthorize OAuth for a server",
+                "usage": "<name>"
+              },
+              {
+                "name": "unauth",
+                "description": "Remove OAuth auth from a server",
+                "usage": "<name>"
+              },
+              {
+                "name": "enable",
+                "description": "Enable an MCP server",
+                "usage": "<name>"
+              },
+              {
+                "name": "disable",
+                "description": "Disable an MCP server",
+                "usage": "<name>"
+              },
+              {
+                "name": "smithery-search",
+                "description": "Search Smithery registry and deploy an MCP server",
+                "usage": "<keyword> [--scope project|user] [--limit <1-100>] [--semantic]"
+              },
+              {
+                "name": "smithery-login",
+                "description": "Login to Smithery and cache API key"
+              },
+              {
+                "name": "smithery-logout",
+                "description": "Remove cached Smithery API key"
+              },
+              {
+                "name": "reconnect",
+                "description": "Reconnect to a specific MCP server",
+                "usage": "<name>"
+              },
+              {
+                "name": "reload",
+                "description": "Force reload MCP runtime tools"
+              },
+              {
+                "name": "resources",
+                "description": "List available resources from connected servers"
+              },
+              {
+                "name": "prompts",
+                "description": "List available prompts from connected servers"
+              },
+              {
+                "name": "notifications",
+                "description": "Show notification capabilities and subscriptions"
+              },
+              {
+                "name": "help",
+                "description": "Show help message"
+              }
+            ]
+          },
+          {
+            "name": "ssh",
+            "source": "builtin",
+            "description": "Manage SSH connections",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "Add an SSH host",
+                "usage": "<name> --host <host> [--user <user>] [--port <port>] [--key <keyPath>] [--scope project|user]"
+              },
+              {
+                "name": "list",
+                "description": "List all configured SSH hosts"
+              },
+              {
+                "name": "remove",
+                "description": "Remove an SSH host",
+                "usage": "<name> [--scope project|user]"
+              },
+              {
+                "name": "help",
+                "description": "Show help message"
+              }
+            ]
+          },
+          {
+            "name": "fresh",
+            "source": "builtin",
+            "description": "Reset provider stream state without changing the local transcript"
+          },
+          {
+            "name": "compact",
+            "source": "builtin",
+            "description": "Compact the conversation",
+            "input": {
+              "hint": "[soft|remote|snapcompact] [focus]"
+            },
+            "subcommands": [
+              {
+                "name": "soft",
+                "description": "Summarize locally with the active model (skip server compaction)",
+                "usage": "[focus]"
+              },
+              {
+                "name": "remote",
+                "description": "Summarize via OpenAI-compatible server compaction, then fall back to a local summary",
+                "usage": "[focus]"
+              },
+              {
+                "name": "snapcompact",
+                "description": "Archive history onto dense bitmap images the model reads back (no LLM call)"
+              }
+            ]
+          },
+          {
+            "name": "shake",
+            "source": "builtin",
+            "description": "Shake heavy content out of the conversation context",
+            "input": {
+              "hint": "[elide|images|thinking]"
+            },
+            "subcommands": [
+              {
+                "name": "elide",
+                "description": "Strip tool results + large blocks (default)"
+              },
+              {
+                "name": "images",
+                "description": "Strip image blocks"
+              },
+              {
+                "name": "thinking",
+                "description": "Drop all thinking blocks"
+              }
+            ]
+          },
+          {
+            "name": "handoff",
+            "source": "builtin",
+            "description": "Summarize the session into a handoff document and compact in place",
+            "input": {
+              "hint": "[focus instructions]"
+            }
+          },
+          {
+            "name": "pin",
+            "source": "builtin",
+            "description": "Pin or unpin a session at the top of the resume list",
+            "input": {
+              "hint": "[session id]"
+            }
+          },
+          {
+            "name": "retry",
+            "source": "builtin",
+            "description": "Retry the last failed agent turn"
+          },
+          {
+            "name": "memory",
+            "source": "builtin",
+            "description": "Manage memory",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "view",
+                "description": "Show current memory injection payload"
+              },
+              {
+                "name": "stats",
+                "description": "Show memory backend statistics"
+              },
+              {
+                "name": "diagnose",
+                "description": "Run memory backend diagnostics"
+              },
+              {
+                "name": "queue",
+                "description": "Show pending memory deltas awaiting consolidation"
+              },
+              {
+                "name": "sync",
+                "description": "Run memory consolidation now"
+              },
+              {
+                "name": "clear",
+                "description": "Clear persisted memory data and artifacts"
+              },
+              {
+                "name": "reset",
+                "description": "Alias for clear"
+              },
+              {
+                "name": "enqueue",
+                "description": "Enqueue memory consolidation maintenance"
+              },
+              {
+                "name": "rebuild",
+                "description": "Alias for enqueue"
+              },
+              {
+                "name": "mm list",
+                "description": "List mental models on the active bank"
+              },
+              {
+                "name": "mm show",
+                "description": "Show one mental model (id required)"
+              },
+              {
+                "name": "mm refresh",
+                "description": "Refresh auto-refresh models bank-wide, or one model by id"
+              },
+              {
+                "name": "mm history",
+                "description": "Diff the change history of a mental model"
+              },
+              {
+                "name": "mm seed",
+                "description": "Create any built-in mental models that are missing"
+              },
+              {
+                "name": "mm delete",
+                "description": "Delete a mental model from the bank (id required)"
+              },
+              {
+                "name": "mm reload",
+                "description": "Re-pull the cached <mental_models> block"
+              }
+            ]
+          },
+          {
+            "name": "rename",
+            "source": "builtin",
+            "description": "Rename the current session (omit title to generate)",
+            "input": {
+              "hint": "[title]"
+            }
+          },
+          {
+            "name": "move",
+            "source": "builtin",
+            "description": "Move the current session to a different directory",
+            "input": {
+              "hint": "[<path>]"
+            }
+          },
+          {
+            "name": "wt",
+            "source": "builtin",
+            "aliases": [
+              "worktree"
+            ],
+            "description": "Move this session into a new worktree, changes included",
+            "input": {
+              "hint": "[<branch>]"
+            }
+          },
+          {
+            "name": "add-dir",
+            "source": "builtin",
+            "description": "Add a workspace directory to this session",
+            "input": {
+              "hint": "<path>"
+            }
+          },
+          {
+            "name": "remove-dir",
+            "source": "builtin",
+            "description": "Remove a workspace directory from this session",
+            "input": {
+              "hint": "<path>"
+            }
+          },
+          {
+            "name": "dirs",
+            "source": "builtin",
+            "description": "List this session's workspace directories"
+          },
+          {
+            "name": "marketplace",
+            "source": "builtin",
+            "description": "Manage plugins from marketplaces",
+            "input": {
+              "hint": "<subcommand>"
+            },
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "Add a marketplace source",
+                "usage": "<source>"
+              },
+              {
+                "name": "remove",
+                "description": "Remove a marketplace source",
+                "usage": "<name>"
+              },
+              {
+                "name": "update",
+                "description": "Update marketplace catalog(s)",
+                "usage": "[name]"
+              },
+              {
+                "name": "list",
+                "description": "List configured marketplaces"
+              },
+              {
+                "name": "discover",
+                "description": "Browse available plugins",
+                "usage": "[marketplace]"
+              },
+              {
+                "name": "install",
+                "description": "Install a plugin (interactive browser if no args)",
+                "usage": "[--force] [name@marketplace]"
+              },
+              {
+                "name": "uninstall",
+                "description": "Uninstall a plugin (selector if no args)",
+                "usage": "[name@marketplace]"
+              },
+              {
+                "name": "installed",
+                "description": "List installed marketplace plugins"
+              },
+              {
+                "name": "upgrade",
+                "description": "Upgrade outdated plugins",
+                "usage": "[name@marketplace]"
+              },
+              {
+                "name": "help",
+                "description": "Show usage guide"
+              }
+            ]
+          },
+          {
+            "name": "plugins",
+            "source": "builtin",
+            "aliases": [
+              "plugin"
+            ],
+            "description": "Manage plugins",
+            "input": {
+              "hint": "[list|enable|disable]"
+            },
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "List all installed plugins (npm + marketplace)"
+              },
+              {
+                "name": "enable",
+                "description": "Enable an installed plugin",
+                "usage": "<plugin>"
+              },
+              {
+                "name": "disable",
+                "description": "Disable an installed plugin",
+                "usage": "<plugin>"
+              }
+            ]
+          },
+          {
+            "name": "reload-plugins",
+            "source": "builtin",
+            "description": "Reload all plugins"
+          },
+          {
+            "name": "force",
+            "source": "builtin",
+            "aliases": [
+              "force:"
+            ],
+            "description": "Force next turn to use a specific tool",
+            "input": {
+              "hint": "<tool-name> [prompt]"
+            }
+          },
+          {
+            "name": "forget-approvals",
+            "source": "builtin",
+            "description": "Forget every file and folder approval Ask and remember has recorded"
+          },
+          {
+            "name": "autoresearch",
+            "source": "extension",
+            "description": "Toggle builtin autoresearch mode, or pass off / clear, or a goal message.",
+            "input": {
+              "hint": "arguments"
+            }
+          },
+          {
+            "name": "init",
+            "source": "file",
+            "description": "Generate AGENTS.md for current codebase"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "01a191ba-4b16-72ef-9cc4-6fb58b8dea18",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:07.670361Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "thinkingLevel": "low",
+        "configured": "auto",
+        "resolved": "low",
+        "type": "thinking_level_changed"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-4b17-7698-8f5e-83021c2a898e",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:07.671466Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "agent_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-4b18-7388-a2f3-7b2a98eb25e3",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:07.672435Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-4b18-7388-a2f3-7b2b99d77e88",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:07.672602Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "content": [
+            {
+              "text": "Do these in order with your tools, one call each, and then reply with the single word done: write a file notes.txt containing exactly the two lines `alpha` and `beta`; read notes.txt; edit notes.txt so `beta` becomes `gamma`; grep for `gamma` in the current directory; glob for `*.txt`; run `echo alvin-bash` with bash.",
+              "type": "text"
+            }
+          ],
+          "timestamp": 1793446267030.0,
+          "attribution": "user",
+          "role": "user"
+        },
+        "messageId": "msg-1",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-4b18-7388-a2f3-7b2c4d255555",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:07.67265Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "content": [
+            {
+              "text": "Do these in order with your tools, one call each, and then reply with the single word done: write a file notes.txt containing exactly the two lines `alpha` and `beta`; read notes.txt; edit notes.txt so `beta` becomes `gamma`; grep for `gamma` in the current directory; glob for `*.txt`; run `echo alvin-bash` with bash.",
+              "type": "text"
+            }
+          ],
+          "timestamp": 1793446267030.0,
+          "attribution": "user",
+          "role": "user"
+        },
+        "messageId": "msg-1",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76bb-7722-bf6b-9e7ae0e8c540",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.843618Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_e0a69f1b915c462d9da18e3d",
+              "name": "write",
+              "arguments": {
+                "content": "alpha\nbeta\n",
+                "i": "Writing notes.txt",
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 4883,
+            "output": 29,
+            "cacheRead": 704,
+            "cacheWrite": 0,
+            "totalTokens": 5616,
+            "cost": {
+              "input": 0.0007324499999999999,
+              "output": 0.0000145,
+              "cacheRead": 0.00002112,
+              "cacheWrite": 0.0,
+              "total": 0.0007680699999999999
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446267673.0,
+          "responseId": "20261031193107df5fa0892ade4491",
+          "duration": 11169.179042,
+          "ttft": 11168.926042,
+          "credentialId": 1
+        },
+        "messageId": "msg-2",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76bc-732e-9e5b-3fd6c677f50c",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.844182Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_e0a69f1b915c462d9da18e3d",
+              "name": "write",
+              "arguments": {
+                "content": "alpha\nbeta\n",
+                "i": "Writing notes.txt",
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 4883,
+            "output": 29,
+            "cacheRead": 704,
+            "cacheWrite": 0,
+            "totalTokens": 5616,
+            "cost": {
+              "input": 0.0007324499999999999,
+              "output": 0.0000145,
+              "cacheRead": 0.00002112,
+              "cacheWrite": 0.0,
+              "total": 0.0007680699999999999
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446267673.0,
+          "responseId": "20261031193107df5fa0892ade4491",
+          "duration": 11169.179042,
+          "ttft": 11168.926042,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_e0a69f1b915c462d9da18e3d",
+                "name": "write",
+                "arguments": {
+                  "content": "alpha\nbeta\n",
+                  "i": "Writing notes.txt",
+                  "path": "notes.txt"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 4883,
+              "output": 29,
+              "cacheRead": 704,
+              "cacheWrite": 0,
+              "totalTokens": 5616,
+              "cost": {
+                "input": 0.0007324499999999999,
+                "output": 0.0000145,
+                "cacheRead": 0.00002112,
+                "cacheWrite": 0.0,
+                "total": 0.0007680699999999999
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446267673.0,
+            "responseId": "20261031193107df5fa0892ade4491",
+            "duration": 11169.179042,
+            "ttft": 11168.926042,
+            "credentialId": 1
+          },
+          "type": "toolcall_start"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76bc-732e-9e5b-3fd7ec452c10",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.844565Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_e0a69f1b915c462d9da18e3d",
+              "name": "write",
+              "arguments": {
+                "content": "alpha\nbeta\n",
+                "i": "Writing notes.txt",
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 4883,
+            "output": 29,
+            "cacheRead": 704,
+            "cacheWrite": 0,
+            "totalTokens": 5616,
+            "cost": {
+              "input": 0.0007324499999999999,
+              "output": 0.0000145,
+              "cacheRead": 0.00002112,
+              "cacheWrite": 0.0,
+              "total": 0.0007680699999999999
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446267673.0,
+          "responseId": "20261031193107df5fa0892ade4491",
+          "duration": 11169.179042,
+          "ttft": 11168.926042,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"content\":\"alpha\\nbeta\\n\",\"i\":\"Writing notes.txt\",\"path\":\"notes.txt\"}",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_e0a69f1b915c462d9da18e3d",
+                "name": "write",
+                "arguments": {
+                  "content": "alpha\nbeta\n",
+                  "i": "Writing notes.txt",
+                  "path": "notes.txt"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 4883,
+              "output": 29,
+              "cacheRead": 704,
+              "cacheWrite": 0,
+              "totalTokens": 5616,
+              "cost": {
+                "input": 0.0007324499999999999,
+                "output": 0.0000145,
+                "cacheRead": 0.00002112,
+                "cacheWrite": 0.0,
+                "total": 0.0007680699999999999
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446267673.0,
+            "responseId": "20261031193107df5fa0892ade4491",
+            "duration": 11169.179042,
+            "ttft": 11168.926042,
+            "credentialId": 1
+          },
+          "type": "toolcall_delta"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76bd-7059-8467-2050e2f0d4b9",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.845079Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_e0a69f1b915c462d9da18e3d",
+              "name": "write",
+              "arguments": {
+                "content": "alpha\nbeta\n",
+                "i": "Writing notes.txt",
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 4883,
+            "output": 29,
+            "cacheRead": 704,
+            "cacheWrite": 0,
+            "totalTokens": 5616,
+            "cost": {
+              "input": 0.0007324499999999999,
+              "output": 0.0000145,
+              "cacheRead": 0.00002112,
+              "cacheWrite": 0.0,
+              "total": 0.0007680699999999999
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446267673.0,
+          "responseId": "20261031193107df5fa0892ade4491",
+          "duration": 11169.179042,
+          "ttft": 11168.926042,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "type": "toolCall",
+            "id": "call_e0a69f1b915c462d9da18e3d",
+            "name": "write",
+            "arguments": {
+              "content": "alpha\nbeta\n",
+              "i": "Writing notes.txt",
+              "path": "notes.txt"
+            }
+          },
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_e0a69f1b915c462d9da18e3d",
+                "name": "write",
+                "arguments": {
+                  "content": "alpha\nbeta\n",
+                  "i": "Writing notes.txt",
+                  "path": "notes.txt"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 4883,
+              "output": 29,
+              "cacheRead": 704,
+              "cacheWrite": 0,
+              "totalTokens": 5616,
+              "cost": {
+                "input": 0.0007324499999999999,
+                "output": 0.0000145,
+                "cacheRead": 0.00002112,
+                "cacheWrite": 0.0,
+                "total": 0.0007680699999999999
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446267673.0,
+            "responseId": "20261031193107df5fa0892ade4491",
+            "duration": 11169.179042,
+            "ttft": 11168.926042,
+            "credentialId": 1
+          },
+          "type": "toolcall_end"
+        },
+        "messageId": "msg-2",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76bd-7059-8467-205173675be7",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.845267Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_e0a69f1b915c462d9da18e3d",
+              "name": "write",
+              "arguments": {
+                "content": "alpha\nbeta\n",
+                "i": "Writing notes.txt",
+                "path": "notes.txt"
+              },
+              "intent": "Writing notes.txt"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 4883,
+            "output": 29,
+            "cacheRead": 704,
+            "cacheWrite": 0,
+            "totalTokens": 5616,
+            "cost": {
+              "input": 0.0007324499999999999,
+              "output": 0.0000145,
+              "cacheRead": 0.00002112,
+              "cacheWrite": 0.0,
+              "total": 0.0007680699999999999
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446267673.0,
+          "responseId": "20261031193107df5fa0892ade4491",
+          "duration": 11169.179042,
+          "ttft": 11168.926042,
+          "completedAt": 1793446278843.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-2",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76be-777e-9fb7-e7303401a933",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.846091Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_e0a69f1b915c462d9da18e3d",
+        "toolName": "write",
+        "args": {
+          "content": "alpha\nbeta\n",
+          "path": "notes.txt"
+        },
+        "intent": "Writing notes.txt",
+        "type": "tool_execution_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76c0-7015-a7cb-a607ca867ca3",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.848713Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_e0a69f1b915c462d9da18e3d",
+        "toolName": "write",
+        "args": {
+          "content": "alpha\nbeta\n",
+          "path": "notes.txt"
+        },
+        "partialResult": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Writing 11 bytes to notes.txt..."
+            }
+          ],
+          "details": {
+            "resolvedPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+          }
+        },
+        "type": "tool_execution_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76c0-7015-a7cb-a608216cbab2",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.848907Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_e0a69f1b915c462d9da18e3d",
+        "toolName": "write",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Successfully wrote 11 bytes to notes.txt"
+            }
+          ],
+          "details": {
+            "resolvedPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+          }
+        },
+        "isError": false,
+        "type": "tool_execution_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76c1-77d9-a130-0dd77e87e2c8",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.849019Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_e0a69f1b915c462d9da18e3d",
+          "toolName": "write",
+          "content": [
+            {
+              "text": "Successfully wrote 11 bytes to notes.txt",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446278848.0,
+          "details": {
+            "resolvedPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+          }
+        },
+        "messageId": "msg-3",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76c1-77d9-a130-0dd8264f5521",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.84907Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_e0a69f1b915c462d9da18e3d",
+          "toolName": "write",
+          "content": [
+            {
+              "text": "Successfully wrote 11 bytes to notes.txt",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446278848.0,
+          "details": {
+            "resolvedPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+          }
+        },
+        "messageId": "msg-3",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76cc-763f-a62b-ad01cc0b8f6e",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.860173Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_e0a69f1b915c462d9da18e3d",
+              "name": "write",
+              "arguments": {
+                "content": "alpha\nbeta\n",
+                "i": "Writing notes.txt",
+                "path": "notes.txt"
+              },
+              "intent": "Writing notes.txt"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 4883,
+            "output": 29,
+            "cacheRead": 704,
+            "cacheWrite": 0,
+            "totalTokens": 5616,
+            "cost": {
+              "input": 0.0007324499999999999,
+              "output": 0.0000145,
+              "cacheRead": 0.00002112,
+              "cacheWrite": 0.0,
+              "total": 0.0007680699999999999
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446267673.0,
+          "responseId": "20261031193107df5fa0892ade4491",
+          "duration": 11169.179042,
+          "ttft": 11168.926042,
+          "credentialId": 1
+        },
+        "toolResults": [
+          {
+            "role": "toolResult",
+            "toolCallId": "call_e0a69f1b915c462d9da18e3d",
+            "toolName": "write",
+            "content": [
+              {
+                "text": "Successfully wrote 11 bytes to notes.txt",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446278848.0,
+            "details": {
+              "resolvedPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+            }
+          }
+        ],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-76cc-763f-a62b-ad0243b77a31",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:18.860664Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a1ad-74e1-85f6-8218b0557682",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:29.837088Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_f60470a74bf240769f660a89",
+              "name": "read",
+              "arguments": {
+                "i": "Reading notes.txt",
+                "path": "notes.txt"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446278850.0,
+          "responseId": "2026103119311877f22c3d298e4901",
+          "credentialId": 1
+        },
+        "messageId": "msg-4",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a1ad-74e1-85f6-82193e420fa6",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:29.837623Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_f60470a74bf240769f660a89",
+              "name": "read",
+              "arguments": {
+                "i": "Reading notes.txt",
+                "path": "notes.txt"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446278850.0,
+          "responseId": "2026103119311877f22c3d298e4901",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_f60470a74bf240769f660a89",
+                "name": "read",
+                "arguments": {
+                  "i": "Reading notes.txt",
+                  "path": "notes.txt"
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793446278850.0,
+            "responseId": "2026103119311877f22c3d298e4901",
+            "credentialId": 1
+          },
+          "type": "toolcall_start"
+        },
+        "messageId": "msg-4",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a1ae-71bd-bb74-5ea216dded1f",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:29.838005Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_f60470a74bf240769f660a89",
+              "name": "read",
+              "arguments": {
+                "i": "Reading notes.txt",
+                "path": "notes.txt"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446278850.0,
+          "responseId": "2026103119311877f22c3d298e4901",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_f60470a74bf240769f660a89",
+                "name": "read",
+                "arguments": {
+                  "i": "Reading notes.txt",
+                  "path": "notes.txt"
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793446278850.0,
+            "responseId": "2026103119311877f22c3d298e4901",
+            "credentialId": 1
+          },
+          "type": "toolcall_delta"
+        },
+        "messageId": "msg-4",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a4fb-75fe-9ac1-f75cf09cfcff",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:30.683108Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_f60470a74bf240769f660a89",
+              "name": "read",
+              "arguments": {
+                "i": "Reading notes.txt",
+                "path": "notes.txt"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 3964,
+            "output": 20,
+            "cacheRead": 1664,
+            "cacheWrite": 0,
+            "totalTokens": 5648,
+            "cost": {
+              "input": 0.0005945999999999999,
+              "output": 0.00001,
+              "cacheRead": 0.00004992,
+              "cacheWrite": 0.0,
+              "total": 0.0006545199999999999
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446278850.0,
+          "responseId": "2026103119311877f22c3d298e4901",
+          "duration": 11831.470875,
+          "ttft": 10986.279042,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "type": "toolCall",
+            "id": "call_f60470a74bf240769f660a89",
+            "name": "read",
+            "arguments": {
+              "i": "Reading notes.txt",
+              "path": "notes.txt"
+            },
+            "streamIndex": 0,
+            "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}"
+          },
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_f60470a74bf240769f660a89",
+                "name": "read",
+                "arguments": {
+                  "i": "Reading notes.txt",
+                  "path": "notes.txt"
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 3964,
+              "output": 20,
+              "cacheRead": 1664,
+              "cacheWrite": 0,
+              "totalTokens": 5648,
+              "cost": {
+                "input": 0.0005945999999999999,
+                "output": 0.00001,
+                "cacheRead": 0.00004992,
+                "cacheWrite": 0.0,
+                "total": 0.0006545199999999999
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446278850.0,
+            "responseId": "2026103119311877f22c3d298e4901",
+            "duration": 11831.470875,
+            "ttft": 10986.279042,
+            "credentialId": 1
+          },
+          "type": "toolcall_end"
+        },
+        "messageId": "msg-4",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a4fb-75fe-9ac1-f75ddc760d06",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:30.683254Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_f60470a74bf240769f660a89",
+              "name": "read",
+              "arguments": {
+                "i": "Reading notes.txt",
+                "path": "notes.txt"
+              },
+              "intent": "Reading notes.txt",
+              "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}",
+              "streamIndex": 0
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 3964,
+            "output": 20,
+            "cacheRead": 1664,
+            "cacheWrite": 0,
+            "totalTokens": 5648,
+            "cost": {
+              "input": 0.0005945999999999999,
+              "output": 0.00001,
+              "cacheRead": 0.00004992,
+              "cacheWrite": 0.0,
+              "total": 0.0006545199999999999
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446278850.0,
+          "responseId": "2026103119311877f22c3d298e4901",
+          "duration": 11831.470875,
+          "ttft": 10986.279042,
+          "completedAt": 1793446290682.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-4",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a4fb-75fe-9ac1-f75ed23e4904",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:30.683704Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_f60470a74bf240769f660a89",
+        "toolName": "read",
+        "args": {
+          "path": "notes.txt"
+        },
+        "intent": "Reading notes.txt",
+        "type": "tool_execution_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a4fc-7011-9383-6c9adb4cfcac",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:30.684396Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_f60470a74bf240769f660a89",
+        "toolName": "read",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "alpha\nbeta"
+            }
+          ],
+          "details": {
+            "totalLines": 2,
+            "rowPrefixes": false,
+            "displayContent": {
+              "text": "alpha\nbeta",
+              "startLine": 1,
+              "lineNumbers": [
+                1,
+                2
+              ]
+            },
+            "fileSize": 11,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+              },
+              "pagedSource": true
+            }
+          }
+        },
+        "isError": false,
+        "type": "tool_execution_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a4fc-7011-9383-6c9b8efadd6d",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:30.684597Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_f60470a74bf240769f660a89",
+          "toolName": "read",
+          "content": [
+            {
+              "text": "alpha\nbeta",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446290684.0,
+          "details": {
+            "totalLines": 2,
+            "rowPrefixes": false,
+            "displayContent": {
+              "text": "alpha\nbeta",
+              "startLine": 1,
+              "lineNumbers": [
+                1,
+                2
+              ]
+            },
+            "fileSize": 11,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+              },
+              "pagedSource": true
+            }
+          }
+        },
+        "messageId": "msg-5",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a4fc-7011-9383-6c9cfa61a154",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:30.684712Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_f60470a74bf240769f660a89",
+          "toolName": "read",
+          "content": [
+            {
+              "text": "alpha\nbeta",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446290684.0,
+          "details": {
+            "totalLines": 2,
+            "rowPrefixes": false,
+            "displayContent": {
+              "text": "alpha\nbeta",
+              "startLine": 1,
+              "lineNumbers": [
+                1,
+                2
+              ]
+            },
+            "fileSize": 11,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+              },
+              "pagedSource": true
+            }
+          }
+        },
+        "messageId": "msg-5",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a4fd-714d-b8ae-f923bea107a9",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:30.685198Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_f60470a74bf240769f660a89",
+              "name": "read",
+              "arguments": {
+                "i": "Reading notes.txt",
+                "path": "notes.txt"
+              },
+              "intent": "Reading notes.txt",
+              "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}",
+              "streamIndex": 0
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 3964,
+            "output": 20,
+            "cacheRead": 1664,
+            "cacheWrite": 0,
+            "totalTokens": 5648,
+            "cost": {
+              "input": 0.0005945999999999999,
+              "output": 0.00001,
+              "cacheRead": 0.00004992,
+              "cacheWrite": 0.0,
+              "total": 0.0006545199999999999
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446278850.0,
+          "responseId": "2026103119311877f22c3d298e4901",
+          "duration": 11831.470875,
+          "ttft": 10986.279042,
+          "credentialId": 1
+        },
+        "toolResults": [
+          {
+            "role": "toolResult",
+            "toolCallId": "call_f60470a74bf240769f660a89",
+            "toolName": "read",
+            "content": [
+              {
+                "text": "alpha\nbeta",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446290684.0,
+            "details": {
+              "totalLines": 2,
+              "rowPrefixes": false,
+              "displayContent": {
+                "text": "alpha\nbeta",
+                "startLine": 1,
+                "lineNumbers": [
+                  1,
+                  2
+                ]
+              },
+              "fileSize": 11,
+              "meta": {
+                "source": {
+                  "type": "path",
+                  "value": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+                },
+                "pagedSource": true
+              }
+            }
+          }
+        ],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-a4fd-714d-b8ae-f92432a5a6e7",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:30.685214Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b749-7699-b9f4-5f1b92a6b532",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.369047Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_b218006726534078bba5918c",
+              "name": "edit",
+              "arguments": {
+                "i": "Changing beta to gamma",
+                "new_string": "gamma",
+                "old_string": "beta",
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 87,
+            "output": 35,
+            "cacheRead": 5568,
+            "cacheWrite": 0,
+            "totalTokens": 5690,
+            "cost": {
+              "input": 0.00001305,
+              "output": 0.0000175,
+              "cacheRead": 0.00016703999999999997,
+              "cacheWrite": 0.0,
+              "total": 0.00019759
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446290685.0,
+          "responseId": "20261031193130191e268b8a1b4eb5",
+          "duration": 4683.096292000002,
+          "ttft": 4683.007000000001,
+          "credentialId": 1
+        },
+        "messageId": "msg-6",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74a-713b-a473-a67132e8f73e",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.370345Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_b218006726534078bba5918c",
+              "name": "edit",
+              "arguments": {
+                "i": "Changing beta to gamma",
+                "new_string": "gamma",
+                "old_string": "beta",
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 87,
+            "output": 35,
+            "cacheRead": 5568,
+            "cacheWrite": 0,
+            "totalTokens": 5690,
+            "cost": {
+              "input": 0.00001305,
+              "output": 0.0000175,
+              "cacheRead": 0.00016703999999999997,
+              "cacheWrite": 0.0,
+              "total": 0.00019759
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446290685.0,
+          "responseId": "20261031193130191e268b8a1b4eb5",
+          "duration": 4683.096292000002,
+          "ttft": 4683.007000000001,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_b218006726534078bba5918c",
+                "name": "edit",
+                "arguments": {
+                  "i": "Changing beta to gamma",
+                  "new_string": "gamma",
+                  "old_string": "beta",
+                  "path": "notes.txt"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 87,
+              "output": 35,
+              "cacheRead": 5568,
+              "cacheWrite": 0,
+              "totalTokens": 5690,
+              "cost": {
+                "input": 0.00001305,
+                "output": 0.0000175,
+                "cacheRead": 0.00016703999999999997,
+                "cacheWrite": 0.0,
+                "total": 0.00019759
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446290685.0,
+            "responseId": "20261031193130191e268b8a1b4eb5",
+            "duration": 4683.096292000002,
+            "ttft": 4683.007000000001,
+            "credentialId": 1
+          },
+          "type": "toolcall_start"
+        },
+        "messageId": "msg-6",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74b-7237-a25d-60d08b501cea",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.371137Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_b218006726534078bba5918c",
+              "name": "edit",
+              "arguments": {
+                "i": "Changing beta to gamma",
+                "new_string": "gamma",
+                "old_string": "beta",
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 87,
+            "output": 35,
+            "cacheRead": 5568,
+            "cacheWrite": 0,
+            "totalTokens": 5690,
+            "cost": {
+              "input": 0.00001305,
+              "output": 0.0000175,
+              "cacheRead": 0.00016703999999999997,
+              "cacheWrite": 0.0,
+              "total": 0.00019759
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446290685.0,
+          "responseId": "20261031193130191e268b8a1b4eb5",
+          "duration": 4683.096292000002,
+          "ttft": 4683.007000000001,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"i\":\"Changing beta to gamma\",\"new_string\":\"gamma\",\"old_string\":\"beta\",\"path\":\"notes.txt\"}",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_b218006726534078bba5918c",
+                "name": "edit",
+                "arguments": {
+                  "i": "Changing beta to gamma",
+                  "new_string": "gamma",
+                  "old_string": "beta",
+                  "path": "notes.txt"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 87,
+              "output": 35,
+              "cacheRead": 5568,
+              "cacheWrite": 0,
+              "totalTokens": 5690,
+              "cost": {
+                "input": 0.00001305,
+                "output": 0.0000175,
+                "cacheRead": 0.00016703999999999997,
+                "cacheWrite": 0.0,
+                "total": 0.00019759
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446290685.0,
+            "responseId": "20261031193130191e268b8a1b4eb5",
+            "duration": 4683.096292000002,
+            "ttft": 4683.007000000001,
+            "credentialId": 1
+          },
+          "type": "toolcall_delta"
+        },
+        "messageId": "msg-6",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74b-7237-a25d-60d1dc3af8d3",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.371665Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_b218006726534078bba5918c",
+              "name": "edit",
+              "arguments": {
+                "i": "Changing beta to gamma",
+                "new_string": "gamma",
+                "old_string": "beta",
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 87,
+            "output": 35,
+            "cacheRead": 5568,
+            "cacheWrite": 0,
+            "totalTokens": 5690,
+            "cost": {
+              "input": 0.00001305,
+              "output": 0.0000175,
+              "cacheRead": 0.00016703999999999997,
+              "cacheWrite": 0.0,
+              "total": 0.00019759
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446290685.0,
+          "responseId": "20261031193130191e268b8a1b4eb5",
+          "duration": 4683.096292000002,
+          "ttft": 4683.007000000001,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "type": "toolCall",
+            "id": "call_b218006726534078bba5918c",
+            "name": "edit",
+            "arguments": {
+              "i": "Changing beta to gamma",
+              "new_string": "gamma",
+              "old_string": "beta",
+              "path": "notes.txt"
+            }
+          },
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_b218006726534078bba5918c",
+                "name": "edit",
+                "arguments": {
+                  "i": "Changing beta to gamma",
+                  "new_string": "gamma",
+                  "old_string": "beta",
+                  "path": "notes.txt"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 87,
+              "output": 35,
+              "cacheRead": 5568,
+              "cacheWrite": 0,
+              "totalTokens": 5690,
+              "cost": {
+                "input": 0.00001305,
+                "output": 0.0000175,
+                "cacheRead": 0.00016703999999999997,
+                "cacheWrite": 0.0,
+                "total": 0.00019759
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446290685.0,
+            "responseId": "20261031193130191e268b8a1b4eb5",
+            "duration": 4683.096292000002,
+            "ttft": 4683.007000000001,
+            "credentialId": 1
+          },
+          "type": "toolcall_end"
+        },
+        "messageId": "msg-6",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74b-7237-a25d-60d209996a2c",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.371858Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_b218006726534078bba5918c",
+              "name": "edit",
+              "arguments": {
+                "i": "Changing beta to gamma",
+                "new_string": "gamma",
+                "old_string": "beta",
+                "path": "notes.txt"
+              },
+              "intent": "Changing beta to gamma"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 87,
+            "output": 35,
+            "cacheRead": 5568,
+            "cacheWrite": 0,
+            "totalTokens": 5690,
+            "cost": {
+              "input": 0.00001305,
+              "output": 0.0000175,
+              "cacheRead": 0.00016703999999999997,
+              "cacheWrite": 0.0,
+              "total": 0.00019759
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446290685.0,
+          "responseId": "20261031193130191e268b8a1b4eb5",
+          "duration": 4683.096292000002,
+          "ttft": 4683.007000000001,
+          "completedAt": 1793446295369.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-6",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74b-7237-a25d-60d337b19786",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.371869Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_b218006726534078bba5918c",
+        "toolName": "edit",
+        "args": {
+          "new_string": "gamma",
+          "old_string": "beta",
+          "path": "notes.txt"
+        },
+        "intent": "Changing beta to gamma",
+        "type": "tool_execution_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74d-75f7-8395-031ff6062e68",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.373021Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_b218006726534078bba5918c",
+        "toolName": "edit",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "[notes.txt]\n1:alpha\n2:gamma"
+            }
+          ],
+          "details": {
+            "diff": " 1|alpha\n-2|beta\n+2|gamma",
+            "firstChangedLine": 2,
+            "op": "update",
+            "path": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt",
+            "oldText": "alpha\nbeta\n",
+            "newText": "alpha\ngamma\n"
+          }
+        },
+        "isError": false,
+        "type": "tool_execution_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74d-75f7-8395-032010805577",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.373175Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_b218006726534078bba5918c",
+          "toolName": "edit",
+          "content": [
+            {
+              "text": "[notes.txt]\n1:alpha\n2:gamma",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446295372.0,
+          "details": {
+            "diff": " 1|alpha\n-2|beta\n+2|gamma",
+            "firstChangedLine": 2,
+            "op": "update",
+            "path": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt",
+            "oldText": "alpha\nbeta\n",
+            "newText": "alpha\ngamma\n"
+          }
+        },
+        "messageId": "msg-7",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74d-75f7-8395-032154ed9fd5",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.373262Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_b218006726534078bba5918c",
+          "toolName": "edit",
+          "content": [
+            {
+              "text": "[notes.txt]\n1:alpha\n2:gamma",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446295372.0,
+          "details": {
+            "diff": " 1|alpha\n-2|beta\n+2|gamma",
+            "firstChangedLine": 2,
+            "op": "update",
+            "path": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt",
+            "oldText": "alpha\nbeta\n",
+            "newText": "alpha\ngamma\n"
+          }
+        },
+        "messageId": "msg-7",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74d-75f7-8395-0322a719a1df",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.373747Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_b218006726534078bba5918c",
+              "name": "edit",
+              "arguments": {
+                "i": "Changing beta to gamma",
+                "new_string": "gamma",
+                "old_string": "beta",
+                "path": "notes.txt"
+              },
+              "intent": "Changing beta to gamma"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 87,
+            "output": 35,
+            "cacheRead": 5568,
+            "cacheWrite": 0,
+            "totalTokens": 5690,
+            "cost": {
+              "input": 0.00001305,
+              "output": 0.0000175,
+              "cacheRead": 0.00016703999999999997,
+              "cacheWrite": 0.0,
+              "total": 0.00019759
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446290685.0,
+          "responseId": "20261031193130191e268b8a1b4eb5",
+          "duration": 4683.096292000002,
+          "ttft": 4683.007000000001,
+          "credentialId": 1
+        },
+        "toolResults": [
+          {
+            "role": "toolResult",
+            "toolCallId": "call_b218006726534078bba5918c",
+            "toolName": "edit",
+            "content": [
+              {
+                "text": "[notes.txt]\n1:alpha\n2:gamma",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446295372.0,
+            "details": {
+              "diff": " 1|alpha\n-2|beta\n+2|gamma",
+              "firstChangedLine": 2,
+              "op": "update",
+              "path": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt",
+              "oldText": "alpha\nbeta\n",
+              "newText": "alpha\ngamma\n"
+            }
+          }
+        ],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-b74d-75f7-8395-0323aa0618d5",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:35.373762Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c772-71db-9dfb-ccd86d2fe523",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.506221Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_9f532eb921ca45ea90877953",
+              "name": "grep",
+              "arguments": {
+                "i": "Searching for gamma",
+                "path": ".",
+                "pattern": "gamma"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446295373.0,
+          "responseId": "20261031193135b38437bcf72c4bcf",
+          "credentialId": 1
+        },
+        "messageId": "msg-8",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c772-71db-9dfb-ccd968664bc1",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.50677Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_9f532eb921ca45ea90877953",
+              "name": "grep",
+              "arguments": {
+                "i": "Searching for gamma",
+                "path": ".",
+                "pattern": "gamma"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446295373.0,
+          "responseId": "20261031193135b38437bcf72c4bcf",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_9f532eb921ca45ea90877953",
+                "name": "grep",
+                "arguments": {
+                  "i": "Searching for gamma",
+                  "path": ".",
+                  "pattern": "gamma"
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793446295373.0,
+            "responseId": "20261031193135b38437bcf72c4bcf",
+            "credentialId": 1
+          },
+          "type": "toolcall_start"
+        },
+        "messageId": "msg-8",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c773-758c-8908-1fa08647f566",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.507166Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_9f532eb921ca45ea90877953",
+              "name": "grep",
+              "arguments": {
+                "i": "Searching for gamma",
+                "path": ".",
+                "pattern": "gamma"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446295373.0,
+          "responseId": "20261031193135b38437bcf72c4bcf",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_9f532eb921ca45ea90877953",
+                "name": "grep",
+                "arguments": {
+                  "i": "Searching for gamma",
+                  "path": ".",
+                  "pattern": "gamma"
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793446295373.0,
+            "responseId": "20261031193135b38437bcf72c4bcf",
+            "credentialId": 1
+          },
+          "type": "toolcall_delta"
+        },
+        "messageId": "msg-8",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c781-76de-803b-1ce4c322743b",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.521659Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_9f532eb921ca45ea90877953",
+              "name": "grep",
+              "arguments": {
+                "i": "Searching for gamma",
+                "path": ".",
+                "pattern": "gamma"
+              },
+              "streamIndex": 0,
+              "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 73,
+            "output": 25,
+            "cacheRead": 5632,
+            "cacheWrite": 0,
+            "totalTokens": 5730,
+            "cost": {
+              "input": 0.00001095,
+              "output": 0.0000125,
+              "cacheRead": 0.00016895999999999998,
+              "cacheWrite": 0.0,
+              "total": 0.00019241
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446295373.0,
+          "responseId": "20261031193135b38437bcf72c4bcf",
+          "duration": 4146.621792000002,
+          "ttft": 4131.642374999999,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "type": "toolCall",
+            "id": "call_9f532eb921ca45ea90877953",
+            "name": "grep",
+            "arguments": {
+              "i": "Searching for gamma",
+              "path": ".",
+              "pattern": "gamma"
+            },
+            "streamIndex": 0,
+            "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}"
+          },
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_9f532eb921ca45ea90877953",
+                "name": "grep",
+                "arguments": {
+                  "i": "Searching for gamma",
+                  "path": ".",
+                  "pattern": "gamma"
+                },
+                "streamIndex": 0,
+                "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 73,
+              "output": 25,
+              "cacheRead": 5632,
+              "cacheWrite": 0,
+              "totalTokens": 5730,
+              "cost": {
+                "input": 0.00001095,
+                "output": 0.0000125,
+                "cacheRead": 0.00016895999999999998,
+                "cacheWrite": 0.0,
+                "total": 0.00019241
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446295373.0,
+            "responseId": "20261031193135b38437bcf72c4bcf",
+            "duration": 4146.621792000002,
+            "ttft": 4131.642374999999,
+            "credentialId": 1
+          },
+          "type": "toolcall_end"
+        },
+        "messageId": "msg-8",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c781-76de-803b-1ce595bcdbe6",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.521883Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_9f532eb921ca45ea90877953",
+              "name": "grep",
+              "arguments": {
+                "i": "Searching for gamma",
+                "path": ".",
+                "pattern": "gamma"
+              },
+              "intent": "Searching for gamma",
+              "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}",
+              "streamIndex": 0
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 73,
+            "output": 25,
+            "cacheRead": 5632,
+            "cacheWrite": 0,
+            "totalTokens": 5730,
+            "cost": {
+              "input": 0.00001095,
+              "output": 0.0000125,
+              "cacheRead": 0.00016895999999999998,
+              "cacheWrite": 0.0,
+              "total": 0.00019241
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446295373.0,
+          "responseId": "20261031193135b38437bcf72c4bcf",
+          "duration": 4146.621792000002,
+          "ttft": 4131.642374999999,
+          "completedAt": 1793446299520.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-8",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c781-76de-803b-1ce65eb65af0",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.521898Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_9f532eb921ca45ea90877953",
+        "toolName": "grep",
+        "args": {
+          "path": ".",
+          "pattern": "gamma"
+        },
+        "intent": "Searching for gamma",
+        "type": "tool_execution_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c783-71a8-8528-d2429a21e71d",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.523378Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_9f532eb921ca45ea90877953",
+        "toolName": "grep",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "# notes.txt\n 1|alpha\n*2|gamma"
+            }
+          ],
+          "details": {
+            "scopePath": ".",
+            "searchPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+            "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+            "matchCount": 1,
+            "fileCount": 1,
+            "files": [
+              "notes.txt"
+            ],
+            "fileMatches": [
+              {
+                "path": "notes.txt",
+                "count": 1
+              }
+            ],
+            "truncated": false,
+            "displayContent": "# notes.txt\n 1│alpha\n*2│gamma"
+          }
+        },
+        "isError": false,
+        "type": "tool_execution_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c783-71a8-8528-d2439590566f",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.523583Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_9f532eb921ca45ea90877953",
+          "toolName": "grep",
+          "content": [
+            {
+              "text": "# notes.txt\n 1|alpha\n*2|gamma",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446299523.0,
+          "details": {
+            "scopePath": ".",
+            "searchPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+            "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+            "matchCount": 1,
+            "fileCount": 1,
+            "files": [
+              "notes.txt"
+            ],
+            "fileMatches": [
+              {
+                "path": "notes.txt",
+                "count": 1
+              }
+            ],
+            "truncated": false,
+            "displayContent": "# notes.txt\n 1│alpha\n*2│gamma"
+          }
+        },
+        "messageId": "msg-9",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c783-71a8-8528-d244ab1034a9",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.5237Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_9f532eb921ca45ea90877953",
+          "toolName": "grep",
+          "content": [
+            {
+              "text": "# notes.txt\n 1|alpha\n*2|gamma",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446299523.0,
+          "details": {
+            "scopePath": ".",
+            "searchPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+            "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+            "matchCount": 1,
+            "fileCount": 1,
+            "files": [
+              "notes.txt"
+            ],
+            "fileMatches": [
+              {
+                "path": "notes.txt",
+                "count": 1
+              }
+            ],
+            "truncated": false,
+            "displayContent": "# notes.txt\n 1│alpha\n*2│gamma"
+          }
+        },
+        "messageId": "msg-9",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c784-72d2-a3b6-c95d0af14536",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.524193Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_9f532eb921ca45ea90877953",
+              "name": "grep",
+              "arguments": {
+                "i": "Searching for gamma",
+                "path": ".",
+                "pattern": "gamma"
+              },
+              "intent": "Searching for gamma",
+              "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}",
+              "streamIndex": 0
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 73,
+            "output": 25,
+            "cacheRead": 5632,
+            "cacheWrite": 0,
+            "totalTokens": 5730,
+            "cost": {
+              "input": 0.00001095,
+              "output": 0.0000125,
+              "cacheRead": 0.00016895999999999998,
+              "cacheWrite": 0.0,
+              "total": 0.00019241
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446295373.0,
+          "responseId": "20261031193135b38437bcf72c4bcf",
+          "duration": 4146.621792000002,
+          "ttft": 4131.642374999999,
+          "credentialId": 1
+        },
+        "toolResults": [
+          {
+            "role": "toolResult",
+            "toolCallId": "call_9f532eb921ca45ea90877953",
+            "toolName": "grep",
+            "content": [
+              {
+                "text": "# notes.txt\n 1|alpha\n*2|gamma",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446299523.0,
+            "details": {
+              "scopePath": ".",
+              "searchPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+              "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+              "matchCount": 1,
+              "fileCount": 1,
+              "files": [
+                "notes.txt"
+              ],
+              "fileMatches": [
+                {
+                  "path": "notes.txt",
+                  "count": 1
+                }
+              ],
+              "truncated": false,
+              "displayContent": "# notes.txt\n 1│alpha\n*2│gamma"
+            }
+          }
+        ],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-c784-72d2-a3b6-c95ef3452c2c",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:39.524213Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c3-7184-994d-3b2ed817a883",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.683035Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_bda1554adc0348b68f6a01e7",
+              "name": "glob",
+              "arguments": {
+                "i": "Listing txt files",
+                "path": "*.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 51,
+            "output": 20,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5767,
+            "cost": {
+              "input": 7.65e-6,
+              "output": 0.00001,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00018853
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446299524.0,
+          "responseId": "2026103119313962cb4a2a92844ddb",
+          "duration": 4158.143917000001,
+          "ttft": 4158.055124999999,
+          "credentialId": 1
+        },
+        "messageId": "msg-10",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c3-7184-994d-3b2f73efb7ad",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.683601Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_bda1554adc0348b68f6a01e7",
+              "name": "glob",
+              "arguments": {
+                "i": "Listing txt files",
+                "path": "*.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 51,
+            "output": 20,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5767,
+            "cost": {
+              "input": 7.65e-6,
+              "output": 0.00001,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00018853
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446299524.0,
+          "responseId": "2026103119313962cb4a2a92844ddb",
+          "duration": 4158.143917000001,
+          "ttft": 4158.055124999999,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_bda1554adc0348b68f6a01e7",
+                "name": "glob",
+                "arguments": {
+                  "i": "Listing txt files",
+                  "path": "*.txt"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 51,
+              "output": 20,
+              "cacheRead": 5696,
+              "cacheWrite": 0,
+              "totalTokens": 5767,
+              "cost": {
+                "input": 7.65e-6,
+                "output": 0.00001,
+                "cacheRead": 0.00017088,
+                "cacheWrite": 0.0,
+                "total": 0.00018853
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446299524.0,
+            "responseId": "2026103119313962cb4a2a92844ddb",
+            "duration": 4158.143917000001,
+            "ttft": 4158.055124999999,
+            "credentialId": 1
+          },
+          "type": "toolcall_start"
+        },
+        "messageId": "msg-10",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c3-7184-994d-3b30b702ccec",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.683991Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_bda1554adc0348b68f6a01e7",
+              "name": "glob",
+              "arguments": {
+                "i": "Listing txt files",
+                "path": "*.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 51,
+            "output": 20,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5767,
+            "cost": {
+              "input": 7.65e-6,
+              "output": 0.00001,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00018853
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446299524.0,
+          "responseId": "2026103119313962cb4a2a92844ddb",
+          "duration": 4158.143917000001,
+          "ttft": 4158.055124999999,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"i\":\"Listing txt files\",\"path\":\"*.txt\"}",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_bda1554adc0348b68f6a01e7",
+                "name": "glob",
+                "arguments": {
+                  "i": "Listing txt files",
+                  "path": "*.txt"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 51,
+              "output": 20,
+              "cacheRead": 5696,
+              "cacheWrite": 0,
+              "totalTokens": 5767,
+              "cost": {
+                "input": 7.65e-6,
+                "output": 0.00001,
+                "cacheRead": 0.00017088,
+                "cacheWrite": 0.0,
+                "total": 0.00018853
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446299524.0,
+            "responseId": "2026103119313962cb4a2a92844ddb",
+            "duration": 4158.143917000001,
+            "ttft": 4158.055124999999,
+            "credentialId": 1
+          },
+          "type": "toolcall_delta"
+        },
+        "messageId": "msg-10",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c4-7178-bb01-3fde64607291",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.684474Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_bda1554adc0348b68f6a01e7",
+              "name": "glob",
+              "arguments": {
+                "i": "Listing txt files",
+                "path": "*.txt"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 51,
+            "output": 20,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5767,
+            "cost": {
+              "input": 7.65e-6,
+              "output": 0.00001,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00018853
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446299524.0,
+          "responseId": "2026103119313962cb4a2a92844ddb",
+          "duration": 4158.143917000001,
+          "ttft": 4158.055124999999,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "type": "toolCall",
+            "id": "call_bda1554adc0348b68f6a01e7",
+            "name": "glob",
+            "arguments": {
+              "i": "Listing txt files",
+              "path": "*.txt"
+            }
+          },
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_bda1554adc0348b68f6a01e7",
+                "name": "glob",
+                "arguments": {
+                  "i": "Listing txt files",
+                  "path": "*.txt"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 51,
+              "output": 20,
+              "cacheRead": 5696,
+              "cacheWrite": 0,
+              "totalTokens": 5767,
+              "cost": {
+                "input": 7.65e-6,
+                "output": 0.00001,
+                "cacheRead": 0.00017088,
+                "cacheWrite": 0.0,
+                "total": 0.00018853
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446299524.0,
+            "responseId": "2026103119313962cb4a2a92844ddb",
+            "duration": 4158.143917000001,
+            "ttft": 4158.055124999999,
+            "credentialId": 1
+          },
+          "type": "toolcall_end"
+        },
+        "messageId": "msg-10",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c4-7178-bb01-3fdf69509648",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.684652Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_bda1554adc0348b68f6a01e7",
+              "name": "glob",
+              "arguments": {
+                "i": "Listing txt files",
+                "path": "*.txt"
+              },
+              "intent": "Listing txt files"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 51,
+            "output": 20,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5767,
+            "cost": {
+              "input": 7.65e-6,
+              "output": 0.00001,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00018853
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446299524.0,
+          "responseId": "2026103119313962cb4a2a92844ddb",
+          "duration": 4158.143917000001,
+          "ttft": 4158.055124999999,
+          "completedAt": 1793446303682.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-10",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c4-7178-bb01-3fe0e2a665f0",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.684664Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_bda1554adc0348b68f6a01e7",
+        "toolName": "glob",
+        "args": {
+          "path": "*.txt"
+        },
+        "intent": "Listing txt files",
+        "type": "tool_execution_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c4-7178-bb01-3fe1939a5c5e",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.684872Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_bda1554adc0348b68f6a01e7",
+        "toolName": "glob",
+        "args": {
+          "path": "*.txt"
+        },
+        "partialResult": {
+          "content": [
+            {
+              "type": "text",
+              "text": "notes.txt"
+            }
+          ],
+          "details": {
+            "scopePath": ".",
+            "fileCount": 1,
+            "files": [
+              "notes.txt"
+            ],
+            "truncated": false
+          }
+        },
+        "type": "tool_execution_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c5-7150-ad78-646634055367",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.685099Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_bda1554adc0348b68f6a01e7",
+        "toolName": "glob",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "notes.txt"
+            }
+          ],
+          "details": {
+            "scopePath": ".",
+            "fileCount": 1,
+            "files": [
+              "notes.txt"
+            ],
+            "truncated": false,
+            "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo"
+          }
+        },
+        "isError": false,
+        "type": "tool_execution_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c5-7150-ad78-646725cc5226",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.685195Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_bda1554adc0348b68f6a01e7",
+          "toolName": "glob",
+          "content": [
+            {
+              "text": "notes.txt",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446303684.0,
+          "details": {
+            "scopePath": ".",
+            "fileCount": 1,
+            "files": [
+              "notes.txt"
+            ],
+            "truncated": false,
+            "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo"
+          }
+        },
+        "messageId": "msg-11",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c5-7150-ad78-646844b2db63",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.685287Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_bda1554adc0348b68f6a01e7",
+          "toolName": "glob",
+          "content": [
+            {
+              "text": "notes.txt",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446303684.0,
+          "details": {
+            "scopePath": ".",
+            "fileCount": 1,
+            "files": [
+              "notes.txt"
+            ],
+            "truncated": false,
+            "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo"
+          }
+        },
+        "messageId": "msg-11",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c5-7150-ad78-646920fffd34",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.685708Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_bda1554adc0348b68f6a01e7",
+              "name": "glob",
+              "arguments": {
+                "i": "Listing txt files",
+                "path": "*.txt"
+              },
+              "intent": "Listing txt files"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 51,
+            "output": 20,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5767,
+            "cost": {
+              "input": 7.65e-6,
+              "output": 0.00001,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00018853
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446299524.0,
+          "responseId": "2026103119313962cb4a2a92844ddb",
+          "duration": 4158.143917000001,
+          "ttft": 4158.055124999999,
+          "credentialId": 1
+        },
+        "toolResults": [
+          {
+            "role": "toolResult",
+            "toolCallId": "call_bda1554adc0348b68f6a01e7",
+            "toolName": "glob",
+            "content": [
+              {
+                "text": "notes.txt",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446303684.0,
+            "details": {
+              "scopePath": ".",
+              "fileCount": 1,
+              "files": [
+                "notes.txt"
+              ],
+              "truncated": false,
+              "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo"
+            }
+          }
+        ],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-d7c5-7150-ad78-646aaf0e9517",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:43.685733Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9bc-7662-b139-1ee01b837cb8",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.284607Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_5f87cee83f0f42dc8cf51476",
+              "name": "bash",
+              "arguments": {
+                "command": "echo alvin-bash",
+                "i": "Echoing alvin-bash"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 77,
+            "output": 26,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5799,
+            "cost": {
+              "input": 0.00001155,
+              "output": 0.000013,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00019543
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446303685.0,
+          "responseId": "2026103119314377de51a01ff14aed",
+          "duration": 4597.91575,
+          "ttft": 4597.797207999996,
+          "credentialId": 1
+        },
+        "messageId": "msg-12",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9bd-708f-a2f5-859b42867774",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.285221Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_5f87cee83f0f42dc8cf51476",
+              "name": "bash",
+              "arguments": {
+                "command": "echo alvin-bash",
+                "i": "Echoing alvin-bash"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 77,
+            "output": 26,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5799,
+            "cost": {
+              "input": 0.00001155,
+              "output": 0.000013,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00019543
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446303685.0,
+          "responseId": "2026103119314377de51a01ff14aed",
+          "duration": 4597.91575,
+          "ttft": 4597.797207999996,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_5f87cee83f0f42dc8cf51476",
+                "name": "bash",
+                "arguments": {
+                  "command": "echo alvin-bash",
+                  "i": "Echoing alvin-bash"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 77,
+              "output": 26,
+              "cacheRead": 5696,
+              "cacheWrite": 0,
+              "totalTokens": 5799,
+              "cost": {
+                "input": 0.00001155,
+                "output": 0.000013,
+                "cacheRead": 0.00017088,
+                "cacheWrite": 0.0,
+                "total": 0.00019543
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446303685.0,
+            "responseId": "2026103119314377de51a01ff14aed",
+            "duration": 4597.91575,
+            "ttft": 4597.797207999996,
+            "credentialId": 1
+          },
+          "type": "toolcall_start"
+        },
+        "messageId": "msg-12",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9bd-708f-a2f5-859cfd4e719e",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.285581Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_5f87cee83f0f42dc8cf51476",
+              "name": "bash",
+              "arguments": {
+                "command": "echo alvin-bash",
+                "i": "Echoing alvin-bash"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 77,
+            "output": 26,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5799,
+            "cost": {
+              "input": 0.00001155,
+              "output": 0.000013,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00019543
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446303685.0,
+          "responseId": "2026103119314377de51a01ff14aed",
+          "duration": 4597.91575,
+          "ttft": 4597.797207999996,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"command\":\"echo alvin-bash\",\"i\":\"Echoing alvin-bash\"}",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_5f87cee83f0f42dc8cf51476",
+                "name": "bash",
+                "arguments": {
+                  "command": "echo alvin-bash",
+                  "i": "Echoing alvin-bash"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 77,
+              "output": 26,
+              "cacheRead": 5696,
+              "cacheWrite": 0,
+              "totalTokens": 5799,
+              "cost": {
+                "input": 0.00001155,
+                "output": 0.000013,
+                "cacheRead": 0.00017088,
+                "cacheWrite": 0.0,
+                "total": 0.00019543
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446303685.0,
+            "responseId": "2026103119314377de51a01ff14aed",
+            "duration": 4597.91575,
+            "ttft": 4597.797207999996,
+            "credentialId": 1
+          },
+          "type": "toolcall_delta"
+        },
+        "messageId": "msg-12",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9be-7405-8fea-afe24010a723",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.286085Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_5f87cee83f0f42dc8cf51476",
+              "name": "bash",
+              "arguments": {
+                "command": "echo alvin-bash",
+                "i": "Echoing alvin-bash"
+              }
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 77,
+            "output": 26,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5799,
+            "cost": {
+              "input": 0.00001155,
+              "output": 0.000013,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00019543
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446303685.0,
+          "responseId": "2026103119314377de51a01ff14aed",
+          "duration": 4597.91575,
+          "ttft": 4597.797207999996,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "type": "toolCall",
+            "id": "call_5f87cee83f0f42dc8cf51476",
+            "name": "bash",
+            "arguments": {
+              "command": "echo alvin-bash",
+              "i": "Echoing alvin-bash"
+            }
+          },
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_5f87cee83f0f42dc8cf51476",
+                "name": "bash",
+                "arguments": {
+                  "command": "echo alvin-bash",
+                  "i": "Echoing alvin-bash"
+                }
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 77,
+              "output": 26,
+              "cacheRead": 5696,
+              "cacheWrite": 0,
+              "totalTokens": 5799,
+              "cost": {
+                "input": 0.00001155,
+                "output": 0.000013,
+                "cacheRead": 0.00017088,
+                "cacheWrite": 0.0,
+                "total": 0.00019543
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446303685.0,
+            "responseId": "2026103119314377de51a01ff14aed",
+            "duration": 4597.91575,
+            "ttft": 4597.797207999996,
+            "credentialId": 1
+          },
+          "type": "toolcall_end"
+        },
+        "messageId": "msg-12",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9be-7405-8fea-afe3d7bbb89c",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.286259Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_5f87cee83f0f42dc8cf51476",
+              "name": "bash",
+              "arguments": {
+                "command": "echo alvin-bash",
+                "i": "Echoing alvin-bash"
+              },
+              "intent": "Echoing alvin-bash"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 77,
+            "output": 26,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5799,
+            "cost": {
+              "input": 0.00001155,
+              "output": 0.000013,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00019543
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446303685.0,
+          "responseId": "2026103119314377de51a01ff14aed",
+          "duration": 4597.91575,
+          "ttft": 4597.797207999996,
+          "completedAt": 1793446308284.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-12",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9be-7405-8fea-afe46ea458aa",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.286272Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_5f87cee83f0f42dc8cf51476",
+        "toolName": "bash",
+        "args": {
+          "command": "echo alvin-bash"
+        },
+        "intent": "Echoing alvin-bash",
+        "type": "tool_execution_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9c8-744d-8aab-6c474ec7a685",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.296968Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_5f87cee83f0f42dc8cf51476",
+        "toolName": "bash",
+        "args": {
+          "command": "echo alvin-bash"
+        },
+        "partialResult": {
+          "content": [
+            {
+              "type": "text",
+              "text": "alvin-bash\n"
+            }
+          ],
+          "details": {}
+        },
+        "type": "tool_execution_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9c9-73c0-8465-dcac7bf24536",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.297181Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_5f87cee83f0f42dc8cf51476",
+        "toolName": "bash",
+        "args": {
+          "command": "echo alvin-bash"
+        },
+        "partialResult": {
+          "content": [
+            {
+              "type": "text",
+              "text": "alvin-bash\n"
+            }
+          ],
+          "details": {
+            "wallTimeNoticeEmitted": false,
+            "timeoutSeconds": 300,
+            "wallTimeMs": 10.476000000002388
+          }
+        },
+        "type": "tool_execution_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9c9-73c0-8465-dcadcfb244c9",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.297233Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "toolCallId": "call_5f87cee83f0f42dc8cf51476",
+        "toolName": "bash",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "alvin-bash\n"
+            }
+          ],
+          "details": {
+            "wallTimeNoticeEmitted": false,
+            "timeoutSeconds": 300,
+            "wallTimeMs": 10.476000000002388
+          }
+        },
+        "isError": false,
+        "type": "tool_execution_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9c9-73c0-8465-dcae1d142e5f",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.297355Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_5f87cee83f0f42dc8cf51476",
+          "toolName": "bash",
+          "content": [
+            {
+              "text": "alvin-bash\n",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446308297.0,
+          "details": {
+            "wallTimeNoticeEmitted": false,
+            "timeoutSeconds": 300,
+            "wallTimeMs": 10.476000000002388
+          }
+        },
+        "messageId": "msg-13",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9c9-73c0-8465-dcaf7a9ef9d6",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.297421Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_5f87cee83f0f42dc8cf51476",
+          "toolName": "bash",
+          "content": [
+            {
+              "text": "alvin-bash\n",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1793446308297.0,
+          "details": {
+            "wallTimeNoticeEmitted": false,
+            "timeoutSeconds": 300,
+            "wallTimeMs": 10.476000000002388
+          }
+        },
+        "messageId": "msg-13",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9ca-756d-9601-61197967a59d",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.29805Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call_5f87cee83f0f42dc8cf51476",
+              "name": "bash",
+              "arguments": {
+                "command": "echo alvin-bash",
+                "i": "Echoing alvin-bash"
+              },
+              "intent": "Echoing alvin-bash"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 77,
+            "output": 26,
+            "cacheRead": 5696,
+            "cacheWrite": 0,
+            "totalTokens": 5799,
+            "cost": {
+              "input": 0.00001155,
+              "output": 0.000013,
+              "cacheRead": 0.00017088,
+              "cacheWrite": 0.0,
+              "total": 0.00019543
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1793446303685.0,
+          "responseId": "2026103119314377de51a01ff14aed",
+          "duration": 4597.91575,
+          "ttft": 4597.797207999996,
+          "credentialId": 1
+        },
+        "toolResults": [
+          {
+            "role": "toolResult",
+            "toolCallId": "call_5f87cee83f0f42dc8cf51476",
+            "toolName": "bash",
+            "content": [
+              {
+                "text": "alvin-bash\n",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446308297.0,
+            "details": {
+              "wallTimeNoticeEmitted": false,
+              "timeoutSeconds": 300,
+              "wallTimeMs": 10.476000000002388
+            }
+          }
+        ],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-e9ca-756d-9601-611aebaef2cc",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:48.298102Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "type": "turn_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-fb8b-703d-9eba-6f7c50fd7f88",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:52.843121Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446308298.0,
+          "responseId": "20261031193148245e7eae424649bc",
+          "credentialId": 1
+        },
+        "messageId": "msg-14",
+        "type": "message_start"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-fb8b-703d-9eba-6f7da6142ad4",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:52.843525Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446308298.0,
+          "responseId": "20261031193148245e7eae424649bc",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "done",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793446308298.0,
+            "responseId": "20261031193148245e7eae424649bc",
+            "credentialId": 1
+          },
+          "type": "text_start"
+        },
+        "messageId": "msg-14",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-fb8b-703d-9eba-6f7e9754f33d",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:52.843815Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0.0,
+              "output": 0.0,
+              "cacheRead": 0.0,
+              "cacheWrite": 0.0,
+              "total": 0.0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446308298.0,
+          "responseId": "20261031193148245e7eae424649bc",
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "done",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "done",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0.0,
+                "output": 0.0,
+                "cacheRead": 0.0,
+                "cacheWrite": 0.0,
+                "total": 0.0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793446308298.0,
+            "responseId": "20261031193148245e7eae424649bc",
+            "credentialId": 1
+          },
+          "type": "text_delta"
+        },
+        "messageId": "msg-14",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-fb8f-71ec-8760-93cf63dca272",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:52.847018Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 48,
+            "output": 3,
+            "cacheRead": 5760,
+            "cacheWrite": 0,
+            "totalTokens": 5811,
+            "cost": {
+              "input": 7.2e-6,
+              "output": 1.5e-6,
+              "cacheRead": 0.00017279999999999997,
+              "cacheWrite": 0.0,
+              "total": 0.00018149999999999997
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446308298.0,
+          "responseId": "20261031193148245e7eae424649bc",
+          "duration": 4547.988749999997,
+          "ttft": 4544.240250000003,
+          "credentialId": 1
+        },
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "content": "done",
+          "partial": {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "done",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 48,
+              "output": 3,
+              "cacheRead": 5760,
+              "cacheWrite": 0,
+              "totalTokens": 5811,
+              "cost": {
+                "input": 7.2e-6,
+                "output": 1.5e-6,
+                "cacheRead": 0.00017279999999999997,
+                "cacheWrite": 0.0,
+                "total": 0.00018149999999999997
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793446308298.0,
+            "responseId": "20261031193148245e7eae424649bc",
+            "duration": 4547.988749999997,
+            "ttft": 4544.240250000003,
+            "credentialId": 1
+          },
+          "type": "text_end"
+        },
+        "messageId": "msg-14",
+        "type": "message_update"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-fb8f-71ec-8760-93d040375b45",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:52.847149Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 48,
+            "output": 3,
+            "cacheRead": 5760,
+            "cacheWrite": 0,
+            "totalTokens": 5811,
+            "cost": {
+              "input": 7.2e-6,
+              "output": 1.5e-6,
+              "cacheRead": 0.00017279999999999997,
+              "cacheWrite": 0.0,
+              "total": 0.00018149999999999997
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446308298.0,
+          "responseId": "20261031193148245e7eae424649bc",
+          "duration": 4547.988749999997,
+          "ttft": 4544.240250000003,
+          "completedAt": 1793446312846.0,
+          "credentialId": 1
+        },
+        "messageId": "msg-14",
+        "type": "message_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-fb8f-71ec-8760-93d12f589a96",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:52.847284Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "api": "openai-completions",
+          "provider": "zai",
+          "model": "glm-5.3-flash",
+          "usage": {
+            "input": 48,
+            "output": 3,
+            "cacheRead": 5760,
+            "cacheWrite": 0,
+            "totalTokens": 5811,
+            "cost": {
+              "input": 7.2e-6,
+              "output": 1.5e-6,
+              "cacheRead": 0.00017279999999999997,
+              "cacheWrite": 0.0,
+              "total": 0.00018149999999999997
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1793446308298.0,
+          "responseId": "20261031193148245e7eae424649bc",
+          "duration": 4547.988749999997,
+          "ttft": 4544.240250000003,
+          "credentialId": 1
+        },
+        "toolResults": [],
+        "type": "turn_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-fb8f-71ec-8760-93d2eb27ab3f",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:52.847762Z",
+    "body": {
+      "kind": "extensionUiRequest",
+      "frame": {
+        "id": "15bbbc12e3c98afb",
+        "widgetKey": "autoresearch",
+        "type": "extension_ui_request",
+        "method": "setWidget"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-fb93-719f-9d9a-f48f08e9f29a",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:52.85149Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "messages": [
+          {
+            "content": [
+              {
+                "text": "Do these in order with your tools, one call each, and then reply with the single word done: write a file notes.txt containing exactly the two lines `alpha` and `beta`; read notes.txt; edit notes.txt so `beta` becomes `gamma`; grep for `gamma` in the current directory; glob for `*.txt`; run `echo alvin-bash` with bash.",
+                "type": "text"
+              }
+            ],
+            "timestamp": 1793446267030.0,
+            "attribution": "user",
+            "role": "user"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_e0a69f1b915c462d9da18e3d",
+                "name": "write",
+                "arguments": {
+                  "content": "alpha\nbeta\n",
+                  "i": "Writing notes.txt",
+                  "path": "notes.txt"
+                },
+                "intent": "Writing notes.txt"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 4883,
+              "output": 29,
+              "cacheRead": 704,
+              "cacheWrite": 0,
+              "totalTokens": 5616,
+              "cost": {
+                "input": 0.0007324499999999999,
+                "output": 0.0000145,
+                "cacheRead": 0.00002112,
+                "cacheWrite": 0.0,
+                "total": 0.0007680699999999999
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446267673.0,
+            "responseId": "20261031193107df5fa0892ade4491",
+            "duration": 11169.179042,
+            "ttft": 11168.926042,
+            "credentialId": 1
+          },
+          {
+            "role": "toolResult",
+            "toolCallId": "call_e0a69f1b915c462d9da18e3d",
+            "toolName": "write",
+            "content": [
+              {
+                "text": "Successfully wrote 11 bytes to notes.txt",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446278848.0,
+            "details": {
+              "resolvedPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+            }
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_f60470a74bf240769f660a89",
+                "name": "read",
+                "arguments": {
+                  "i": "Reading notes.txt",
+                  "path": "notes.txt"
+                },
+                "intent": "Reading notes.txt",
+                "partialArgs": "{\"i\":\"Reading notes.txt\",\"path\":\"notes.txt\"}",
+                "streamIndex": 0
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 3964,
+              "output": 20,
+              "cacheRead": 1664,
+              "cacheWrite": 0,
+              "totalTokens": 5648,
+              "cost": {
+                "input": 0.0005945999999999999,
+                "output": 0.00001,
+                "cacheRead": 0.00004992,
+                "cacheWrite": 0.0,
+                "total": 0.0006545199999999999
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446278850.0,
+            "responseId": "2026103119311877f22c3d298e4901",
+            "duration": 11831.470875,
+            "ttft": 10986.279042,
+            "credentialId": 1
+          },
+          {
+            "role": "toolResult",
+            "toolCallId": "call_f60470a74bf240769f660a89",
+            "toolName": "read",
+            "content": [
+              {
+                "text": "alpha\nbeta",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446290684.0,
+            "details": {
+              "totalLines": 2,
+              "rowPrefixes": false,
+              "displayContent": {
+                "text": "alpha\nbeta",
+                "startLine": 1,
+                "lineNumbers": [
+                  1,
+                  2
+                ]
+              },
+              "fileSize": 11,
+              "meta": {
+                "source": {
+                  "type": "path",
+                  "value": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt"
+                },
+                "pagedSource": true
+              }
+            }
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_b218006726534078bba5918c",
+                "name": "edit",
+                "arguments": {
+                  "i": "Changing beta to gamma",
+                  "new_string": "gamma",
+                  "old_string": "beta",
+                  "path": "notes.txt"
+                },
+                "intent": "Changing beta to gamma"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 87,
+              "output": 35,
+              "cacheRead": 5568,
+              "cacheWrite": 0,
+              "totalTokens": 5690,
+              "cost": {
+                "input": 0.00001305,
+                "output": 0.0000175,
+                "cacheRead": 0.00016703999999999997,
+                "cacheWrite": 0.0,
+                "total": 0.00019759
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446290685.0,
+            "responseId": "20261031193130191e268b8a1b4eb5",
+            "duration": 4683.096292000002,
+            "ttft": 4683.007000000001,
+            "credentialId": 1
+          },
+          {
+            "role": "toolResult",
+            "toolCallId": "call_b218006726534078bba5918c",
+            "toolName": "edit",
+            "content": [
+              {
+                "text": "[notes.txt]\n1:alpha\n2:gamma",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446295372.0,
+            "details": {
+              "diff": " 1|alpha\n-2|beta\n+2|gamma",
+              "firstChangedLine": 2,
+              "op": "update",
+              "path": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo/notes.txt",
+              "oldText": "alpha\nbeta\n",
+              "newText": "alpha\ngamma\n"
+            }
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_9f532eb921ca45ea90877953",
+                "name": "grep",
+                "arguments": {
+                  "i": "Searching for gamma",
+                  "path": ".",
+                  "pattern": "gamma"
+                },
+                "intent": "Searching for gamma",
+                "partialArgs": "{\"i\":\"Searching for gamma\",\"path\":\".\",\"pattern\":\"gamma\"}",
+                "streamIndex": 0
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 73,
+              "output": 25,
+              "cacheRead": 5632,
+              "cacheWrite": 0,
+              "totalTokens": 5730,
+              "cost": {
+                "input": 0.00001095,
+                "output": 0.0000125,
+                "cacheRead": 0.00016895999999999998,
+                "cacheWrite": 0.0,
+                "total": 0.00019241
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446295373.0,
+            "responseId": "20261031193135b38437bcf72c4bcf",
+            "duration": 4146.621792000002,
+            "ttft": 4131.642374999999,
+            "credentialId": 1
+          },
+          {
+            "role": "toolResult",
+            "toolCallId": "call_9f532eb921ca45ea90877953",
+            "toolName": "grep",
+            "content": [
+              {
+                "text": "# notes.txt\n 1|alpha\n*2|gamma",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446299523.0,
+            "details": {
+              "scopePath": ".",
+              "searchPath": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+              "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo",
+              "matchCount": 1,
+              "fileCount": 1,
+              "files": [
+                "notes.txt"
+              ],
+              "fileMatches": [
+                {
+                  "path": "notes.txt",
+                  "count": 1
+                }
+              ],
+              "truncated": false,
+              "displayContent": "# notes.txt\n 1│alpha\n*2│gamma"
+            }
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_bda1554adc0348b68f6a01e7",
+                "name": "glob",
+                "arguments": {
+                  "i": "Listing txt files",
+                  "path": "*.txt"
+                },
+                "intent": "Listing txt files"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 51,
+              "output": 20,
+              "cacheRead": 5696,
+              "cacheWrite": 0,
+              "totalTokens": 5767,
+              "cost": {
+                "input": 7.65e-6,
+                "output": 0.00001,
+                "cacheRead": 0.00017088,
+                "cacheWrite": 0.0,
+                "total": 0.00018853
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446299524.0,
+            "responseId": "2026103119313962cb4a2a92844ddb",
+            "duration": 4158.143917000001,
+            "ttft": 4158.055124999999,
+            "credentialId": 1
+          },
+          {
+            "role": "toolResult",
+            "toolCallId": "call_bda1554adc0348b68f6a01e7",
+            "toolName": "glob",
+            "content": [
+              {
+                "text": "notes.txt",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446303684.0,
+            "details": {
+              "scopePath": ".",
+              "fileCount": 1,
+              "files": [
+                "notes.txt"
+              ],
+              "truncated": false,
+              "cwd": "/var/folders/hp/x_yx9mkx6c56j6wtt2kqdwfh0000gn/T/alvin-record-01a191ba-4452-75d5-90ba-1e95db0a7bb0/repo"
+            }
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "call_5f87cee83f0f42dc8cf51476",
+                "name": "bash",
+                "arguments": {
+                  "command": "echo alvin-bash",
+                  "i": "Echoing alvin-bash"
+                },
+                "intent": "Echoing alvin-bash"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 77,
+              "output": 26,
+              "cacheRead": 5696,
+              "cacheWrite": 0,
+              "totalTokens": 5799,
+              "cost": {
+                "input": 0.00001155,
+                "output": 0.000013,
+                "cacheRead": 0.00017088,
+                "cacheWrite": 0.0,
+                "total": 0.00019543
+              }
+            },
+            "stopReason": "toolUse",
+            "timestamp": 1793446303685.0,
+            "responseId": "2026103119314377de51a01ff14aed",
+            "duration": 4597.91575,
+            "ttft": 4597.797207999996,
+            "credentialId": 1
+          },
+          {
+            "role": "toolResult",
+            "toolCallId": "call_5f87cee83f0f42dc8cf51476",
+            "toolName": "bash",
+            "content": [
+              {
+                "text": "alvin-bash\n",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "timestamp": 1793446308297.0,
+            "details": {
+              "wallTimeNoticeEmitted": false,
+              "timeoutSeconds": 300,
+              "wallTimeMs": 10.476000000002388
+            }
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "text": "done",
+                "type": "text"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "zai",
+            "model": "glm-5.3-flash",
+            "usage": {
+              "input": 48,
+              "output": 3,
+              "cacheRead": 5760,
+              "cacheWrite": 0,
+              "totalTokens": 5811,
+              "cost": {
+                "input": 7.2e-6,
+                "output": 1.5e-6,
+                "cacheRead": 0.00017279999999999997,
+                "cacheWrite": 0.0,
+                "total": 0.00018149999999999997
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1793446308298.0,
+            "responseId": "20261031193148245e7eae424649bc",
+            "duration": 4547.988749999997,
+            "ttft": 4544.240250000003,
+            "credentialId": 1
+          }
+        ],
+        "isTerminal": true,
+        "yielded": true,
+        "type": "agent_end"
+      }
+    }
+  },
+  {
+    "id": "01a191ba-fb93-719f-9d9a-f490bf7f6ad5",
+    "live": "01a191ba-4896-7504-bf0d-14aa9453ee5c",
+    "at": "2026-10-31T11:31:52.851539Z",
+    "body": {
+      "kind": "promptResult",
+      "frame": {
+        "agentInvoked": true,
+        "status": "completed",
+        "sessionSettled": true,
+        "id": "req_4"
+      }
+    }
+  }
+]

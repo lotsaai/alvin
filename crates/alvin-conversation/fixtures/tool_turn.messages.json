@@ -7,7 +7,7 @@
           "type": "text"
         }
       ],
-      "timestamp": 1793439133196.0,
+      "timestamp": 1793446224684.0,
       "attribution": "user",
       "role": "user"
     },
@@ -16,14 +16,14 @@
       "content": [
         {
           "type": "toolCall",
-          "id": "call_7906f05f322b4a3e893d5713",
+          "id": "call_8a2523e883bd4bd188439254",
           "name": "bash",
           "arguments": {
             "command": "echo alvin-tool-ok",
-            "i": "Running echo smoke test"
+            "i": "Running echo check"
           },
-          "intent": "Running echo smoke test",
-          "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo smoke test\"}",
+          "intent": "Running echo check",
+          "partialArgs": "{\"command\":\"echo alvin-tool-ok\",\"i\":\"Running echo check\"}",
           "streamIndex": 0
         }
       ],
@@ -31,27 +31,27 @@
       "provider": "zai",
       "model": "glm-5.3-flash",
       "usage": {
-        "input": 9663,
-        "output": 24,
+        "input": 9665,
+        "output": 23,
         "cacheRead": 0,
         "cacheWrite": 0,
-        "totalTokens": 9687,
+        "totalTokens": 9688,
         "cost": {
-          "input": 0.00144945,
-          "output": 0.000012,
+          "input": 0.00144975,
+          "output": 0.0000115,
           "cacheRead": 0.0,
           "cacheWrite": 0.0,
-          "total": 0.00146145
+          "total": 0.00146125
         }
       },
       "stopReason": "toolUse",
-      "timestamp": 1793439133988.0,
-      "responseId": "20261031173214f992bc92025c4b51",
-      "duration": 10955.619125,
-      "ttft": 10954.898125,
-      "completedAt": 1793439144945.0,
+      "timestamp": 1793446226366.0,
+      "responseId": "202610311930264157f4fcd60649cd",
+      "duration": 4676.034459,
+      "ttft": 4675.703417000001,
+      "completedAt": 1793446231043.0,
       "contextSnapshot": {
-        "promptTokens": 9663,
+        "promptTokens": 9665,
         "nonMessageTokens": 8323,
         "toolSchemaTokens": 5154,
         "compactionEpoch": 0
@@ -60,7 +60,7 @@
     },
     {
       "role": "toolResult",
-      "toolCallId": "call_7906f05f322b4a3e893d5713",
+      "toolCallId": "call_8a2523e883bd4bd188439254",
       "toolName": "bash",
       "content": [
         {
@@ -69,11 +69,11 @@
         }
       ],
       "isError": false,
-      "timestamp": 1793439144974.0,
+      "timestamp": 1793446231058.0,
       "details": {
         "wallTimeNoticeEmitted": false,
         "timeoutSeconds": 300,
-        "wallTimeMs": 19.688874999999825
+        "wallTimeMs": 11.580500000000027
       }
     },
     {
@@ -88,29 +88,29 @@
       "provider": "zai",
       "model": "glm-5.3-flash",
       "usage": {
-        "input": 96,
+        "input": 8993,
         "output": 3,
-        "cacheRead": 9600,
+        "cacheRead": 704,
         "cacheWrite": 0,
-        "totalTokens": 9699,
+        "totalTokens": 9700,
         "cost": {
-          "input": 0.0000144,
+          "input": 0.00134895,
           "output": 1.5e-6,
-          "cacheRead": 0.00028799999999999995,
+          "cacheRead": 0.00002112,
           "cacheWrite": 0.0,
-          "total": 0.00030389999999999996
+          "total": 0.00137157
         }
       },
       "stopReason": "stop",
-      "timestamp": 1793439144976.0,
-      "responseId": "20261031173225127e5e5020324b9f",
+      "timestamp": 1793446231060.0,
+      "responseId": "2026103119303153a57c0336ff4079",
       "errorId": 0.0,
-      "duration": 4862.752958000001,
-      "ttft": 4859.463542000001,
-      "completedAt": 1793439149840.0,
+      "duration": 11274.13175,
+      "ttft": 11272.054375000002,
+      "completedAt": 1793446242334.0,
       "credentialId": 1,
       "contextSnapshot": {
-        "promptTokens": 9696,
+        "promptTokens": 9697,
         "nonMessageTokens": 8323,
         "toolSchemaTokens": 5154,
         "compactionEpoch": 0

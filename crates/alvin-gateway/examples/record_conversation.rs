@@ -36,11 +36,13 @@ struct Scenario {
   answer_asks: bool,
   /// A second prompt, sent once the first turn settles. The entries are recorded before it, after it, and as the delta between.
   second_prompt: Option<&'static str>,
+  /// Write the recording for the UI crate's tests instead of the conversation crate's.
+  for_ui: bool,
   /// After the turns, label an entry, clear the label and navigate to a user message, recording the entries after each.
   tree_actions: bool,
 }
 
-const SCENARIOS: [Scenario; 6] = [
+const SCENARIOS: [Scenario; 8] = [
   Scenario {
     name: "plain_turn",
     flags: &["--no-tools"],
@@ -50,6 +52,7 @@ const SCENARIOS: [Scenario; 6] = [
     answer_asks: false,
     second_prompt: None,
     tree_actions: false,
+    for_ui: false,
   },
   Scenario {
     name: "tool_turn",
@@ -60,6 +63,7 @@ const SCENARIOS: [Scenario; 6] = [
     answer_asks: false,
     second_prompt: None,
     tree_actions: false,
+    for_ui: false,
   },
   Scenario {
     name: "aborted_turn",
@@ -70,6 +74,7 @@ const SCENARIOS: [Scenario; 6] = [
     answer_asks: false,
     second_prompt: None,
     tree_actions: false,
+    for_ui: false,
   },
   Scenario {
     name: "queue_turn",
@@ -80,6 +85,7 @@ const SCENARIOS: [Scenario; 6] = [
     answer_asks: false,
     second_prompt: None,
     tree_actions: false,
+    for_ui: false,
   },
   Scenario {
     name: "ask_turn",
@@ -90,6 +96,7 @@ const SCENARIOS: [Scenario; 6] = [
     answer_asks: true,
     second_prompt: None,
     tree_actions: false,
+    for_ui: false,
   },
   Scenario {
     name: "tree_turn",
@@ -100,19 +107,46 @@ const SCENARIOS: [Scenario; 6] = [
     answer_asks: false,
     second_prompt: Some("Reply with the single word again."),
     tree_actions: true,
+    for_ui: false,
+  },
+  Scenario {
+    name: "tools_turn",
+    flags: &["--approval-mode", "yolo", "--tools", "read,write,edit,grep,glob,bash"],
+    prompt: "Do these in order with your tools, one call each, and then reply with the single word done: \
+             write a file notes.txt containing exactly the two lines `alpha` and `beta`; read notes.txt; \
+             edit notes.txt so `beta` becomes `gamma`; grep for `gamma` in the current directory; \
+             glob for `*.txt`; run `echo alvin-bash` with bash.",
+    abort: false,
+    follow_up: None,
+    answer_asks: false,
+    second_prompt: None,
+    tree_actions: false,
+    for_ui: true,
+  },
+  Scenario {
+    name: "task_turn",
+    flags: &["--approval-mode", "yolo", "--tools", "task,read"],
+    prompt: "Use the task tool exactly once to launch one subagent that reads the file Cargo.toml if it exists and says in one \
+             sentence what it found, then reply with the single word done.",
+    abort: false,
+    follow_up: None,
+    answer_asks: false,
+    second_prompt: None,
+    tree_actions: false,
+    for_ui: true,
   },
 ];
 
 #[tokio::main]
 async fn main() -> Result<()> {
-  let out = PathBuf::from(
-    std::env::args()
-      .nth(1)
-      .ok_or_else(|| eyre!("usage: record_conversation <output dir>"))?,
-  );
-  std::fs::create_dir_all(&out)?;
+  let mut args = std::env::args().skip(1);
+  let usage = || eyre!("usage: record_conversation <conversation fixtures dir> <ui fixtures dir>");
+  let conversation = PathBuf::from(args.next().ok_or_else(usage)?);
+  let ui = PathBuf::from(args.next().ok_or_else(usage)?);
+  std::fs::create_dir_all(&conversation)?;
+  std::fs::create_dir_all(&ui)?;
   for scenario in &SCENARIOS {
-    record(scenario, &out).await?;
+    record(scenario, if scenario.for_ui { &ui } else { &conversation }).await?;
     println!("recorded {}", scenario.name);
   }
   Ok(())

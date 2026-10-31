@@ -1,12 +1,12 @@
 [
   {
-    "id": "01a1914d-5d2b-7287-b524-94b254a78013",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:08.875839Z",
+    "id": "01a191b9-8bb8-72f4-acd2-72afa55018d1",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:18.680032Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bba0ab41c19572",
+        "id": "15bbbbb6e3636e97",
         "widgetKey": "autoresearch",
         "type": "extension_ui_request",
         "method": "setWidget"
@@ -14,9 +14,9 @@
     }
   },
   {
-    "id": "01a1914d-5d2b-7287-b524-94b33f2eac62",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:08.875858Z",
+    "id": "01a191b9-8bb8-72f4-acd2-72b000442f6f",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:18.680039Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -25,9 +25,9 @@
     }
   },
   {
-    "id": "01a1914d-5d2b-7287-b524-94b46c10728b",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:08.875861Z",
+    "id": "01a191b9-8bb8-72f4-acd2-72b1bb9c994a",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:18.680041Z",
     "body": {
       "kind": "availableCommandsUpdate",
       "frame": {
@@ -990,9 +990,9 @@
     }
   },
   {
-    "id": "01a1914d-60b1-7595-bc3f-4f349f6ca3db",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:09.777126Z",
+    "id": "01a191b9-8f3b-7052-bc28-c040e4188c82",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:19.579307Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1004,9 +1004,9 @@
     }
   },
   {
-    "id": "01a1914d-60b4-71e4-801c-eedbe1f57749",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:09.780533Z",
+    "id": "01a191b9-8f3b-7052-bc28-c04194586a82",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:19.579892Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1015,9 +1015,9 @@
     }
   },
   {
-    "id": "01a1914d-60b8-7471-bcc3-488d6fbed0a3",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:09.784246Z",
+    "id": "01a191b9-8f3c-7722-9708-3ef8a01d914a",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:19.580578Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1026,9 +1026,9 @@
     }
   },
   {
-    "id": "01a1914d-60b9-71fe-ac4c-f8bb1bb4eb58",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:09.785399Z",
+    "id": "01a191b9-8f3d-7654-be64-fef871df567c",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:19.581177Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1039,7 +1039,7 @@
               "type": "text"
             }
           ],
-          "timestamp": 1793439128876.0,
+          "timestamp": 1793446218680.0,
           "attribution": "user",
           "role": "user"
         },
@@ -1049,9 +1049,9 @@
     }
   },
   {
-    "id": "01a1914d-60b9-71fe-ac4c-f8bc09124d6f",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:09.786006Z",
+    "id": "01a191b9-8f3d-7654-be64-fef984204579",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:19.581726Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1062,7 +1062,7 @@
               "type": "text"
             }
           ],
-          "timestamp": 1793439128876.0,
+          "timestamp": 1793446218680.0,
           "attribution": "user",
           "role": "user"
         },
@@ -1072,9 +1072,9 @@
     }
   },
   {
-    "id": "01a1914d-65ab-766a-b98f-c20568ae7877",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:11.051804Z",
+    "id": "01a191b9-9ad9-7097-9c49-f7f8230470c9",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:22.553506Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1104,8 +1104,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793439129788.0,
-          "responseId": "202610311732101f6ed8339c9c4e31",
+          "timestamp": 1793446219581.0,
+          "responseId": "20261031193019cb4e3d38756641ea",
           "credentialId": 1
         },
         "messageId": "msg-2",
@@ -1114,9 +1114,9 @@
     }
   },
   {
-    "id": "01a1914d-65ad-72e5-a938-8e433a23b46b",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:11.053858Z",
+    "id": "01a191b9-9ad9-7097-9c49-f7f96232e324",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:22.553927Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1146,8 +1146,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793439129788.0,
-          "responseId": "202610311732101f6ed8339c9c4e31",
+          "timestamp": 1793446219581.0,
+          "responseId": "20261031193019cb4e3d38756641ea",
           "credentialId": 1
         },
         "assistantMessageEvent": {
@@ -1178,8 +1178,8 @@
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793439129788.0,
-            "responseId": "202610311732101f6ed8339c9c4e31",
+            "timestamp": 1793446219581.0,
+            "responseId": "20261031193019cb4e3d38756641ea",
             "credentialId": 1
           },
           "type": "text_start"
@@ -1190,9 +1190,9 @@
     }
   },
   {
-    "id": "01a1914d-65ae-7639-85b1-2b66c8f9a455",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:11.054557Z",
+    "id": "01a191b9-9ada-728a-a3ee-65c9c908b5bc",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:22.554255Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1222,8 +1222,8 @@
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793439129788.0,
-          "responseId": "202610311732101f6ed8339c9c4e31",
+          "timestamp": 1793446219581.0,
+          "responseId": "20261031193019cb4e3d38756641ea",
           "credentialId": 1
         },
         "assistantMessageEvent": {
@@ -1255,8 +1255,8 @@
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793439129788.0,
-            "responseId": "202610311732101f6ed8339c9c4e31",
+            "timestamp": 1793446219581.0,
+            "responseId": "20261031193019cb4e3d38756641ea",
             "credentialId": 1
           },
           "type": "text_delta"
@@ -1267,9 +1267,9 @@
     }
   },
   {
-    "id": "01a1914d-65b1-706c-91b9-15f12cec82d3",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:11.057466Z",
+    "id": "01a191b9-9ada-728a-a3ee-65ca1c029b0b",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:22.554617Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1285,24 +1285,24 @@
           "provider": "zai",
           "model": "glm-5.3-flash",
           "usage": {
-            "input": 93,
+            "input": 3550,
             "output": 3,
-            "cacheRead": 3456,
+            "cacheRead": 0,
             "cacheWrite": 0,
-            "totalTokens": 3552,
+            "totalTokens": 3553,
             "cost": {
-              "input": 0.00001395,
+              "input": 0.0005325,
               "output": 1.5e-6,
-              "cacheRead": 0.00010368,
+              "cacheRead": 0.0,
               "cacheWrite": 0.0,
-              "total": 0.00011913
+              "total": 0.000534
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793439129788.0,
-          "responseId": "202610311732101f6ed8339c9c4e31",
-          "duration": 1266.127833,
-          "ttft": 1260.709667,
+          "timestamp": 1793446219581.0,
+          "responseId": "20261031193019cb4e3d38756641ea",
+          "duration": 2971.770917,
+          "ttft": 2971.054292,
           "credentialId": 1
         },
         "assistantMessageEvent": {
@@ -1320,24 +1320,24 @@
             "provider": "zai",
             "model": "glm-5.3-flash",
             "usage": {
-              "input": 93,
+              "input": 3550,
               "output": 3,
-              "cacheRead": 3456,
+              "cacheRead": 0,
               "cacheWrite": 0,
-              "totalTokens": 3552,
+              "totalTokens": 3553,
               "cost": {
-                "input": 0.00001395,
+                "input": 0.0005325,
                 "output": 1.5e-6,
-                "cacheRead": 0.00010368,
+                "cacheRead": 0.0,
                 "cacheWrite": 0.0,
-                "total": 0.00011913
+                "total": 0.000534
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793439129788.0,
-            "responseId": "202610311732101f6ed8339c9c4e31",
-            "duration": 1266.127833,
-            "ttft": 1260.709667,
+            "timestamp": 1793446219581.0,
+            "responseId": "20261031193019cb4e3d38756641ea",
+            "duration": 2971.770917,
+            "ttft": 2971.054292,
             "credentialId": 1
           },
           "type": "text_end"
@@ -1348,9 +1348,9 @@
     }
   },
   {
-    "id": "01a1914d-65b1-706c-91b9-15f2f1391a0b",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:11.057771Z",
+    "id": "01a191b9-9ada-728a-a3ee-65cb8ae13d15",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:22.554756Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1366,25 +1366,25 @@
           "provider": "zai",
           "model": "glm-5.3-flash",
           "usage": {
-            "input": 93,
+            "input": 3550,
             "output": 3,
-            "cacheRead": 3456,
+            "cacheRead": 0,
             "cacheWrite": 0,
-            "totalTokens": 3552,
+            "totalTokens": 3553,
             "cost": {
-              "input": 0.00001395,
+              "input": 0.0005325,
               "output": 1.5e-6,
-              "cacheRead": 0.00010368,
+              "cacheRead": 0.0,
               "cacheWrite": 0.0,
-              "total": 0.00011913
+              "total": 0.000534
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793439129788.0,
-          "responseId": "202610311732101f6ed8339c9c4e31",
-          "duration": 1266.127833,
-          "ttft": 1260.709667,
-          "completedAt": 1793439131056.0,
+          "timestamp": 1793446219581.0,
+          "responseId": "20261031193019cb4e3d38756641ea",
+          "duration": 2971.770917,
+          "ttft": 2971.054292,
+          "completedAt": 1793446222553.0,
           "credentialId": 1
         },
         "messageId": "msg-2",
@@ -1393,9 +1393,9 @@
     }
   },
   {
-    "id": "01a1914d-65ba-7605-9cac-3bc756ee176f",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:11.066313Z",
+    "id": "01a191b9-9adb-7339-b140-ff400d5518d4",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:22.555946Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1411,24 +1411,24 @@
           "provider": "zai",
           "model": "glm-5.3-flash",
           "usage": {
-            "input": 93,
+            "input": 3550,
             "output": 3,
-            "cacheRead": 3456,
+            "cacheRead": 0,
             "cacheWrite": 0,
-            "totalTokens": 3552,
+            "totalTokens": 3553,
             "cost": {
-              "input": 0.00001395,
+              "input": 0.0005325,
               "output": 1.5e-6,
-              "cacheRead": 0.00010368,
+              "cacheRead": 0.0,
               "cacheWrite": 0.0,
-              "total": 0.00011913
+              "total": 0.000534
             }
           },
           "stopReason": "stop",
-          "timestamp": 1793439129788.0,
-          "responseId": "202610311732101f6ed8339c9c4e31",
-          "duration": 1266.127833,
-          "ttft": 1260.709667,
+          "timestamp": 1793446219581.0,
+          "responseId": "20261031193019cb4e3d38756641ea",
+          "duration": 2971.770917,
+          "ttft": 2971.054292,
           "credentialId": 1
         },
         "toolResults": [],
@@ -1437,13 +1437,13 @@
     }
   },
   {
-    "id": "01a1914d-65bd-70b0-8f84-257604be92f8",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:11.069187Z",
+    "id": "01a191b9-9adc-721a-9ce3-e89bc1b71d20",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:22.556511Z",
     "body": {
       "kind": "extensionUiRequest",
       "frame": {
-        "id": "15bba0ad6f019574",
+        "id": "15bbbbbab7236e99",
         "widgetKey": "autoresearch",
         "type": "extension_ui_request",
         "method": "setWidget"
@@ -1451,9 +1451,9 @@
     }
   },
   {
-    "id": "01a1914d-65bf-715e-b297-5b8a8cdb3c66",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:11.071482Z",
+    "id": "01a191b9-9add-712f-84fc-56324f8dc80d",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:22.557114Z",
     "body": {
       "kind": "agent",
       "frame": {
@@ -1465,7 +1465,7 @@
                 "type": "text"
               }
             ],
-            "timestamp": 1793439128876.0,
+            "timestamp": 1793446218680.0,
             "attribution": "user",
             "role": "user"
           },
@@ -1481,24 +1481,24 @@
             "provider": "zai",
             "model": "glm-5.3-flash",
             "usage": {
-              "input": 93,
+              "input": 3550,
               "output": 3,
-              "cacheRead": 3456,
+              "cacheRead": 0,
               "cacheWrite": 0,
-              "totalTokens": 3552,
+              "totalTokens": 3553,
               "cost": {
-                "input": 0.00001395,
+                "input": 0.0005325,
                 "output": 1.5e-6,
-                "cacheRead": 0.00010368,
+                "cacheRead": 0.0,
                 "cacheWrite": 0.0,
-                "total": 0.00011913
+                "total": 0.000534
               }
             },
             "stopReason": "stop",
-            "timestamp": 1793439129788.0,
-            "responseId": "202610311732101f6ed8339c9c4e31",
-            "duration": 1266.127833,
-            "ttft": 1260.709667,
+            "timestamp": 1793446219581.0,
+            "responseId": "20261031193019cb4e3d38756641ea",
+            "duration": 2971.770917,
+            "ttft": 2971.054292,
             "credentialId": 1
           }
         ],
@@ -1509,9 +1509,9 @@
     }
   },
   {
-    "id": "01a1914d-65bf-715e-b297-5b8bd6ba1bda",
-    "live": "01a1914d-5d2b-7287-b524-94b1f141a28a",
-    "at": "2026-10-31T09:32:11.071529Z",
+    "id": "01a191b9-9add-712f-84fc-5633860d4784",
+    "live": "01a191b9-8bb7-70c7-b8f6-0e5faee8dc74",
+    "at": "2026-10-31T11:30:22.557126Z",
     "body": {
       "kind": "promptResult",
       "frame": {

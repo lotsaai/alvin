@@ -7,7 +7,7 @@
           "type": "text"
         }
       ],
-      "timestamp": 1793439152025.0,
+      "timestamp": 1793446244435.0,
       "attribution": "user",
       "role": "user"
     },
@@ -15,7 +15,7 @@
       "role": "assistant",
       "content": [
         {
-          "thinking": "Just",
+          "thinking": "Output",
           "thinkingSignature": "reasoning_content",
           "type": "thinking",
           "summary": false
@@ -39,11 +39,11 @@
         }
       },
       "stopReason": "aborted",
-      "timestamp": 1793439152841.0,
-      "responseId": "2026103117323391ba23580de64fa9",
+      "timestamp": 1793446245199.0,
+      "responseId": "20261031193045adebd0d0e5954611",
       "errorMessage": "Interrupted by user",
       "errorId": 67112960.0,
-      "completedAt": 1793439153975.0,
+      "completedAt": 1793446246133.0,
       "credentialId": 1
     }
   ],

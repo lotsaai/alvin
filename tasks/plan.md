@@ -236,7 +236,7 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 
 #### Task 21: Built-in tool renderers
 **Description:** Per-tool `ToolCard` renderers: bash output, read, edit/write as `Diff` when the result carries a patch (field names taken from recorded fixtures), grep/find/glob match lists, and task subagent summaries. Unknown tools keep the JSON renderer.
-**Acceptance criteria:** [ ] each built-in tool renders its specific view from a recorded fixture; [ ] an unknown tool renders its args and result as JSON; [ ] streamed output updates the running card.
+**Acceptance criteria:** [x] each built-in tool renders its specific view from a recorded fixture; [x] an unknown tool renders its args and result as JSON; [x] streamed output updates the running card.
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 13. **Files:** `alvin-conversation-ui/src/tool_card.rs`, fixtures. **Scope:** S.
 
 ### Checkpoint: Complete

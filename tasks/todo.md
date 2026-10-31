@@ -43,7 +43,7 @@ Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mis
 - [x] Task 18: History tree actions
 - [x] Task 19: Session operations and command catalog
 - [x] Task 20: Failure states in the UI
-- [ ] Task 21: Built-in tool renderers
+- [x] Task 21: Built-in tool renderers
 
 ### Checkpoint: Complete
 - [ ] Every method has a UI path and every event has a visible effect; all checks clean; Windows verified; human sign-off
