@@ -7,8 +7,9 @@ use std::time::Instant;
 use alvin_omp_host::{Host, StartRequest};
 use alvin_protocol::{
   AbortAndRestoreQueueResult, BashRequest, BashResult, ListSessions, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
-  OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, RemoveQueuedMessageResult,
-  RemoveQueuedRequest, SessionPage, SessionState, SubscribeRequest,
+  ModelCycleResult, ModelInfo, OpenRequest, OpenTarget, ProjectSummary, PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest,
+  RemoveQueuedMessageResult, RemoveQueuedRequest, SessionPage, SessionState, SetModelRequest, SetThinkingRequest, SubscribeRequest,
+  ThinkingLevel, ThinkingLevelCycleResult,
 };
 use tokio::sync::broadcast;
 
@@ -224,6 +225,38 @@ impl Gateway {
   pub(crate) async fn restore_queue(&self, id: LiveSessionId) -> Result<AbortAndRestoreQueueResult> {
     let live = self.live.get(id)?;
     self.timed("abort_and_restore_queue", live.session.restore_queue()).await
+  }
+
+  pub(crate) async fn models(&self, id: LiveSessionId) -> Result<Vec<ModelInfo>> {
+    let live = self.live.get(id)?;
+    self.timed("get_available_models", live.session.models()).await
+  }
+
+  pub(crate) async fn set_model(&self, request: SetModelRequest) -> Result<ModelInfo> {
+    let live = self.live.get(request.live)?;
+    self
+      .timed("set_model", live.session.set_model(request.provider, request.model_id))
+      .await
+  }
+
+  pub(crate) async fn cycle_model(&self, id: LiveSessionId) -> Result<Option<ModelCycleResult>> {
+    let live = self.live.get(id)?;
+    self.timed("cycle_model", live.session.cycle_model()).await
+  }
+
+  pub(crate) async fn thinking_levels(&self, id: LiveSessionId) -> Result<Vec<ThinkingLevel>> {
+    let live = self.live.get(id)?;
+    self.timed("get_available_thinking_levels", live.session.thinking_levels()).await
+  }
+
+  pub(crate) async fn set_thinking(&self, request: SetThinkingRequest) -> Result<()> {
+    let live = self.live.get(request.live)?;
+    self.timed("set_thinking_level", live.session.set_thinking(request.level)).await
+  }
+
+  pub(crate) async fn cycle_thinking(&self, id: LiveSessionId) -> Result<Option<ThinkingLevelCycleResult>> {
+    let live = self.live.get(id)?;
+    self.timed("cycle_thinking_level", live.session.cycle_thinking()).await
   }
 
   pub(crate) async fn abort(&self, id: LiveSessionId) -> Result<()> {

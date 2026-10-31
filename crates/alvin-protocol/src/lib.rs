@@ -5,6 +5,7 @@ mod error_codes;
 mod events;
 mod ids;
 mod live;
+mod model;
 mod omp_wire;
 mod projects;
 mod queue;
@@ -20,6 +21,9 @@ pub use live::{
 };
 #[cfg(feature = "server")]
 pub use live::{EventsApiServer, LiveApiServer};
+#[cfg(feature = "server")]
+pub use model::ModelApiServer;
+pub use model::{ModelApiClient, SetModelRequest, SetThinkingRequest};
 pub use omp_wire::*;
 #[cfg(feature = "server")]
 pub use projects::ProjectsApiServer;

@@ -157,7 +157,7 @@ impl Workspace {
 mod tests {
   use alvin_client::Client;
   use alvin_conversation::Run;
-  use alvin_protocol::{AgentMessage, LiveSessionId, PromptStatus};
+  use alvin_protocol::{AgentMessage, LiveApiClient, LiveSessionId, PromptStatus};
   use gpui_kit::test::{TestQueryExt as _, TestWindowExt as _};
   use gpui_kit::{AnyWindowHandle, AppContext as _, Bounds, Entity, TestAppContext, WindowBounds, WindowOptions, px, size};
 
@@ -475,6 +475,56 @@ mod tests {
     until(cx, "the turn to be aborted", |cx| {
       with_active(cx, &workspace, |view| view.last_prompt == Some(PromptStatus::Aborted)).unwrap_or(false)
     });
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn cycling_the_thinking_level_changes_what_live_state_reports(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let client = fixture.client().await;
+    let (window, workspace) = open_window(cx, client.clone());
+    open_new_session(cx, window, &workspace);
+    let live = active(cx, &workspace).expect("a session is open");
+    until(cx, "the session's state to load", |cx| {
+      with_active(cx, &workspace, |view| view.thinking.is_some()).unwrap_or(false)
+    });
+    let before = with_active(cx, &workspace, |view| view.thinking).flatten();
+
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      window.click("thinking-cycle", cx);
+    })
+    .unwrap();
+
+    until(cx, "the thinking level to change", |cx| {
+      with_active(cx, &workspace, |view| view.thinking != before).unwrap_or(false)
+    });
+    let shown = with_active(cx, &workspace, |view| view.thinking).flatten();
+    let reported = LiveApiClient::state(&client, live).await.unwrap().thinking_level;
+    assert_eq!(shown, reported);
+    fixture.finish().await;
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+  #[gpui_kit::test]
+  async fn the_pickers_offer_omps_models_and_levels_and_show_the_current_ones(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fixture = Fixture::new();
+    let (window, workspace) = open_window(cx, fixture.client().await);
+    open_new_session(cx, window, &workspace);
+    until(cx, "the catalog to load", |cx| {
+      let live = active(cx, &workspace).expect("a session is open");
+      cx.read(|cx| workspace.read(cx).model().read(cx).catalog(live).is_some())
+    });
+
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert!(window.find("model-picker").visible());
+      assert!(window.find("thinking-picker").visible());
+    })
+    .unwrap();
     fixture.finish().await;
   }
 }

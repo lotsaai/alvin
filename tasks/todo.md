@@ -37,7 +37,7 @@ Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mis
 
 ## Phase 5: Feature slices
 - [x] Task 14: Queue: steer, follow-up, and queue edits
-- [ ] Task 15: Model and thinking pickers
+- [x] Task 15: Model and thinking pickers
 - [ ] Task 16: Extension dialogs
 - [ ] Task 17: History tree: read and render
 - [ ] Task 18: History tree actions

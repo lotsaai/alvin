@@ -43,6 +43,8 @@ Method names `<area>/<camelCaseVerb>`. One trait per area, each `#[rpc(client)]`
 | `DialogApi` | `dialog/respond` (answers an extension UI request) | extension UI responses |
 | `EventsApi` | subscription `events/subscribe` → `events/event`, params `{ live: LiveSessionId, after: Option<EventId> }` | all frames |
 
+omp's `cycle_thinking_level` can answer `auto`, a selector omp-rpc's generated `Effort` cannot decode, so that one step of the cycle fails with a gateway error. Setting a level and every other step work.
+
 Reading a session's messages means opening it: `live/open` starts omp on that session file, and the UI pages its transcript with `live/messages` and reads its history tree with `live/tree`. No session content is read without a live omp; `session-index` reads headers and tail status only.
 
 `prompt` text is sent unchanged. omp expands `/` commands, skills, templates, and `^model` itself. `!cmd` is `live/bash`; nothing else is parsed client-side. Out of scope: python, live voice, dictation, login, btw, goal, subagent control, host tools.

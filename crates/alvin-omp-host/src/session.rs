@@ -6,12 +6,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use alvin_protocol::{
-  AbortAndRestoreQueueResult, BashResult, MessagesPage, PromoteQueuedMessageResult, PromptAck, QueuedMessageQueue,
-  RemoveQueuedMessageResult, SessionState,
+  AbortAndRestoreQueueResult, BashResult, MessagesPage, ModelCycleResult, ModelInfo, PromoteQueuedMessageResult, PromptAck,
+  QueuedMessageQueue, RemoveQueuedMessageResult, SessionState, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use omp_rpc::{
-  AbortAndPromptCommand, AbortAndRestoreQueueCommand, AbortBashCommand, AbortCommand, BashCommand, Client, Command, FollowUpCommand,
-  GetMessagesPageCommand, GetStateCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, SteerCommand,
+  AbortAndPromptCommand, AbortAndRestoreQueueCommand, AbortBashCommand, AbortCommand, BashCommand, Client, Command, CycleModelCommand,
+  CycleThinkingLevelCommand, FollowUpCommand, GetAvailableModelsCommand, GetAvailableThinkingLevelsCommand, GetMessagesPageCommand,
+  GetStateCommand, PromoteQueuedMessageCommand, PromptCommand, RemoveQueuedMessageCommand, SetModelCommand, SetThinkingLevelCommand,
+  SteerCommand,
 };
 
 use crate::translate::convert;
@@ -106,6 +108,42 @@ impl Session {
   pub async fn restore_queue(&self) -> Result<AbortAndRestoreQueueResult> {
     let result = self.call(AbortAndRestoreQueueCommand::default()).await?;
     convert("restored queue", &result)
+  }
+
+  /// The models omp can use.
+  pub async fn models(&self) -> Result<Vec<ModelInfo>> {
+    let models = self.call(GetAvailableModelsCommand::default()).await?;
+    convert("model list", &models)
+  }
+
+  /// Switches to a model.
+  pub async fn set_model(&self, provider: String, model_id: String) -> Result<ModelInfo> {
+    let model = self.call(SetModelCommand { provider, model_id }).await?;
+    convert("model", &model)
+  }
+
+  /// Switches to the next model in omp's cycle, or `None` when there is no other.
+  pub async fn cycle_model(&self) -> Result<Option<ModelCycleResult>> {
+    let result = self.call(CycleModelCommand::default()).await?;
+    convert("model cycle", &result)
+  }
+
+  /// The thinking levels the current model accepts.
+  pub async fn thinking_levels(&self) -> Result<Vec<ThinkingLevel>> {
+    let levels = self.call(GetAvailableThinkingLevelsCommand::default()).await?;
+    convert("thinking levels", &levels)
+  }
+
+  /// Sets the thinking level.
+  pub async fn set_thinking(&self, level: ThinkingLevel) -> Result<()> {
+    let level = convert("thinking level", &level)?;
+    self.call(SetThinkingLevelCommand { level }).await
+  }
+
+  /// Switches to the next thinking level, or `None` when the model has none to cycle through.
+  pub async fn cycle_thinking(&self) -> Result<Option<ThinkingLevelCycleResult>> {
+    let result = self.call(CycleThinkingLevelCommand::default()).await?;
+    convert("thinking cycle", &result)
   }
 
   /// Aborts the running turn.

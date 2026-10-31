@@ -4,9 +4,10 @@ use std::time::Instant;
 
 use alvin_protocol::{
   AbortAndRestoreQueueResult, BashRequest, BashResult, EventsApiServer, ListSessions, LiveApiServer, LiveSessionId, LiveSessionSummary,
-  MessagesPage, MessagesRequest, OpenRequest, ProjectSummary, ProjectsApiServer, PromoteQueuedMessageResult, PromoteQueuedRequest,
-  PromptRequest, QueueApiServer, RemoveQueuedMessageResult, RemoveQueuedRequest, SessionPage, SessionState, SessionsApiServer,
-  SubscribeRequest,
+  MessagesPage, MessagesRequest, ModelApiServer, ModelCycleResult, ModelInfo, OpenRequest, ProjectSummary, ProjectsApiServer,
+  PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer, RemoveQueuedMessageResult, RemoveQueuedRequest,
+  SessionPage, SessionState, SessionsApiServer, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
+  ThinkingLevelCycleResult,
 };
 use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
 use jsonrpsee::server::{Methods, PendingSubscriptionSink, SubscriptionMessage};
@@ -97,6 +98,33 @@ impl QueueApiServer for Gateway {
 }
 
 #[async_trait]
+impl ModelApiServer for Gateway {
+  async fn models(&self, live: LiveSessionId) -> RpcResult<Vec<ModelInfo>> {
+    self.traced("model/list", Gateway::models(self, live)).await
+  }
+
+  async fn set_model(&self, request: SetModelRequest) -> RpcResult<ModelInfo> {
+    self.traced("model/set", Gateway::set_model(self, request)).await
+  }
+
+  async fn cycle_model(&self, live: LiveSessionId) -> RpcResult<Option<ModelCycleResult>> {
+    self.traced("model/cycle", Gateway::cycle_model(self, live)).await
+  }
+
+  async fn thinking_levels(&self, live: LiveSessionId) -> RpcResult<Vec<ThinkingLevel>> {
+    self.traced("thinking/levels", Gateway::thinking_levels(self, live)).await
+  }
+
+  async fn set_thinking(&self, request: SetThinkingRequest) -> RpcResult<()> {
+    self.traced("thinking/set", Gateway::set_thinking(self, request)).await
+  }
+
+  async fn cycle_thinking(&self, live: LiveSessionId) -> RpcResult<Option<ThinkingLevelCycleResult>> {
+    self.traced("thinking/cycle", Gateway::cycle_thinking(self, live)).await
+  }
+}
+
+#[async_trait]
 impl EventsApiServer for Gateway {
   async fn events(&self, pending: PendingSubscriptionSink, request: SubscribeRequest) -> SubscriptionResult {
     let (replay, mut receiver, log) = match self.subscribe(&request) {
@@ -146,6 +174,7 @@ impl Gateway {
     methods.merge(SessionsApiServer::into_rpc(self.clone()))?;
     methods.merge(LiveApiServer::into_rpc(self.clone()))?;
     methods.merge(QueueApiServer::into_rpc(self.clone()))?;
+    methods.merge(ModelApiServer::into_rpc(self.clone()))?;
     methods.merge(EventsApiServer::into_rpc(self.clone()))?;
     Ok(methods)
   }
@@ -200,11 +229,17 @@ mod tests {
         "live/prompt",
         "live/state",
         "live/steer",
+        "model/cycle",
+        "model/list",
+        "model/set",
         "projects/list",
         "queue/promote",
         "queue/remove",
         "queue/restore",
         "sessions/list",
+        "thinking/cycle",
+        "thinking/levels",
+        "thinking/set",
       ]
     );
   }

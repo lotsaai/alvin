@@ -11,6 +11,7 @@ use gpui_kit::{
 
 use crate::actions::{Abort, SESSION_CONTEXT};
 use crate::model::{Model, ModelEvent};
+use crate::pickers::Pickers;
 use crate::{composer, queue, transcript};
 
 /// A live session's view. Holds only what is local to the view: the scroll state, the composer and how many rows the
@@ -20,6 +21,7 @@ pub(crate) struct SessionView {
   model: Entity<Model>,
   scroller: Entity<MessageScrollerState>,
   composer: Entity<TextareaState>,
+  pickers: Pickers,
   rows: usize,
   _subscriptions: Vec<Subscription>,
 }
@@ -28,10 +30,12 @@ impl SessionView {
   pub(crate) fn new(model: Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut Context<Self>) -> Self {
     let composer = composer::state(window, cx);
     let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
+    let pickers = Pickers::new(&model, live, window, cx);
     let subscriptions = vec![
       cx.observe(&scroller, |_, _, cx| cx.notify()),
-      cx.observe(&model, |this, _, cx| {
+      cx.observe_in(&model, window, |this, model, window, cx| {
         this.sync_rows(cx);
+        this.pickers.sync(&model, this.live, window, cx);
         cx.notify();
       }),
       cx.subscribe_in(&model, window, |this, _, event: &ModelEvent, window, cx| {
@@ -57,6 +61,7 @@ impl SessionView {
       model,
       scroller,
       composer,
+      pickers,
       rows: 0,
       _subscriptions: subscriptions,
     };
@@ -126,6 +131,7 @@ impl Render for SessionView {
           .aria_label(status.clone())
           .child(status),
       )
+      .child(self.pickers.view(&self.model, live))
       .child(div().p_2().child(composer::view(&self.composer)))
   }
 }

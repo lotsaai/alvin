@@ -12,9 +12,9 @@ use alvin_gateway::{Gateway, GatewayConfig, WsServer};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
   BashRequest, CheckoutId, ErrorCode, ErrorData, Event, EventBody, EventId, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary,
-  MessagesRequest, OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromoteQueuedRequest, PromptRequest,
-  QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage, SessionStatus,
-  SessionsApiClient, SubscribeRequest,
+  MessagesRequest, ModelApiClient, OpenRequest, OpenTarget, ProjectId, ProjectSummary, ProjectsApiClient, PromoteQueuedRequest,
+  PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage,
+  SessionStatus, SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
 };
 
 /// Session files written by real omp (the first two records of one run).
@@ -957,6 +957,90 @@ async fn the_queue_is_edited_while_a_turn_runs_over_both_transports() {
   );
 
   drop((stream, channel, ws));
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn model_and_thinking_level_change_and_show_in_state_over_both_transports() {
+  let project = Project::new(1);
+  let gateway = project.live_gateway();
+  let ([channel, ws], server) = both_transports(&gateway).await;
+  let opened = open_new(&channel).await;
+
+  let models = ModelApiClient::models(&channel, opened.live).await.unwrap();
+  let current = LiveApiClient::state(&ws, opened.live).await.unwrap().model.unwrap();
+  assert!(
+    models
+      .iter()
+      .any(|model| model.id == current.id && model.provider == current.provider)
+  );
+
+  // Another model, set through one transport, is what the other transport's `live/state` reports.
+  let other = models
+    .iter()
+    .find(|model| model.id != current.id)
+    .expect("omp offers a second model");
+  let set = ModelApiClient::set_model(
+    &channel,
+    SetModelRequest {
+      live: opened.live,
+      provider: other.provider.clone(),
+      model_id: other.id.clone(),
+    },
+  )
+  .await
+  .unwrap();
+  assert_eq!(set.id, other.id);
+  assert_eq!(LiveApiClient::state(&ws, opened.live).await.unwrap().model.unwrap().id, other.id);
+
+  // Cycling lands on a model omp lists, and `live/state` agrees.
+  if let Some(cycled) = ModelApiClient::cycle_model(&ws, opened.live).await.unwrap() {
+    assert!(models.iter().any(|model| model.id == cycled.model.id));
+    assert_eq!(
+      LiveApiClient::state(&channel, opened.live).await.unwrap().model.unwrap().id,
+      cycled.model.id
+    );
+  }
+
+  // Back to the original model, which accepts the thinking levels below.
+  ModelApiClient::set_model(
+    &ws,
+    SetModelRequest {
+      live: opened.live,
+      provider: current.provider.clone(),
+      model_id: current.id.clone(),
+    },
+  )
+  .await
+  .unwrap();
+  let levels = ModelApiClient::thinking_levels(&channel, opened.live).await.unwrap();
+  // omp reports `auto` as a cycle step, which omp-rpc cannot decode; start where the next step is a concrete level.
+  assert!(levels.contains(&ThinkingLevel::Low) && levels.contains(&ThinkingLevel::High));
+  ModelApiClient::set_thinking(
+    &ws,
+    SetThinkingRequest {
+      live: opened.live,
+      level: ThinkingLevel::Low,
+    },
+  )
+  .await
+  .unwrap();
+  assert_eq!(
+    LiveApiClient::state(&channel, opened.live).await.unwrap().thinking_level,
+    Some(ThinkingLevel::Low)
+  );
+  let cycled = ModelApiClient::cycle_thinking(&channel, opened.live)
+    .await
+    .unwrap()
+    .expect("a level to cycle to");
+  assert_eq!(cycled.level.as_str(), ThinkingLevel::High.as_str());
+  assert_eq!(
+    LiveApiClient::state(&ws, opened.live).await.unwrap().thinking_level,
+    Some(ThinkingLevel::High)
+  );
+
+  drop((channel, ws));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
 }

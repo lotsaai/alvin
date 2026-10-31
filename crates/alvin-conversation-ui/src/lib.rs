@@ -4,6 +4,7 @@
 mod actions;
 mod composer;
 mod model;
+mod pickers;
 mod queue;
 mod session;
 mod sidebar;

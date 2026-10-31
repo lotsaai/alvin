@@ -7,8 +7,9 @@ use alvin_client::{Client, ConnectionState, Error, ResyncReason};
 use alvin_conversation::{Connection, Conversation, Run, SessionsKey};
 use alvin_protocol::{
   BashRequest, CheckoutId, ErrorCode, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
-  OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient, QueuedMessageQueue,
-  RemoveQueuedRequest, SessionCursor, SessionId, SessionsApiClient, SubscribeRequest,
+  ModelApiClient, ModelInfo, OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient,
+  QueuedMessageQueue, RemoveQueuedRequest, SessionCursor, SessionId, SessionsApiClient, SetModelRequest, SetThinkingRequest,
+  SubscribeRequest, ThinkingLevel,
 };
 use gpui_kit::{AsyncApp, Context, EventEmitter, SharedString, Task, WeakEntity};
 
@@ -38,8 +39,18 @@ pub enum ModelEvent {
   },
 }
 
+/// What a live session can be switched to: omp's models, and the thinking levels the current model accepts.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Catalog {
+  /// The models omp can use.
+  pub models: Vec<ModelInfo>,
+  /// The thinking levels of the current model.
+  pub levels: Vec<ThinkingLevel>,
+}
+
 /// Projects, sessions and live sessions, and the commands that change them.
 pub struct Model {
+  catalogs: BTreeMap<LiveSessionId, Catalog>,
   conversation: Conversation,
   client: Client,
   /// Live sessions with a `!` command running, so Escape aborts that and not the turn.
@@ -74,6 +85,7 @@ impl Model {
       }
     });
     Self {
+      catalogs: BTreeMap::new(),
       conversation: Conversation::default(),
       client,
       bash_running: BTreeSet::new(),
@@ -85,6 +97,11 @@ impl Model {
   /// The state views render.
   pub fn conversation(&self) -> &Conversation {
     &self.conversation
+  }
+
+  /// The models and thinking levels of a session, once loaded.
+  pub fn catalog(&self, live: LiveSessionId) -> Option<&Catalog> {
+    self.catalogs.get(&live)
   }
 
   /// Whether a `!` command is running in the session.
@@ -202,6 +219,7 @@ impl Model {
             let loaded = this.update(cx, |model, cx| {
               model.conversation.set_state(live, &state);
               model.conversation.load_page(live, page);
+              model.load_catalog(live, cx);
               cx.notify();
             });
             if loaded.is_err() {
@@ -226,6 +244,10 @@ impl Model {
               if this
                 .update(cx, |model, cx| {
                   model.conversation.apply(&event);
+                  // omp said the model changed without saying to what.
+                  if model.conversation.live(live).is_some_and(|view| view.state_stale) {
+                    model.refresh_state(live, cx);
+                  }
                   cx.notify();
                 })
                 .is_err()
@@ -369,6 +391,106 @@ impl Model {
       {
         fail(&this, cx, &error);
       }
+    })
+    .detach();
+  }
+
+  /// Reads `live/state` again, for what changed in omp without an event that says what.
+  fn refresh_state(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(
+      async move |this, cx| match LiveApiClient::state(&client, live).await.map_err(Error::from) {
+        Ok(state) => drop(this.update(cx, |model, cx| {
+          model.conversation.set_state(live, &state);
+          cx.notify();
+        })),
+        Err(error) => fail(&this, cx, &error),
+      },
+    )
+    .detach();
+  }
+
+  /// Loads the models and thinking levels a picker offers. The levels depend on the current model.
+  fn load_catalog(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      let loaded = async {
+        let models = ModelApiClient::models(&client, live).await?;
+        let levels = ModelApiClient::thinking_levels(&client, live).await?;
+        Ok::<_, Error>(Catalog { models, levels })
+      }
+      .await;
+      match loaded {
+        Ok(catalog) => drop(this.update(cx, |model, cx| {
+          model.catalogs.insert(live, catalog);
+          cx.notify();
+        })),
+        Err(error) => fail(&this, cx, &error),
+      }
+    })
+    .detach();
+  }
+
+  /// Switches the session to a model, then shows what omp now reports.
+  pub fn set_model(&mut self, live: LiveSessionId, provider: String, model_id: String, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    self.change_model(cx, live, async move {
+      ModelApiClient::set_model(&client, SetModelRequest { live, provider, model_id })
+        .await
+        .map(drop)
+    });
+  }
+
+  /// Switches to the next model in omp's cycle.
+  pub fn cycle_model(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    self.change_model(cx, live, async move { ModelApiClient::cycle_model(&client, live).await.map(drop) });
+  }
+
+  /// Sets the thinking level, then shows what omp now reports.
+  pub fn set_thinking(&mut self, live: LiveSessionId, level: ThinkingLevel, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    self.change_thinking(cx, live, async move {
+      ModelApiClient::set_thinking(&client, SetThinkingRequest { live, level }).await
+    });
+  }
+
+  /// Switches to the next thinking level.
+  pub fn cycle_thinking(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    self.change_thinking(
+      cx,
+      live,
+      async move { ModelApiClient::cycle_thinking(&client, live).await.map(drop) },
+    );
+  }
+
+  /// A model change also changes the thinking levels on offer.
+  fn change_model<E: Into<Error> + 'static>(
+    &mut self,
+    cx: &mut Context<Self>,
+    live: LiveSessionId,
+    call: impl Future<Output = Result<(), E>> + 'static,
+  ) {
+    cx.spawn(async move |this, cx| match call.await.map_err(Into::into) {
+      Ok(()) => drop(this.update(cx, |model, cx| {
+        model.refresh_state(live, cx);
+        model.load_catalog(live, cx);
+      })),
+      Err(error) => fail(&this, cx, &error),
+    })
+    .detach();
+  }
+
+  fn change_thinking<E: Into<Error> + 'static>(
+    &mut self,
+    cx: &mut Context<Self>,
+    live: LiveSessionId,
+    call: impl Future<Output = Result<(), E>> + 'static,
+  ) {
+    cx.spawn(async move |this, cx| match call.await.map_err(Into::into) {
+      Ok(()) => drop(this.update(cx, |model, cx| model.refresh_state(live, cx))),
+      Err(error) => fail(&this, cx, &error),
     })
     .detach();
   }

@@ -206,7 +206,7 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 
 #### Task 15: Model and thinking pickers
 **Description:** Methods: `model/list|set|cycle` and `thinking/levels|set|cycle`. Fold `model_changed`, `thinking_level_changed`, and `config_update`. Add `pickers.rs` and the cycle actions.
-**Acceptance criteria:** [ ] changing the model and thinking level in the UI shows up in `live/state`; [ ] cycle actions work; [ ] round-trips over both transports.
+**Acceptance criteria:** [x] changing the model and thinking level in the UI shows up in `live/state`; [x] cycle actions work; [x] round-trips over both transports.
 **Verification:** `mise format`; `mise run --force test`. **Dependencies:** 13. **Files:** `alvin-protocol/src/model.rs`, host session, gateway rpc + tests, `alvin-conversation/src/live.rs`, `alvin-conversation-ui/src/pickers.rs`. **Scope:** M.
 
 #### Task 16: Extension dialogs
