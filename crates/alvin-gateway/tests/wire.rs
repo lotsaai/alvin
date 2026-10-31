@@ -7,8 +7,8 @@ use std::time::{Duration, SystemTime};
 use alvin_client::{ChannelPair, Client, Endpoint, Error};
 use alvin_gateway::{Gateway, GatewayConfig, WsServer};
 use alvin_protocol::{
-  CheckoutId, ErrorCode, ErrorData, EventId, ListSessions, ProjectId, ProjectSummary, ProjectsApiClient, SessionCursor, SessionId,
-  SessionPage, SessionStatus, SessionsApiClient,
+  CheckoutId, ErrorCode, ErrorData, EventId, ListSessions, ProjectId, ProjectSummary, ProjectsApiClient, SessionCursor, SessionPage,
+  SessionStatus, SessionsApiClient,
 };
 
 /// Session files written by real omp (the first two records of one run).
@@ -101,8 +101,8 @@ fn request(project: ProjectId, after: Option<SessionCursor>, limit: u32) -> List
 
 async fn only_project(client: &Client) -> (ProjectId, CheckoutId) {
   let projects = ProjectsApiClient::list(client).await.unwrap();
-  let [ProjectSummary::Resolved { id, checkouts, .. }] = projects.as_slice() else {
-    panic!("expected one resolved project: {projects:?}");
+  let [ProjectSummary { id, checkouts, .. }] = projects.as_slice() else {
+    panic!("expected one project: {projects:?}");
   };
   (id.clone(), checkouts[0].id.clone())
 }
@@ -116,7 +116,8 @@ fn the_declared_method_list_is_pinned() {
 
 #[tokio::test]
 async fn projects_list_returns_the_same_projects_over_channel_and_websocket() {
-  let gateway = gateway(fixture_sessions());
+  let project = Project::new(2);
+  let gateway = project.gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let over_channel = ProjectsApiClient::list(&channel).await.unwrap();
   let over_ws = ProjectsApiClient::list(&ws).await.unwrap();
@@ -124,15 +125,23 @@ async fn projects_list_returns_the_same_projects_over_channel_and_websocket() {
   server.shutdown().await.unwrap();
 
   assert_eq!(over_channel, over_ws);
-  // The recorded cwd was a temporary directory that no longer exists, so the session is an unresolved group.
   assert!(
-    matches!(
-      over_ws.as_slice(),
-      [ProjectSummary::Unresolved { sessions, .. }]
-        if *sessions == [SessionId::from("01a18ff1-ab74-73b8-a3a2-79905565c49b".to_owned())]
-    ),
+    matches!(over_ws.as_slice(), [ProjectSummary { root, checkouts, .. }] if *root == project.root && checkouts.len() == 1),
     "{over_ws:?}"
   );
+}
+
+#[tokio::test]
+async fn sessions_of_a_deleted_directory_are_not_listed() {
+  // The recorded cwd was a temporary directory that no longer exists, so the session belongs to no project.
+  let gateway = gateway(fixture_sessions());
+  let (client, server) = ws_client(&gateway).await;
+
+  let projects = ProjectsApiClient::list(&client).await.unwrap();
+  drop(client);
+  server.shutdown().await.unwrap();
+
+  assert_eq!(projects, vec![]);
 }
 
 #[tokio::test]

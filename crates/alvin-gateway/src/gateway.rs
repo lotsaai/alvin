@@ -25,7 +25,7 @@ impl Gateway {
       let heads = alvin_session_index::scan(&config.sessions_dir)?
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
-      Ok(alvin_session_index::group(heads.into_iter().map(|head| (head.cwd, head.id)))?)
+      Ok(alvin_session_index::group(heads.into_iter().map(|head| head.cwd))?)
     })
     .await
     .map_err(Error::from)?

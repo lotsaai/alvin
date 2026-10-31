@@ -1,22 +1,19 @@
 //! Projects and checkouts from the `cwd` of each session.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use alvin_protocol::{CheckoutId, CheckoutSummary, ProjectId, ProjectSummary, SessionId, UnresolvedCause, Vcs};
+use alvin_protocol::{CheckoutId, CheckoutSummary, ProjectId, ProjectSummary, Vcs};
 use code_workspace::Workspace;
 
 use crate::header::SessionHead;
 use crate::{Error, Result};
 
-/// Where a `cwd` led: a checkout of a repository, or the reason it did not resolve.
-enum Resolution {
-  Resolved {
-    repository: PathBuf,
-    checkout: PathBuf,
-    vcs: Option<Vcs>,
-  },
-  Unresolved(UnresolvedCause),
+/// Where a `cwd` led: its checkout and repository.
+struct Resolved {
+  repository: PathBuf,
+  checkout: PathBuf,
+  vcs: Option<Vcs>,
 }
 
 /// An id for a canonical root path: the hex of its blake3 hash.
@@ -24,7 +21,9 @@ fn path_id(path: &Path) -> String {
   blake3::hash(path.as_os_str().as_encoded_bytes()).to_hex().to_string()
 }
 
-fn resolve(cwd: &Path) -> Result<Resolution> {
+/// Resolves a `cwd` to its workspace. `None` when it no longer resolves (deleted directory, worktree whose
+/// repository is gone): such a session belongs to no project.
+fn resolve(cwd: &Path) -> Result<Option<Resolved>> {
   use code_workspace::Error as Discovery;
 
   match Workspace::discover(cwd) {
@@ -41,13 +40,9 @@ fn resolve(cwd: &Path) -> Result<Resolution> {
         code_workspace::Vcs::Jujutsu => Vcs::Jujutsu,
         code_workspace::Vcs::JujutsuColocated => Vcs::JujutsuColocated,
       });
-      Ok(Resolution::Resolved { repository, checkout, vcs })
+      Ok(Some(Resolved { repository, checkout, vcs }))
     }
-    Err(Discovery::NoWorkspaceMarker { start }) => Ok(Resolution::Unresolved(UnresolvedCause::NoWorkspaceMarker {
-      start: PathBuf::from(start),
-    })),
-    Err(Discovery::PathResolution { path }) => Ok(Resolution::Unresolved(UnresolvedCause::PathResolution { path })),
-    Err(Discovery::InvalidVcsPointer { path }) => Ok(Resolution::Unresolved(UnresolvedCause::InvalidVcsPointer { path })),
+    Err(Discovery::NoWorkspaceMarker { .. } | Discovery::PathResolution { .. } | Discovery::InvalidVcsPointer { .. }) => Ok(None),
     Err(source) => Err(Error::ResolveWorkspace {
       cwd: cwd.to_path_buf(),
       source,
@@ -55,59 +50,52 @@ fn resolve(cwd: &Path) -> Result<Resolution> {
   }
 }
 
-/// Groups sessions by repository and checkout, resolving each distinct `cwd` once.
+/// Groups session working directories by repository and checkout, resolving each distinct `cwd` once.
 ///
-/// Resolved projects come first, ordered by repository root, then the unresolved groups ordered by `cwd`.
-pub fn group(sessions: impl IntoIterator<Item = (PathBuf, SessionId)>) -> Result<Vec<ProjectSummary>> {
-  let mut by_cwd: BTreeMap<PathBuf, Vec<SessionId>> = BTreeMap::new();
-  for (cwd, id) in sessions {
-    by_cwd.entry(cwd).or_default().push(id);
-  }
-
+/// Projects are ordered by repository root. A `cwd` that no longer resolves has no project and is left out.
+pub fn group(cwds: impl IntoIterator<Item = PathBuf>) -> Result<Vec<ProjectSummary>> {
   let mut repositories: BTreeMap<PathBuf, BTreeMap<PathBuf, Option<Vcs>>> = BTreeMap::new();
-  let mut unresolved = Vec::new();
-  for (cwd, mut ids) in by_cwd {
-    match resolve(&cwd)? {
-      Resolution::Resolved { repository, checkout, vcs } => {
-        repositories.entry(repository).or_default().insert(checkout, vcs);
-      }
-      Resolution::Unresolved(cause) => {
-        ids.sort();
-        unresolved.push(ProjectSummary::Unresolved { cwd, cause, sessions: ids });
-      }
+  for cwd in cwds.into_iter().collect::<BTreeSet<_>>() {
+    if let Some(Resolved { repository, checkout, vcs }) = resolve(&cwd)? {
+      repositories.entry(repository).or_default().insert(checkout, vcs);
     }
   }
 
-  let resolved = repositories.into_iter().map(|(root, checkouts)| ProjectSummary::Resolved {
-    id: ProjectId::from(path_id(&root)),
-    root,
-    checkouts: checkouts
+  Ok(
+    repositories
       .into_iter()
-      .map(|(root, vcs)| CheckoutSummary {
-        id: CheckoutId::from(path_id(&root)),
+      .map(|(root, checkouts)| ProjectSummary {
+        id: ProjectId::from(path_id(&root)),
         root,
-        vcs,
+        checkouts: checkouts
+          .into_iter()
+          .map(|(root, vcs)| CheckoutSummary {
+            id: CheckoutId::from(path_id(&root)),
+            root,
+            vcs,
+          })
+          .collect(),
       })
       .collect(),
-  });
-  Ok(resolved.chain(unresolved).collect())
+  )
 }
+
 /// The sessions of one project, or of one checkout of it, resolving each distinct `cwd` once.
 ///
-/// Empty when no resolved project has that id, or the project has no such checkout: a project and a checkout
-/// only exist through their sessions.
+/// Empty when no project has that id, or the project has no such checkout: a project and a checkout only exist
+/// through their sessions.
 pub fn select(heads: Vec<SessionHead>, project: &ProjectId, checkout: Option<&CheckoutId>) -> Result<Vec<SessionHead>> {
-  let mut resolutions: BTreeMap<PathBuf, Resolution> = BTreeMap::new();
+  let mut resolutions: BTreeMap<PathBuf, Option<Resolved>> = BTreeMap::new();
   let mut selected = Vec::new();
   for head in heads {
     if !resolutions.contains_key(&head.cwd) {
       resolutions.insert(head.cwd.clone(), resolve(&head.cwd)?);
     }
-    let Some(Resolution::Resolved {
+    let Some(Some(Resolved {
       repository,
       checkout: root,
       ..
-    }) = resolutions.get(&head.cwd)
+    })) = resolutions.get(&head.cwd)
     else {
       continue;
     };
@@ -122,9 +110,9 @@ pub fn select(heads: Vec<SessionHead>, project: &ProjectId, checkout: Option<&Ch
 mod tests {
   use std::path::{Path, PathBuf};
 
-  use alvin_protocol::{CheckoutId, CheckoutSummary, ProjectId, ProjectSummary, SessionId, UnresolvedCause, Vcs};
+  use alvin_protocol::{CheckoutId, CheckoutSummary, ProjectId, ProjectSummary, Vcs};
 
-  use super::group;
+  use super::{group, select};
   use crate::scan;
   use crate::test_support::{TempDir, run, run_omp};
 
@@ -145,12 +133,8 @@ mod tests {
     }
   }
 
-  fn sessions(cwds: &[&Path]) -> Vec<(PathBuf, SessionId)> {
-    cwds
-      .iter()
-      .enumerate()
-      .map(|(n, cwd)| (cwd.to_path_buf(), SessionId::from(format!("session-{n}"))))
-      .collect()
+  fn cwds(paths: &[&Path]) -> Vec<PathBuf> {
+    paths.iter().map(|path| path.to_path_buf()).collect()
   }
 
   #[test]
@@ -167,11 +151,11 @@ mod tests {
     let sub = repo.join("src");
     std::fs::create_dir(&sub).unwrap();
 
-    let projects = group(sessions(&[&repo, &sub, &wt1, &wt2])).unwrap();
+    let projects = group(cwds(&[&repo, &sub, &wt1, &wt2])).unwrap();
 
     assert_eq!(
       projects,
-      vec![ProjectSummary::Resolved {
+      vec![ProjectSummary {
         id: project_id(&repo),
         root: repo.clone(),
         checkouts: vec![
@@ -200,11 +184,11 @@ mod tests {
       })
     };
 
-    let projects = group(sessions(&[&repo, &ws1, &ws2])).unwrap();
+    let projects = group(cwds(&[&repo, &ws1, &ws2])).unwrap();
 
     assert_eq!(
       projects,
-      vec![ProjectSummary::Resolved {
+      vec![ProjectSummary {
         id: project_id(&repo),
         root: repo.clone(),
         checkouts: vec![
@@ -217,28 +201,17 @@ mod tests {
   }
 
   #[test]
-  fn deleted_cwd_lands_in_an_unresolved_group_with_its_sessions() {
+  fn a_deleted_cwd_belongs_to_no_project() {
     let tmp = TempDir::new();
     let gone = tmp.path().join("gone");
     std::fs::create_dir(&gone).unwrap();
     std::fs::remove_dir(&gone).unwrap();
-    // Discovery walks up from the nearest existing ancestor of a deleted cwd.
-    let nearest_ancestor = tmp.path().to_path_buf();
 
-    let projects = group(sessions(&[&gone, &gone])).unwrap();
-
-    assert_eq!(
-      projects,
-      vec![ProjectSummary::Unresolved {
-        cwd: gone.clone(),
-        cause: UnresolvedCause::NoWorkspaceMarker { start: nearest_ancestor },
-        sessions: vec![SessionId::from("session-0".to_owned()), SessionId::from("session-1".to_owned())],
-      }]
-    );
+    assert_eq!(group(cwds(&[&gone, &gone])).unwrap(), vec![]);
   }
 
   #[test]
-  fn worktree_whose_repository_was_deleted_is_unresolved() {
+  fn a_worktree_whose_repository_was_deleted_belongs_to_no_project() {
     let tmp = TempDir::new();
     let repo = tmp.path().join("repo");
     std::fs::create_dir(&repo).unwrap();
@@ -248,15 +221,31 @@ mod tests {
     run(&repo, "git", &["worktree", "add", "--quiet", "../wt", "-b", "one"]);
     std::fs::remove_dir_all(&repo).unwrap();
 
-    let projects = group(sessions(&[&wt])).unwrap();
+    assert_eq!(group(cwds(&[&wt])).unwrap(), vec![]);
+  }
 
-    assert!(matches!(
-      projects.as_slice(),
-      [ProjectSummary::Unresolved {
-        cause: UnresolvedCause::InvalidVcsPointer { .. },
-        ..
-      }]
-    ));
+  #[test]
+  fn select_skips_sessions_whose_cwd_no_longer_resolves() {
+    let tmp = TempDir::new();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    run(&repo, "git", &["init", "--quiet"]);
+    let gone = tmp.path().join("gone");
+    let head = |cwd: &Path, id: &str| crate::SessionHead {
+      path: PathBuf::from(format!("{id}.jsonl")),
+      id: alvin_protocol::SessionId::from(id.to_owned()),
+      cwd: cwd.to_path_buf(),
+      title: None,
+      created: jiff::Timestamp::UNIX_EPOCH,
+      modified: jiff::Timestamp::UNIX_EPOCH,
+      parent: None,
+      assistant_in_head: false,
+    };
+
+    let selected = select(vec![head(&repo, "alive"), head(&gone, "gone")], &project_id(&repo), None).unwrap();
+
+    assert_eq!(selected.len(), 1);
+    assert_eq!(selected[0].id.as_str(), "alive");
   }
 
   #[test]
@@ -268,11 +257,11 @@ mod tests {
     let link = tmp.path().join("link");
     std::os::unix::fs::symlink(&plain, &link).unwrap();
 
-    let projects = group(sessions(&[&link])).unwrap();
+    let projects = group(cwds(&[&link])).unwrap();
 
     assert_eq!(
       projects,
-      vec![ProjectSummary::Resolved {
+      vec![ProjectSummary {
         id: project_id(&plain),
         root: plain.clone(),
         checkouts: vec![checkout(&plain, None)]
@@ -305,14 +294,11 @@ mod tests {
     });
 
     let heads: Vec<_> = scan(&root).unwrap().into_iter().map(|head| head.unwrap()).collect();
-    let projects = group(heads.into_iter().map(|head| (head.cwd, head.id))).unwrap();
+    let projects = group(heads.into_iter().map(|head| head.cwd)).unwrap();
 
     let resolved: Vec<_> = projects
       .iter()
-      .map(|project| match project {
-        ProjectSummary::Resolved { root, checkouts, .. } => (root.clone(), checkouts.len()),
-        ProjectSummary::Unresolved { cwd, .. } => panic!("unresolved: {}", cwd.display()),
-      })
+      .map(|project| (project.root.clone(), project.checkouts.len()))
       .collect();
     assert_eq!(resolved, vec![(git, 3), (jj, 3)]);
   }

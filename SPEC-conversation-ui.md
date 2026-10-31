@@ -25,7 +25,7 @@ Gupi features that do not go through omp-rpc: file browser, git changes panel, w
 │  projects      │  transcript (MessageScroller)        │ (toggle)     │
 │   checkouts    │                                      │              │
 │    sessions    │  widgets from extensions             │              │
-│  unresolved    │  queue                               │              │
+│                │  queue                               │              │
 │                │  composer                            │              │
 ├ StatusBar: connection · model · thinking · context use · ext status ┤
 └──────────────────────────────────────────────────────────────────────┘
@@ -38,7 +38,7 @@ Components (gpui-kit 0.8.1, import paths from the skill's catalog; exact signatu
 One file per view; each is an `Entity<T>` with `Render` where it retains state, `RenderOnce` otherwise (coding guides, "Choose the right unit").
 
 - `Workspace` (root view, one per window): owns the `alvin_client::Client`, the `Entity<Model>` (below), the sidebar, the open tabs, and the active session view. Placed directly under gpui-kit's `Root`.
-- `ProjectSidebar`: projects → checkouts (main, git worktrees, jj workspaces) → sessions, newest first, paged on scroll (`sessions/list`); the unresolved groups with their reason; a live marker on sessions open in a tab. Actions: open (`live/open` with the session file), new session in a checkout (`live/open` new, model optional), refresh.
+- `ProjectSidebar`: projects → checkouts (main, git worktrees, jj workspaces) → sessions, newest first, paged on scroll (`sessions/list`); a live marker on sessions open in a tab. Actions: open (`live/open` with the session file), new session in a checkout (`live/open` new, model optional), refresh.
 - `SessionView` (one per live session): transcript, widgets, queue, composer, and the session menu (rename, compact, stats, export HTML, close).
 - `Transcript`: `MessageScroller` over the active branch. Rows are committed messages plus one streaming row. Row kinds follow omp's `AgentMessage` variants: user (text, images), assistant (markdown text, thinking in a `Collapsible`, tool calls), tool result, bash execution, branch summary, compaction summary, custom messages. Older pages load on scroll to the top (`live/messages` cursor); `MessageScroller` keeps the reader's position on insert.
 - `ToolCard`: one per tool call, keyed by `tool_call_id`. Running state with streamed output (`tool_execution_update`/`stream_update`), then the result. Renderers by tool name for omp's built-in tools (bash: command and output; read; edit and write: `Diff` when the result carries a patch; grep, find, glob: match lists; task: subagent summary). Any other tool name renders its args and result as formatted JSON; tool args and results are open JSON in omp's schema, so a tool alvin does not know is a normal case, not an error. Which result fields carry patches is read from recorded fixtures in the first slice.

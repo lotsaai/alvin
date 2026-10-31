@@ -16,7 +16,7 @@ Success:
 
 Shapes follow omp's wire types (generated into `alvin-protocol`, read from omp-rpc `wire.rs`):
 
-- `Workspace`: projects with checkouts and the unresolved groups (`projects/list`), and the paged session list per checkout (`sessions/list`).
+- `Workspace`: projects with checkouts (`projects/list`), and the paged session list per checkout (`sessions/list`).
 - `LiveSessions`: `LiveSessionId` to `LiveView`.
 - `LiveView`:
   - `transcript`: committed messages (`AgentMessage`: user, assistant, tool result, bash execution, branch and compaction summaries, and the other variants omp defines), loaded newest page first from `live/messages` (`MessagesPage { messages, total_messages, next_cursor }`) and extended by `message_end`.

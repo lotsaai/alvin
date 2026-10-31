@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use jsonrpsee::proc_macros::rpc;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{CheckoutId, ProjectId, SessionId};
+use crate::ids::{CheckoutId, ProjectId};
 
 /// The version control system that owns a checkout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,57 +30,23 @@ pub struct CheckoutSummary {
   pub vcs: Option<Vcs>,
 }
 
-/// Why an omp session's `cwd` does not resolve to a workspace.
+/// A repository, or a plain workspace directory when there is no VCS, with the checkouts that have sessions.
+/// A `cwd` that no longer resolves to a workspace has no project: its sessions are not listed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum UnresolvedCause {
-  /// No workspace marker was found walking up from the directory, typically because it was deleted.
-  NoWorkspaceMarker {
-    /// Where discovery started.
-    start: PathBuf,
-  },
-  /// A path could not be resolved from the filesystem.
-  PathResolution {
-    /// The path that failed to resolve.
-    path: PathBuf,
-  },
-  /// A `.git` file or jj repository pointer was malformed, for example a worktree whose repository was deleted.
-  InvalidVcsPointer {
-    /// The pointer file.
-    path: PathBuf,
-  },
-}
-
-/// A group of sessions: a repository with its checkouts, or the sessions of a `cwd` that no longer resolves.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum ProjectSummary {
-  /// A repository, or a plain workspace directory when there is no VCS.
-  Resolved {
-    /// Digest of the canonical repository root.
-    id: ProjectId,
-    /// Canonical repository root.
-    root: PathBuf,
-    /// Checkouts that have sessions, ordered by root.
-    checkouts: Vec<CheckoutSummary>,
-  },
-  /// A recorded `cwd` that does not resolve. This is a state to show the user, not a fallback.
-  Unresolved {
-    /// The `cwd` recorded in the session headers.
-    cwd: PathBuf,
-    /// Why discovery failed.
-    cause: UnresolvedCause,
-    /// The sessions recorded under this `cwd`.
-    sessions: Vec<SessionId>,
-  },
+pub struct ProjectSummary {
+  /// Digest of the canonical repository root.
+  pub id: ProjectId,
+  /// Canonical repository root.
+  pub root: PathBuf,
+  /// Checkouts that have sessions, ordered by root.
+  pub checkouts: Vec<CheckoutSummary>,
 }
 
 /// Repositories and their checkouts, from omp's session files.
 #[cfg_attr(feature = "server", rpc(client, server, namespace = "projects", namespace_separator = "/"))]
 #[cfg_attr(not(feature = "server"), rpc(client, namespace = "projects", namespace_separator = "/"))]
 pub trait ProjectsApi {
-  /// Every project with sessions: resolved repositories with their checkouts, plus one unresolved group per
-  /// recorded `cwd` whose repository can no longer be resolved.
+  /// Every project whose sessions' `cwd` still resolves to a workspace, with the checkouts that have sessions.
   #[method(name = "list")]
   async fn list(&self) -> jsonrpsee::core::RpcResult<Vec<ProjectSummary>>;
 }
@@ -89,26 +55,27 @@ pub trait ProjectsApi {
 mod tests {
   use std::path::PathBuf;
 
-  use super::{ProjectSummary, UnresolvedCause};
-  use crate::ids::SessionId;
+  use super::{CheckoutSummary, ProjectSummary, Vcs};
+  use crate::ids::{CheckoutId, ProjectId};
 
   #[test]
-  fn unresolved_project_has_a_stable_wire_shape() {
-    let project = ProjectSummary::Unresolved {
-      cwd: PathBuf::from("/gone"),
-      cause: UnresolvedCause::NoWorkspaceMarker {
-        start: PathBuf::from("/gone"),
-      },
-      sessions: vec![SessionId::from("s1".to_owned())],
+  fn a_project_has_a_stable_wire_shape() {
+    let project = ProjectSummary {
+      id: ProjectId::from("p".to_owned()),
+      root: PathBuf::from("/repo"),
+      checkouts: vec![CheckoutSummary {
+        id: CheckoutId::from("c".to_owned()),
+        root: PathBuf::from("/repo"),
+        vcs: Some(Vcs::JujutsuColocated),
+      }],
     };
     let json = serde_json::to_value(&project).unwrap();
     assert_eq!(
       json,
       serde_json::json!({
-        "kind": "unresolved",
-        "cwd": "/gone",
-        "cause": { "kind": "noWorkspaceMarker", "start": "/gone" },
-        "sessions": ["s1"],
+        "id": "p",
+        "root": "/repo",
+        "checkouts": [{ "id": "c", "root": "/repo", "vcs": "jujutsuColocated" }],
       })
     );
     assert_eq!(serde_json::from_value::<ProjectSummary>(json).unwrap(), project);

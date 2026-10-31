@@ -13,7 +13,7 @@ pub use ids::{CheckoutId, EventId, LiveSessionId, ProjectId, SessionId};
 pub use omp_wire::*;
 #[cfg(feature = "server")]
 pub use projects::ProjectsApiServer;
-pub use projects::{CheckoutSummary, ProjectSummary, ProjectsApiClient, UnresolvedCause, Vcs};
+pub use projects::{CheckoutSummary, ProjectSummary, ProjectsApiClient, Vcs};
 #[cfg(feature = "server")]
 pub use sessions::SessionsApiServer;
 pub use sessions::{ListSessions, SessionCursor, SessionPage, SessionStatus, SessionSummary, SessionsApiClient};
