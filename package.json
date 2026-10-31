@@ -1,0 +1,7 @@
+{
+  "name": "alvin",
+  "private": true,
+  "devDependencies": {
+    "@oh-my-pi/pi-coding-agent": "18.14.0"
+  }
+}

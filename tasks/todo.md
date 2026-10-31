@@ -3,8 +3,8 @@
 Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mise format` (read each step) and `mise run --force test`.
 
 ## Phase 1: Foundation
-- [ ] Task 1: Scaffold workspace and prune heyday tooling
-- [ ] Task 2: Generate omp wire types into `alvin-protocol` (risk spike)
+- [x] Task 1: Scaffold workspace and prune heyday tooling
+- [x] Task 2: Generate omp wire types into `alvin-protocol` (risk spike)
 
 ### Checkpoint 1: Foundation
 - [ ] format/test/check clean; spike findings recorded; human approves generated types

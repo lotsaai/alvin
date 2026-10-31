@@ -2,4 +2,9 @@ hakari-package = "alvin-workspace-hack"
 dep-format-version = "4"
 resolver = "2"
 
-platforms = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
+platforms = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+
+# alvin-protocol and alvin-client build for wasm32 without the jsonrpsee server half. Unifying
+# jsonrpsee's `server` features into the hack crate would turn them on for every build.
+[traversal-excludes]
+third-party = [{ name = "jsonrpsee" }]

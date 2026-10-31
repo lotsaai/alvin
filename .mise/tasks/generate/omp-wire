@@ -1,0 +1,56 @@
+#!/usr/bin/env bun
+
+//MISE description="Generate crates/alvin-protocol/src/omp_wire.rs from the pinned omp release; `-- --check` verifies pins and drift without writing"
+
+import { copyFile, mkdir, rm } from "node:fs/promises";
+import path from "node:path";
+import { $ } from "bun";
+
+const root = (await $`git rev-parse --show-toplevel`.text()).trim();
+process.chdir(root);
+
+const PACKAGE = "@oh-my-pi/pi-coding-agent";
+const pkgDir = path.join(root, "node_modules", PACKAGE);
+const genDir = path.join(pkgDir, "scripts/gen-rpc");
+const patchFile = path.join(root, "crates/alvin-protocol/schema/rust.ts.patch");
+const outFile = path.join(root, "crates/alvin-protocol/src/omp_wire.rs");
+const check = Bun.argv.includes("--check");
+
+/** Runs omp's own generator with our patch applied to a temporary copy of `rust.ts`, then rustfmt into `dest`. */
+async function generate(dest: string): Promise<void> {
+  const copy = path.join(genDir, "rust.alvin.ts");
+  await copyFile(path.join(genDir, "rust.ts"), copy);
+  try {
+    // A patch that no longer applies exactly must fail the task.
+    await $`patch --fuzz=0 --no-backup-if-mismatch ${copy} < ${patchFile}`.quiet();
+    const { buildRpcWireBundle } = await import(path.join(pkgDir, "src/modes/rpc/wire"));
+    const { buildWireModel } = await import(path.join(genDir, "model"));
+    const { emitRust } = await import(copy);
+    await Bun.write(dest, emitRust(buildWireModel(buildRpcWireBundle())));
+  } finally {
+    await rm(copy, { force: true });
+    await rm(`${copy}.rej`, { force: true });
+  }
+  // The committed file is rustfmt-clean, exactly as `hk` leaves it.
+  await $`rustfmt --edition 2024 ${dest}`;
+}
+
+if (check) {
+  const pinned: string = (await Bun.file("package.json").json()).devDependencies?.[PACKAGE];
+  const installed: string = (await Bun.file(path.join(pkgDir, "package.json")).json()).version;
+  const binary = (await $`omp --version`.text()).trim().replace(/^omp\//, "");
+  if (pinned !== installed || installed !== binary) {
+    console.error(`omp version pins disagree: package.json=${pinned} node_modules=${installed} omp binary=${binary}`);
+    process.exit(1);
+  }
+  await mkdir(".cache", { recursive: true });
+  const fresh = path.join(root, ".cache/omp_wire.fresh.rs");
+  await generate(fresh);
+  if ((await Bun.file(fresh).text()) !== (await Bun.file(outFile).text())) {
+    console.error("crates/alvin-protocol/src/omp_wire.rs differs from a fresh generation; run `mise run generate:omp-wire`");
+    process.exit(1);
+  }
+} else {
+  await generate(outFile);
+  console.log(`wrote ${path.relative(root, outFile)}`);
+}

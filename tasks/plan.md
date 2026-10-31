@@ -55,20 +55,29 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 #### Task 1: Scaffold workspace and prune heyday tooling
 **Description:** Create the root `Cargo.toml` (resolver 3, `crates/*`, edition 2024), `.config/hakari.toml`, and `crates/alvin-workspace-hack`. Prune `.mise/tasks` as `SPEC-scaffold.md` lists, rewrite `test/_default` so it calls only nextest (no `server.sh`, no NSH host fan-out), retarget `hakari` to `alvin-workspace-hack`, and remove NSH from `hk.pkl` and `mise.toml`. Removing `sqlc`, `java`, and the iOS/Android targets is already approved. Add `bun`, which is approved.
 **Acceptance criteria:**
-- [ ] `mise format` and `mise test` exit clean on the empty workspace. Each step's output has been read.
-- [ ] A second `mise hakari` run produces no diff.
-- [ ] `grep -ri 'nsh\|heyday'` over `hk.pkl`, `mise.toml`, `.mise/tasks` finds nothing.
+- [x] `mise format` and `mise test` exit clean on the empty workspace. Each step's output has been read.
+- [x] A second `mise hakari` run produces no diff.
+- [x] `grep -ri 'nsh\|heyday'` over `hk.pkl`, `mise.toml`, `.mise/tasks` finds nothing.
 **Verification:** `mise format`; `mise test`; `mise hakari` ×2 then `jj diff` empty.
 **Dependencies:** None. **Files:** `Cargo.toml`, `.config/hakari.toml`, `crates/alvin-workspace-hack/*`, `.mise/tasks/**`, `hk.pkl`, `mise.toml`. **Scope:** M.
 
 #### Task 2: Generate omp wire types into `alvin-protocol` (risk spike)
 **Description:** Add root `package.json` + `bun.lock` that pin `@oh-my-pi/pi-coding-agent@18.14.0`. Write `crates/alvin-protocol/schema/rust.ts.patch` (our derives, `validate` attributes, no `#![allow]`, unused items dropped) and the `generate:omp-wire` task, which writes `src/omp_wire.rs`. Create the `alvin-protocol` crate shell (`lib.rs`, `error.rs`, `error_codes.rs` with the full code table, `ids.rs`) and the `server` feature. Extend `mise check` with the native and `wasm32` builds of `alvin-protocol` and the version-agreement check across `package.json`, the `omp-rpc` tag, and `omp --version`.
 **Acceptance criteria:**
-- [ ] The generated `omp_wire.rs` compiles native and `wasm32-unknown-unknown` without `server`, and contains no `allow` attributes.
-- [ ] `mise check` fails when the pins disagree, or when the committed `omp_wire.rs` differs from a fresh generation.
-- [ ] Tests: UUIDv7 version bit set and mint ordering; the error-code table is pinned.
+- [x] The generated `omp_wire.rs` compiles native and `wasm32-unknown-unknown` without `server`, and contains no `allow` attributes.
+- [x] `mise check` fails when the pins disagree, or when the committed `omp_wire.rs` differs from a fresh generation.
+- [x] Tests: UUIDv7 version bit set and mint ordering; the error-code table is pinned.
 **Verification:** `mise run generate:omp-wire` then `jj diff` empty; `mise check`; `mise format`; `mise run --force test`. Write a short findings note in this plan covering whether the patch applied cleanly and whether validation keywords exist.
 **Dependencies:** 1. **Files:** `package.json`, `bun.lock`, `.mise/tasks/generate/omp-wire`, `.mise/tasks/check`, `crates/alvin-protocol/{Cargo.toml,schema/rust.ts.patch,src/{lib,error,error_codes,ids,omp_wire}.rs}`. **Scope:** M.
+
+**Spike findings (omp 18.14.0):**
+- The patch applies cleanly with `patch --fuzz=0`. It makes three changes to `rust.ts`: the header (drops `#![allow(dead_code, clippy::all, rustdoc::all)]`, names the release), helper emission (the generator always emitted `scalar_or_array_option`, which no field uses; now only used decoders are emitted), and boxing of oversized union variants so `clippy::large_enum_variant` stays clean under `-D warnings`: `AgentMessage::Assistant`, `RpcAgentEvent::{MessageUpdate, CacheWarmingEnd}`, `RpcNotification::ConfigUpdate`, `RpcServerFrame::RpcNotification`. Consumers (`alvin-omp-host`) construct these with `Box::new`. A size change on an omp bump fails `mise check`; the `BOXED` table in the patch is then revisited.
+- **No validation keywords exist** in `rpc-wire.schema.json` (no `minLength`, `maxLength`, `minimum`, `maximum`, `pattern`, item counts). `#[validate(...)]` attributes cannot be generated. Deviation from the task text: the patch adds no `Validate` or `JsonSchema` derives either, because nothing consumes them yet and they would apply to a 7.4k-line file. Decision for the human at Checkpoint 1.
+- The package `exports` map blocks deep imports, so the task imports the generator by path from `node_modules` and applies the patch to a temporary `rust.alvin.ts` beside `rust.ts` (removed in `finally`; the installed package stays untouched).
+- `mise check` runs the wasm build and the pin/drift check. The `omp-rpc` tag comparison is not wired yet: no `omp-rpc` dependency exists until Task 7, which adds it to the check.
+- `wasm32-unknown-unknown` is now a hakari platform (as `SPEC-scaffold.md` states). Hakari unified jsonrpsee's `server-core`/`server` features into the hack crate, pulling `rand`/`getrandom` 0.3, which does not build on wasm32. `jsonrpsee` is therefore a `traversal-excludes` entry in `.config/hakari.toml`. `uuid` gets its `js` feature through a wasm32-only target dependency.
+- The `server` feature is declared (`jsonrpsee/server-core`) but its build was not exercised: direct `cargo build` is blocked by repo policy and `mise build` does not enable it.
+- `mise format` exited clean while `cargo-check` would have failed on the dead helper (`hk fix --quiet` hides report output); `mise check` surfaced it. Read `mise check`, not `mise format`, for lint evidence.
 
 ### Checkpoint 1: Foundation
 - [ ] `mise format`, `mise run --force test`, `mise check` clean

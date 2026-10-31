@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 
-#MISE description="Run the linters and formatters"
+#MISE description="Run the linters and formatters, build alvin-protocol native and wasm32, verify the omp pins and generated wire types"
 
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
 
+set -euo pipefail
+
 hk check --all
+
+# alvin-protocol is the wasm-compatible leaf: the default (client) half must build without `server`.
+cargo build --quiet -p alvin-protocol
+cargo build --quiet --target wasm32-unknown-unknown -p alvin-protocol
+
+mise run generate:omp-wire -- --check
