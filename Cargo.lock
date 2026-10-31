@@ -156,6 +156,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "alvin-app"
+version = "0.1.0"
+dependencies = [
+ "alvin-client",
+ "alvin-conversation-ui",
+ "alvin-gateway",
+ "alvin-protocol",
+ "alvin-workspace-hack",
+ "clap",
+ "confique",
+ "dirs 7.0.0",
+ "eyre",
+ "gpui-kit",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "alvin-client"
 version = "0.1.0"
 dependencies = [
@@ -267,23 +286,78 @@ dependencies = [
 name = "alvin-workspace-hack"
 version = "0.1.0"
 dependencies = [
- "aho-corasick",
+ "anstyle",
+ "arrayvec",
+ "bitflags 2.13.2",
  "cc",
+ "chrono",
+ "clap",
+ "clap_builder",
+ "crossbeam-utils",
+ "crypto-common 0.1.7",
+ "digest 0.10.7",
+ "errno",
+ "fastrand",
+ "form_urlencoded",
+ "futures",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-sink",
+ "futures-util",
+ "getrandom 0.2.17",
+ "getrandom 0.4.3",
+ "gpui-base",
+ "gpui-component",
+ "gpui-kit",
+ "gpui-pre",
+ "gpui-pre-apple",
+ "gpui-pre-collections",
+ "gpui-pre-http-client",
+ "gpui-pre-macos",
+ "gpui-pre-platform",
+ "gpui-pre-wgpu",
+ "gpui-pre-windows",
+ "hashbrown 0.17.1",
+ "indexmap",
  "log",
  "memchr",
+ "mio",
+ "num-traits",
+ "once_cell",
+ "percent-encoding",
+ "phf_shared 0.13.1",
  "proc-macro2",
  "quote",
+ "rand 0.8.8",
+ "rand 0.9.5",
+ "rand_core 0.6.4",
  "regex-automata",
+ "regex-syntax",
+ "rust-i18n-support",
+ "rustix",
+ "semver",
  "serde",
  "serde_core",
  "serde_json",
+ "slab",
+ "smallvec",
+ "subtle",
  "syn 2.0.119",
  "syn 3.0.9",
  "tokio",
+ "toml_datetime 1.1.2+spec-1.1.0",
+ "toml_edit 0.22.27",
  "toml_parser",
+ "tracing",
  "tracing-core",
+ "typenum",
+ "url",
  "windows-sys 0.61.2",
  "winnow 1.0.4",
+ "zerocopy",
+ "zeroize",
+ "zvariant",
 ]
 
 [[package]]
@@ -8487,6 +8561,7 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+ "serde_derive",
 ]
 
 [[package]]

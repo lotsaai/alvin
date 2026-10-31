@@ -38,7 +38,8 @@ pub(crate) fn sidebar(model: &Entity<Model>, cx: &App) -> impl IntoElement {
         checkout: Some(checkout.id.clone()),
       };
       let new_model = model.clone();
-      let new_key = key.clone();
+      let new_project = project.id.clone();
+      let new_checkout = checkout.id.clone();
       column = column.child(
         h_flex()
           .gap_2()
@@ -55,7 +56,7 @@ pub(crate) fn sidebar(model: &Entity<Model>, cx: &App) -> impl IntoElement {
               .small()
               .ghost()
               .label("New")
-              .on_click(move |_, _, cx| new_model.update(cx, |model, cx| model.new_session(&new_key, cx))),
+              .on_click(move |_, _, cx| new_model.update(cx, |model, cx| model.new_session(new_project.clone(), new_checkout.clone(), cx))),
           ),
       );
       if let Some(list) = workspace.sessions(&key) {

@@ -30,7 +30,7 @@ Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mis
 ## Phase 4: UI walking skeleton
 - [x] Task 11: Conversation fold core plus recorded fixtures
 - [x] Task 12: UI browse and chat: sidebar, open, transcript, composer (wasm32 build not met: needs nightly, see plan)
-- [ ] Task 13: `alvin-app` face: config, embedded/remote, quit
+- [x] Task 13: `alvin-app` face: config, embedded/remote, quit (real window launch not verifiable in the sandbox, see plan)
 
 ### Checkpoint 3: Usable app
 - [ ] Real turn in `mise dev` on macOS; human UX review

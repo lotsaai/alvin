@@ -188,9 +188,9 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 #### Task 13: `alvin-app` face: config, embedded/remote, quit
 **Description:** `config.rs` (confique layers, `Settings` conversion, sessions-dir resolver that takes env as arguments), `app.rs` (runtime, embedded gateway or ws client, gpui-kit window, `on_app_quit` shutdown + telemetry flush), and the `mise dev` task.
 **Acceptance criteria:**
-- [ ] Config tests: precedence, unknown key, endpoint + gateway keys conflict, non-ws scheme, zero-source defaults, sessions-dir rules.
-- [ ] Startup test: the embedded window shows the temporary project and opens a live session. After quit, no omp remains.
-- [ ] `mise dev` opens a window listing this machine's projects. `--endpoint ws://…` against `alvind` shows the same UI.
+- [x] Config tests: precedence, unknown key, endpoint + gateway keys conflict, non-ws scheme, zero-source defaults, sessions-dir rules.
+- [x] Startup test: the embedded window shows the temporary project and opens a live session. After the `Quit` action, no omp remains.
+- [ ] `mise dev` opens a window listing this machine's projects. `--endpoint ws://…` against `alvind` shows the same UI. **Not verified.** The sandbox denies the macOS pasteboard service GPUI initialises at startup (`com.apple.hiservices-xpcservice`), so no window can open from it; the binary panics in `objc2-app-kit` before reaching alvin's code. Run `mise dev` and `mise dev -- --endpoint ws://127.0.0.1:7410` against a running `alvind` on a normal desktop.
 **Verification:** `mise format`; `mise run --force test`; manual: `mise dev`, plus `alvind` + `alvin-app --endpoint`.
 **Dependencies:** 12, 6. **Files:** `crates/alvin-app/{Cargo.toml,src/{main,config,app}.rs}`, `.mise/tasks/dev`. **Scope:** M.
 

@@ -1,0 +1,25 @@
+[package]
+name = "alvin-app"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "alvin desktop app"
+
+[dependencies]
+alvin-client = { version = "0.1.0", path = "../alvin-client" }
+alvin-conversation-ui = { version = "0.1.0", path = "../alvin-conversation-ui" }
+alvin-gateway = { version = "0.1.0", path = "../alvin-gateway" }
+alvin-workspace-hack = { version = "0.1", path = "../alvin-workspace-hack" }
+clap = { version = "4.6.7", features = ["derive", "env"] }
+confique = { version = "0.4.0", features = ["toml"] }
+dirs = "7.0.0"
+eyre = "0.6.14"
+gpui-kit = "0.8.1"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tracing = "0.1.44"
+url = { version = "2.5.8", features = ["serde"] }
+
+[dev-dependencies]
+alvin-protocol = { path = "../alvin-protocol" }
+gpui-kit = { version = "0.8.1", features = ["test-support"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time"] }

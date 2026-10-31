@@ -11,6 +11,7 @@ mod omp_dirs;
 mod rpc;
 mod telemetry;
 
+pub use alvin_omp_host::HostConfig;
 pub use config::GatewayConfig;
 pub use error::{Error, Result};
 pub use gateway::Gateway;

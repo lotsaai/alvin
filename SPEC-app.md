@@ -85,6 +85,8 @@ Errors before the window opens are `eyre` reports at the edge, printed and exiti
 
 ## Shutdown
 
+Quitting never relies on GPUI's quit hook alone: it runs for 200 ms (`SHUTDOWN_TIMEOUT`), and closing omp sessions takes longer, so the processes would outlive the app. The `Quit` action (bound to the platform's command key plus `q`) and the last window closing therefore shut the embedded gateway down in full, then call `cx.quit()`. The `on_app_quit` hook still starts a shutdown for quits that bypass both. A second request while one runs does nothing.
+
 On quit (`Context::on_app_quit`, gpui-pre 0.3.10, read on docs.rs; bounded by GPUI's `SHUTDOWN_TIMEOUT`): embedded mode shuts the gateway down, which closes every live session and its omp process tree (`SPEC-gateway.md`, `SPEC-omp-host.md`); then telemetry flushes and shuts down explicitly, logging any error. Remote mode closes the client only; the remote gateway's sessions stay live.
 
 ## Out of Scope (v1)

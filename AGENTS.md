@@ -21,7 +21,7 @@ alvin is a desktop client for the `omp` coding agent. A gateway owns one `omp --
 | `alvin-client` | **Typed client**: one client type; the transport (channel, `ws://`, `wss://`) is an implementation detail picked by endpoint. Builds for wasm32. | `alvin-protocol`, `jsonrpsee` client transports, `tokio`, `jiff`, `tracing`, `url`, `gloo-timers` and `wasm-bindgen-futures` (wasm only) |
 | `alvin-conversation` | **UI state**: projects, sessions, live turns, queue, history tree, folded from protocol events. No IO. Builds for wasm32. | `alvin-protocol`, `serde_json` |
 | `alvin-conversation-ui` | **UI views**: gpui-kit components rendering `alvin-conversation` state and issuing commands through `alvin-client`. | `alvin-conversation`, `alvin-client`, `alvin-protocol`, `gpui-kit`, `serde_json` |
-| `alvin-app` | **Face**: desktop binary. Owns config and argument parsing; embeds the gateway over the channel transport or connects to a `ws(s)://` URL. | `alvin-conversation-ui`, `alvin-client`, `alvin-gateway`, `gpui-kit`, `eyre`, `alvin-workspace-hack` |
+| `alvin-app` | **Face**: desktop binary. Owns config and argument parsing; embeds the gateway over the channel transport or connects to a `ws(s)://` URL. | `alvin-conversation-ui`, `alvin-client`, `alvin-gateway`, `gpui-kit`, `tokio`, `clap`, `confique`, `dirs`, `url`, `tracing`, `eyre`, `alvin-workspace-hack` |
 | `alvin-workspace-hack` | **Build-only**: `cargo-hakari` feature unification. | Managed by hakari only. |
 
 ### Dependency Rules (STRICT)

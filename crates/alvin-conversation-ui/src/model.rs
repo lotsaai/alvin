@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use alvin_client::{Client, ConnectionState, Error, ResyncReason};
 use alvin_conversation::{Connection, Conversation, SessionsKey};
 use alvin_protocol::{
-  BashRequest, ErrorCode, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest, OpenRequest,
-  OpenTarget, ProjectsApiClient, PromptRequest, SessionCursor, SessionId, SessionsApiClient, SubscribeRequest,
+  BashRequest, CheckoutId, ErrorCode, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesPage, MessagesRequest,
+  OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromptRequest, SessionCursor, SessionId, SessionsApiClient, SubscribeRequest,
 };
 use gpui_kit::{AsyncApp, Context, EventEmitter, SharedString, Task, WeakEntity};
 
@@ -153,17 +153,9 @@ impl Model {
     self.open(OpenTarget::Session { session }, cx);
   }
 
-  /// Opens a new session in a checkout.
-  pub fn new_session(&mut self, key: &SessionsKey, cx: &mut Context<Self>) {
-    if let Some(checkout) = key.checkout.clone() {
-      self.open(
-        OpenTarget::New {
-          project: key.project.clone(),
-          checkout,
-        },
-        cx,
-      );
-    }
+  /// Opens a new session in a checkout of a project.
+  pub fn new_session(&mut self, project: ProjectId, checkout: CheckoutId, cx: &mut Context<Self>) {
+    self.open(OpenTarget::New { project, checkout }, cx);
   }
 
   fn open(&mut self, target: OpenTarget, cx: &mut Context<Self>) {

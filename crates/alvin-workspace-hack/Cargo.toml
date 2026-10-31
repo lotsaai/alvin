@@ -10,28 +10,140 @@ description = "workspace-hack package, managed by hakari"
 
 ### BEGIN HAKARI SECTION
 [dependencies]
-aho-corasick = { version = "1" }
-log = { version = "0.4", default-features = false, features = ["std"] }
+anstyle = { version = "1" }
+arrayvec = { version = "0.7", default-features = false, features = ["std"] }
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive", "env"] }
+clap_builder = { version = "4", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
+crossbeam-utils = { version = "0.8" }
+form_urlencoded = { version = "1" }
+futures = { version = "0.3", features = ["bilock", "unstable"] }
+futures-channel = { version = "0.3", features = ["sink", "unstable"] }
+futures-core = { version = "0.3", features = ["unstable"] }
+futures-executor = { version = "0.3" }
+futures-sink = { version = "0.3" }
+gpui-base = { version = "0.8", default-features = false, features = ["test-support"] }
+gpui-component = { version = "0.8", default-features = false, features = ["test-support"] }
+gpui-kit = { version = "0.8", features = ["test-support"] }
+gpui-pre = { version = "0.3", features = ["test-support"] }
+gpui-pre-collections = { version = "0.3", default-features = false, features = ["test-support"] }
+gpui-pre-http-client = { version = "0.3", default-features = false, features = ["test-support"] }
+indexmap = { version = "2", features = ["serde"] }
+log = { version = "0.4", default-features = false, features = ["serde", "std"] }
 memchr = { version = "2" }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std"] }
-serde = { version = "1", features = ["alloc", "derive"] }
-serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
-serde_json = { version = "1", features = ["alloc", "raw_value"] }
+num-traits = { version = "0.2", features = ["i128", "libm"] }
+percent-encoding = { version = "2" }
+rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
+rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", default-features = false, features = ["small_rng", "std", "std_rng"] }
+rand_core = { version = "0.6", default-features = false, features = ["std"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
+regex-syntax = { version = "0.8" }
+rust-i18n-support = { version = "4", default-features = false, features = ["codegen"] }
+serde = { version = "1", features = ["alloc", "derive", "rc"] }
+serde_core = { version = "1", features = ["alloc", "rc"] }
+serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
+slab = { version = "0.4" }
+smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 tracing-core = { version = "0.1" }
+url = { version = "2", features = ["serde"] }
 winnow = { version = "1" }
+zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
+
+[target.aarch64-apple-darwin.dependencies]
+bitflags = { version = "2", default-features = false, features = ["std"] }
+errno = { version = "0.3" }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+gpui-pre-apple = { version = "0.3", features = ["font-kit", "runtime_shaders", "test-support"] }
+gpui-pre-macos = { version = "0.3", default-features = false, features = ["font-kit", "runtime_shaders", "test-support"] }
+gpui-pre-platform = { version = "0.3", features = ["font-kit", "runtime_shaders", "test-support", "wayland", "x11"] }
+once_cell = { version = "1" }
+rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
+semver = { version = "1", features = ["serde"] }
+typenum = { version = "1", default-features = false, features = ["const-generics"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-windows-sys = { version = "0.61", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Globalization", "Win32_Networking_WinSock", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
+bitflags = { version = "2", default-features = false, features = ["std"] }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+gpui-pre-platform = { version = "0.3", features = ["font-kit", "runtime_shaders", "test-support", "wayland", "x11"] }
+gpui-pre-windows = { version = "0.3", default-features = false, features = ["test-support"] }
+typenum = { version = "1", default-features = false, features = ["const-generics"] }
+windows-sys = { version = "0.61", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Globalization", "Win32_Networking_WinSock", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
+
+[target.x86_64-unknown-linux-gnu.dependencies]
+bitflags = { version = "2", default-features = false, features = ["std"] }
+crypto-common = { version = "0.1", default-features = false, features = ["std"] }
+digest = { version = "0.10", features = ["mac", "std"] }
+fastrand = { version = "2" }
+futures-util = { version = "0.3", features = ["bilock", "channel", "io", "sink", "unstable"] }
+getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+gpui-pre-platform = { version = "0.3", features = ["font-kit", "runtime_shaders", "test-support", "wayland", "x11"] }
+gpui-pre-wgpu = { version = "0.3", features = ["font-kit", "test-support"] }
+hashbrown = { version = "0.17", default-features = false, features = ["default-hasher", "inline-more"] }
+mio = { version = "1", features = ["net", "os-ext"] }
+once_cell = { version = "1" }
+phf_shared = { version = "0.13", default-features = false, features = ["std"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+smallvec = { version = "1", default-features = false, features = ["write"] }
+subtle = { version = "2" }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+tracing = { version = "0.1", features = ["log"] }
+typenum = { version = "1", default-features = false, features = ["const-generics"] }
+zeroize = { version = "1", features = ["zeroize_derive"] }
+zvariant = { version = "5", features = ["enumflags2", "gvariant", "serde_bytes"] }
 
 [build-dependencies]
+anstyle = { version = "1" }
 cc = { version = "1", default-features = false, features = ["parallel"] }
-proc-macro2 = { version = "1" }
+crossbeam-utils = { version = "0.8" }
+indexmap = { version = "2", features = ["serde"] }
+log = { version = "0.4", default-features = false, features = ["serde", "std"] }
+memchr = { version = "2" }
+num-traits = { version = "0.2", features = ["i128", "libm"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = { version = "1" }
+rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", default-features = false, features = ["small_rng", "std", "std_rng"] }
+rand_core = { version = "0.6", default-features = false, features = ["std"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
+regex-syntax = { version = "0.8" }
+rust-i18n-support = { version = "4", default-features = false, features = ["codegen"] }
+serde = { version = "1", features = ["alloc", "derive", "rc"] }
+serde_core = { version = "1", features = ["alloc", "rc"] }
+serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
+smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+toml_datetime = { version = "1", features = ["serde"] }
+toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 winnow = { version = "1" }
+zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
+
+[target.aarch64-apple-darwin.build-dependencies]
+bitflags = { version = "2", default-features = false, features = ["std"] }
+errno = { version = "0.3" }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+once_cell = { version = "1" }
+rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
+semver = { version = "1", features = ["serde"] }
+typenum = { version = "1", default-features = false, features = ["const-generics"] }
+
+[target.x86_64-pc-windows-msvc.build-dependencies]
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+typenum = { version = "1", default-features = false, features = ["const-generics"] }
+windows-sys = { version = "0.61", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Globalization", "Win32_Networking_WinSock", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
+
+[target.x86_64-unknown-linux-gnu.build-dependencies]
+fastrand = { version = "2" }
+getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
+hashbrown = { version = "0.17", default-features = false, features = ["default-hasher", "inline-more"] }
+once_cell = { version = "1" }
+phf_shared = { version = "0.13", default-features = false, features = ["std"] }
+smallvec = { version = "1", default-features = false, features = ["write"] }
+typenum = { version = "1", default-features = false, features = ["const-generics"] }
+zvariant = { version = "5", features = ["enumflags2", "gvariant", "serde_bytes"] }
 
 ### END HAKARI SECTION
