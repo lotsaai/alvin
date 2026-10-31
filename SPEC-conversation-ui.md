@@ -11,7 +11,7 @@ Success:
 - Every protocol method has a UI path that issues it, and every `EventBody` variant has a visible effect, both covered by tests.
 - A live turn streams into the transcript without re-rendering earlier rows; the transcript and history tree stay responsive with thousands of entries.
 - A reconnect, a `Resync`, an omp exit, and a wire error each have a defined, visible state; none leaves stale content on screen.
-- `cargo build --target wasm32-unknown-unknown -p alvin-conversation-ui` succeeds, through `mise check`.
+- `cargo build --target wasm32-unknown-unknown -p alvin-conversation-ui` succeeds. **Not met today:** gpui-kit's browser backend (`wasm_thread`) needs a nightly compiler and the project builds on stable. The crate has no wasm-specific code, and `mise check` guards its dependencies instead.
 
 ## Out of Scope
 

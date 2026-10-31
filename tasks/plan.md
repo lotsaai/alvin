@@ -179,11 +179,11 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 #### Task 12: UI browse and chat: sidebar, open, transcript, composer
 **Description:** `alvin-conversation-ui`: `model.rs` (`Entity<Model>`), `workspace.rs` (tabs), `sidebar.rs` (projects → checkouts → sessions, paged), `session.rs`, `transcript.rs` (`MessageScroller`, older pages on scroll), a generic JSON `tool_card.rs`, `composer.rs` (Enter → `live/prompt`, `!` → `live/bash`, Escape → abort/abortBash), `actions.rs` + `init`, and an event task per tab. Read each gpui-kit component page before using it.
 **Acceptance criteria:**
-- [ ] Headless tests against an embedded gateway with real omp: open a listed session and page its transcript; new session → prompt → streamed reply → settled; `!echo hi` runs bash; abort mid-turn.
-- [ ] Element ids come from domain ids. The view holds no domain state.
-- [ ] Builds for wasm32.
+- [x] Headless tests against an embedded gateway with real omp: open a listed session and page its transcript; new session → prompt → streamed reply → settled; `!echo hi` runs bash; abort mid-turn.
+- [x] Element ids come from domain ids. The view holds no domain state.
+- [ ] Builds for wasm32. **Not met.** gpui-kit's browser backend pulls in `wasm_thread 0.3.3`, which uses `#![feature(stdarch_wasm_atomic_wait)]` and so needs a nightly compiler; the project is on stable. The crate has no wasm-specific code. `mise check` instead guards that it depends on no gateway, omp host or session index outside dev-dependencies. Revisit when gpui-kit's web stack builds on stable.
 **Verification:** `mise format`; `mise run --force test`; `mise check`.
-**Dependencies:** 5, 11. **Files:** `crates/alvin-conversation-ui/src/{lib,actions,model,workspace,sidebar,session,transcript,tool_card,composer}.rs`. **Scope:** L.
+**Dependencies:** 5, 11. **Files:** `crates/alvin-conversation-ui/src/{lib,actions,model,workspace,sidebar,session,transcript,tool_card,composer,test_support}.rs`. **Scope:** L.
 
 #### Task 13: `alvin-app` face: config, embedded/remote, quit
 **Description:** `config.rs` (confique layers, `Settings` conversion, sessions-dir resolver that takes env as arguments), `app.rs` (runtime, embedded gateway or ws client, gpui-kit window, `on_app_quit` shutdown + telemetry flush), and the `mise dev` task.

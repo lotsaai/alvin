@@ -25,6 +25,13 @@ fi
 # alvin-conversation is pure state and builds for wasm32 too.
 cargo build --quiet --target wasm32-unknown-unknown -p alvin-conversation
 
+# alvin-conversation-ui is the views. gpui-kit's browser build needs a nightly compiler (wasm_thread uses unstable features),
+# so this crate is not built for wasm32 here. What it must keep: no gateway, omp host or session index outside dev-dependencies.
+if cargo tree --quiet -p alvin-conversation-ui --target all --edges normal | grep -E 'alvin-gateway|alvin-omp-host|alvin-session-index'; then
+	echo "alvin-conversation-ui must not depend on the gateway, the omp host or the session index outside dev-dependencies" >&2
+	exit 1
+fi
+
 mise run generate:omp-wire -- --check
 
 # The omp-rpc git tag in alvin-omp-host must name the same release as the pinned omp package.

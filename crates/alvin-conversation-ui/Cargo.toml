@@ -1,0 +1,19 @@
+[package]
+name = "alvin-conversation-ui"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "gpui-kit views over alvin-conversation state"
+
+[dependencies]
+alvin-client = { version = "0.1.0", path = "../alvin-client" }
+alvin-conversation = { version = "0.1.0", path = "../alvin-conversation" }
+alvin-protocol = { version = "0.1.0", path = "../alvin-protocol" }
+gpui-kit = "0.8.1"
+serde_json = "1.0.154"
+
+[dev-dependencies]
+alvin-gateway = { path = "../alvin-gateway" }
+alvin-omp-host = { path = "../alvin-omp-host" }
+gpui-kit = { version = "0.8.1", features = ["test-support"] }
+tokio = { version = "1.54.1", features = ["rt", "macros", "rt-multi-thread", "time"] }

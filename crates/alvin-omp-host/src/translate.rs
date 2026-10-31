@@ -23,25 +23,16 @@ impl Untranslated {
   }
 }
 
-/// The outcome of translating one event.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Translation {
-  /// A protocol event body.
-  Event(EventBody),
-  /// A frame the protocol does not expose.
-  Untranslated(Untranslated),
-}
-
-/// Translates one `omp-rpc` event.
-pub fn translate(event: Event) -> Translation {
+/// Translates one `omp-rpc` event into a protocol event body, or into the raw frame when the protocol does not expose it.
+pub fn translate(event: Event) -> Result<EventBody, Untranslated> {
   match event {
     Event::Notification(notification) => notification_body(notification),
     Event::UnmatchedResponse(response) => untranslated(&response),
-    Event::Undecodable { raw, error } => Translation::Event(EventBody::Undecodable { raw, error }),
+    Event::Undecodable { raw, error } => Ok(EventBody::Undecodable { raw, error }),
   }
 }
 
-fn notification_body(notification: RpcNotification) -> Translation {
+fn notification_body(notification: RpcNotification) -> Result<EventBody, Untranslated> {
   match notification {
     RpcNotification::RpcAgentEvent(member) => carry(&member, EventBody::Agent),
     RpcNotification::PromptResult(member) => carry(&member, EventBody::PromptResult),
@@ -53,7 +44,7 @@ fn notification_body(notification: RpcNotification) -> Translation {
     RpcNotification::SessionInfoUpdate(member) => carry(&member, EventBody::SessionInfoUpdate),
     RpcNotification::ConfigUpdate(member) => carry(&member, |member| EventBody::ConfigUpdate(Box::new(member))),
     RpcNotification::RpcFrameError(member) => carry(&member, EventBody::RpcFrameError),
-    RpcNotification::Unknown(frame) => Translation::Untranslated(Untranslated { frame }),
+    RpcNotification::Unknown(frame) => Err(Untranslated { frame }),
     // Startup handshake (consumed by the client), subagents, live voice, dictation and btw: not in the protocol.
     other => untranslated(&other),
   }
@@ -61,26 +52,26 @@ fn notification_body(notification: RpcNotification) -> Translation {
 
 /// Moves `member` into the protocol's type of the same name and wraps it. A value that does not convert becomes an
 /// `Undecodable` body carrying its JSON, so it is never silently lost.
-fn carry<T: Serialize, U: for<'de> Deserialize<'de>>(member: &T, wrap: fn(U) -> EventBody) -> Translation {
+fn carry<T: Serialize, U: for<'de> Deserialize<'de>>(member: &T, wrap: fn(U) -> EventBody) -> Result<EventBody, Untranslated> {
   match serde_json::to_value(member) {
     Ok(frame) => match U::deserialize(&frame) {
-      Ok(converted) => Translation::Event(wrap(converted)),
-      Err(error) => Translation::Event(EventBody::Undecodable {
+      Ok(converted) => Ok(wrap(converted)),
+      Err(error) => Ok(EventBody::Undecodable {
         raw: frame,
         error: error.to_string(),
       }),
     },
-    Err(error) => Translation::Event(EventBody::Undecodable {
+    Err(error) => Ok(EventBody::Undecodable {
       raw: Value::Null,
       error: error.to_string(),
     }),
   }
 }
 
-fn untranslated<T: Serialize>(member: &T) -> Translation {
+fn untranslated<T: Serialize>(member: &T) -> Result<EventBody, Untranslated> {
   match serde_json::to_value(member) {
-    Ok(frame) => Translation::Untranslated(Untranslated { frame }),
-    Err(error) => Translation::Event(EventBody::Undecodable {
+    Ok(frame) => Err(Untranslated { frame }),
+    Err(error) => Ok(EventBody::Undecodable {
       raw: Value::Null,
       error: error.to_string(),
     }),
@@ -121,8 +112,8 @@ mod tests {
     let mut bodies = Vec::new();
     for event in recorded() {
       match translate(event) {
-        Translation::Event(body) => bodies.push(body),
-        Translation::Untranslated(frame) => untranslated.push(frame.kind().to_owned()),
+        Ok(body) => bodies.push(body),
+        Err(frame) => untranslated.push(frame.kind().to_owned()),
       }
     }
 
@@ -136,13 +127,7 @@ mod tests {
 
   #[test]
   fn a_text_delta_keeps_its_text_and_a_prompt_result_its_status() {
-    let bodies: Vec<EventBody> = recorded()
-      .into_iter()
-      .filter_map(|event| match translate(event) {
-        Translation::Event(body) => Some(body),
-        Translation::Untranslated(_) => None,
-      })
-      .collect();
+    let bodies: Vec<EventBody> = recorded().into_iter().filter_map(|event| translate(event).ok()).collect();
 
     let delta = bodies.iter().find_map(|body| match body {
       EventBody::Agent(RpcAgentEvent::MessageUpdate(update)) => match &update.assistant_message_event {
@@ -165,7 +150,7 @@ mod tests {
 
     assert_eq!(
       translated,
-      Translation::Event(EventBody::Undecodable {
+      Ok(EventBody::Undecodable {
         raw,
         error: "missing field `message`".to_owned(),
       })
@@ -178,6 +163,6 @@ mod tests {
 
     let translated = translate(Event::Notification(RpcNotification::Unknown(frame.clone())));
 
-    assert_eq!(translated, Translation::Untranslated(Untranslated { frame }));
+    assert_eq!(translated, Err(Untranslated { frame }));
   }
 }

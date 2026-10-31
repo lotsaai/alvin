@@ -11,4 +11,4 @@ mod translate;
 pub use error::{Error, Result};
 pub use host::{Host, HostConfig, StartRequest};
 pub use session::Session;
-pub use translate::{Translation, Untranslated, translate};
+pub use translate::{Untranslated, translate};

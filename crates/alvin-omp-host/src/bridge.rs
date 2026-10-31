@@ -14,7 +14,7 @@ use std::thread::Builder;
 use alvin_protocol::EventBody;
 use tokio::sync::mpsc;
 
-use crate::translate::{Translation, translate};
+use crate::translate::translate;
 use crate::{Error, Result};
 
 /// A running pump and the async end of its channel.
@@ -60,13 +60,13 @@ fn pump(
 ) {
   for event in source {
     match translate(event) {
-      Translation::Event(body) => {
+      Ok(body) => {
         if sender.blocking_send(body).is_err() {
           // The consumer is gone, so there is nobody to deliver to. omp-rpc keeps serving calls without a reader.
           return;
         }
       }
-      Translation::Untranslated(frame) => {
+      Err(frame) => {
         let seen = untranslated.fetch_add(1, Ordering::Relaxed).saturating_add(1);
         tracing::debug!(cwd = %cwd.display(), kind = frame.kind(), seen, "omp frame not exposed by the protocol");
       }
