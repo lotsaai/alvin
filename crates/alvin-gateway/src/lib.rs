@@ -1,0 +1,14 @@
+//! Application boundary: implements the alvin protocol server traits and serves them over an in-process channel
+//! and over WebSocket.
+
+mod channel;
+mod config;
+mod error;
+mod gateway;
+mod listener;
+mod rpc;
+
+pub use config::GatewayConfig;
+pub use error::{Error, Result};
+pub use gateway::Gateway;
+pub use listener::WsServer;

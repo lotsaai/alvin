@@ -1,6 +1,6 @@
 //! The crate's error type.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Errors raised while indexing omp sessions.
 #[derive(Debug, thiserror::Error)]
@@ -72,6 +72,21 @@ pub enum Error {
     /// The session file.
     path: PathBuf,
   },
+}
+
+impl Error {
+  /// The directory, session file, or working directory the index was reading when it failed.
+  pub fn path(&self) -> &Path {
+    match self {
+      Self::ResolveWorkspace { cwd, .. } => cwd,
+      Self::CanonicalizeRoot { root, .. } => root,
+      Self::ReadDir { path, .. }
+      | Self::ReadFile { path, .. }
+      | Self::DecodeRecord { path, .. }
+      | Self::MisplacedTitleSlot { path, .. }
+      | Self::HeaderIncomplete { path } => path,
+    }
+  }
 }
 
 /// Result alias for this crate.

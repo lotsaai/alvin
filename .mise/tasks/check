@@ -15,4 +15,11 @@ cargo build --quiet --target wasm32-unknown-unknown -p alvin-protocol
 cargo build --quiet -p alvin-protocol --features server
 cargo clippy --quiet -p alvin-protocol --all-targets --features server -- -D warnings
 
+# alvin-client builds for wasm32 and links neither the gateway nor jsonrpsee's server half.
+cargo build --quiet --target wasm32-unknown-unknown -p alvin-client
+if cargo tree --quiet -p alvin-client --target all --edges normal | grep -E 'alvin-gateway|jsonrpsee-server'; then
+	echo "alvin-client must not depend on the gateway or jsonrpsee-server" >&2
+	exit 1
+fi
+
 mise run generate:omp-wire -- --check

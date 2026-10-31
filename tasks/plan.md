@@ -97,9 +97,9 @@ Execution is strictly sequential, one task at a time, in task-number order. Rust
 #### Task 4: `projects/list` end to end over channel and `ws://`
 **Description:** First gateway and client slice. Gateway: `config.rs` (`GatewayConfig`), `gateway.rs`, `rpc.rs` (merged `RpcModule`), `channel.rs` (`connect_channel`, tin `memory.rs` pattern), `listener.rs` (ws on any `AsyncRead + AsyncWrite`), and the `ProjectsApi` server. Client: `endpoint.rs`, `client.rs`, `channel.rs`, `ws.rs`, and `error.rs` (typed `ErrorData`, `UnknownCode`, `Disconnected`). Acceptance tests in `crates/alvin-gateway/tests/` cover both transports plus the pinned method list.
 **Acceptance criteria:**
-- [ ] `projects/list` returns the same projects over the channel and over `ws://127.0.0.1:0`.
-- [ ] A gateway error reaches the client as a typed error with its protocol code. No `String` flattening.
-- [ ] `alvin-client` builds for `wasm32` (in `mise check`) and does not depend on `alvin-gateway` or the jsonrpsee server crates.
+- [x] `projects/list` returns the same projects over the channel and over `ws://127.0.0.1:0`.
+- [x] A gateway error reaches the client as a typed error with its protocol code. No `String` flattening.
+- [x] `alvin-client` builds for `wasm32` (in `mise check`) and does not depend on `alvin-gateway` or the jsonrpsee server crates.
 **Verification:** `mise format`; `mise run --force test`; `mise check`.
 **Dependencies:** 3. **Files:** `crates/alvin-gateway/{Cargo.toml,src/{lib,error,config,gateway,rpc,channel,listener}.rs,tests/*}`, `crates/alvin-client/{Cargo.toml,src/{lib,error,endpoint,client,channel,ws}.rs}`. **Scope:** L, unavoidable for the first end-to-end path. Keep `rpc.rs` minimal.
 

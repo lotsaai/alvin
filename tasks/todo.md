@@ -11,7 +11,7 @@ Plan, acceptance criteria, and risks: `tasks/plan.md`. Every task ends with `mis
 
 ## Phase 2: Read-only path
 - [x] Task 3: Scan session headers and group projects
-- [ ] Task 4: `projects/list` end to end over channel and `ws://`
+- [x] Task 4: `projects/list` end to end over channel and `ws://`
 - [ ] Task 5: `sessions/list` with status and paging
 - [ ] Task 6: `alvind` face with telemetry and `wss://`
 

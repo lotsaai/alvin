@@ -7,26 +7,28 @@ mod omp_wire;
 mod projects;
 
 pub use error::{Error, Result};
-pub use error_codes::*;
+pub use error_codes::{ErrorCode, ErrorData};
 pub use ids::{CheckoutId, EventId, LiveSessionId, ProjectId, SessionId};
 pub use omp_wire::*;
-pub use projects::{CheckoutSummary, ProjectSummary, UnresolvedCause, Vcs};
+#[cfg(feature = "server")]
+pub use projects::ProjectsApiServer;
+pub use projects::{CheckoutSummary, ProjectSummary, ProjectsApiClient, UnresolvedCause, Vcs};
 
 #[cfg(test)]
 mod client_tests {
   use jsonrpsee::core::client::Error as ClientError;
   use jsonrpsee::types::ErrorObjectOwned;
 
-  use crate::STALE_CURSOR;
+  use crate::ErrorCode;
 
   /// The client half (default features) surfaces a gateway error with its stable code intact.
   #[test]
   fn client_half_keeps_the_wire_error_code() {
-    let wire = ErrorObjectOwned::owned(STALE_CURSOR, "cursor too old", None::<()>);
+    let wire = ErrorObjectOwned::owned(ErrorCode::StaleCursor.code(), "cursor too old", None::<()>);
     let json = serde_json::to_string(&wire).unwrap();
     let received: ErrorObjectOwned = serde_json::from_str(&json).unwrap();
     match ClientError::Call(received) {
-      ClientError::Call(error) => assert_eq!(error.code(), STALE_CURSOR),
+      ClientError::Call(error) => assert_eq!(error.code(), ErrorCode::StaleCursor.code()),
       other => panic!("unexpected client error: {other}"),
     }
   }

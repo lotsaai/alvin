@@ -1,0 +1,20 @@
+[package]
+name = "alvin-gateway"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "Application boundary: serves the alvin protocol over a channel transport and WebSocket"
+
+[dependencies]
+alvin-protocol = { version = "0.1.0", path = "../alvin-protocol", features = ["server"] }
+alvin-session-index = { version = "0.1.0", path = "../alvin-session-index" }
+alvin-workspace-hack = { version = "0.1.0", path = "../alvin-workspace-hack", default-features = false }
+jsonrpsee = { version = "0.26.1", default-features = false, features = ["server", "macros"] }
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["rt", "net", "sync", "macros"] }
+tracing = "0.1.44"
+typed-builder = "0.23.2"
+
+[dev-dependencies]
+alvin-client = { path = "../alvin-client" }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }

@@ -4,7 +4,7 @@ resolver = "2"
 
 platforms = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
-# alvin-protocol and alvin-client build for wasm32 without the jsonrpsee server half. Unifying
-# jsonrpsee's `server` features into the hack crate would turn them on for every build.
+# alvin-protocol and alvin-client build for wasm32 without the jsonrpsee server half, and without tokio's `net`
+# (mio does not build there). Unifying the gateway's features into the hack crate would turn them on everywhere.
 [traversal-excludes]
-third-party = [{ name = "jsonrpsee" }]
+third-party = [{ name = "jsonrpsee" }, { name = "tokio" }]

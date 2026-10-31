@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use jsonrpsee::proc_macros::rpc;
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{CheckoutId, ProjectId, SessionId};
@@ -72,6 +73,16 @@ pub enum ProjectSummary {
     /// The sessions recorded under this `cwd`.
     sessions: Vec<SessionId>,
   },
+}
+
+/// Repositories and their checkouts, from omp's session files.
+#[cfg_attr(feature = "server", rpc(client, server, namespace = "projects", namespace_separator = "/"))]
+#[cfg_attr(not(feature = "server"), rpc(client, namespace = "projects", namespace_separator = "/"))]
+pub trait ProjectsApi {
+  /// Every project with sessions: resolved repositories with their checkouts, plus one unresolved group per
+  /// recorded `cwd` whose repository can no longer be resolved.
+  #[method(name = "list")]
+  async fn list(&self) -> jsonrpsee::core::RpcResult<Vec<ProjectSummary>>;
 }
 
 #[cfg(test)]

@@ -12,4 +12,12 @@ description = "workspace-hack package, managed by hakari"
 [dependencies]
 memchr = { version = "2" }
 
+[build-dependencies]
+proc-macro2 = { version = "1" }
+quote = { version = "1" }
+syn = { version = "3", features = ["extra-traits", "fold", "visit"] }
+
+[target.wasm32-unknown-unknown.build-dependencies]
+syn = { version = "3", default-features = false, features = ["full", "visit-mut"] }
+
 ### END HAKARI SECTION
