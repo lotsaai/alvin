@@ -1,21 +1,23 @@
 //! Wire contract between the alvin gateway and its clients.
 
-pub mod error_codes;
-pub mod ids;
-pub mod omp_wire;
-pub mod projects;
-
 mod error;
+mod error_codes;
+mod ids;
+mod omp_wire;
+mod projects;
 
 pub use error::{Error, Result};
+pub use error_codes::*;
 pub use ids::{CheckoutId, EventId, LiveSessionId, ProjectId, SessionId};
+pub use omp_wire::*;
+pub use projects::{CheckoutSummary, ProjectSummary, UnresolvedCause, Vcs};
 
 #[cfg(test)]
 mod client_tests {
   use jsonrpsee::core::client::Error as ClientError;
   use jsonrpsee::types::ErrorObjectOwned;
 
-  use crate::error_codes::STALE_CURSOR;
+  use crate::STALE_CURSOR;
 
   /// The client half (default features) surfaces a gateway error with its stable code intact.
   #[test]

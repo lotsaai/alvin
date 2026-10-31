@@ -3,8 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use alvin_protocol::projects::{CheckoutSummary, ProjectSummary, UnresolvedCause, Vcs};
-use alvin_protocol::{CheckoutId, ProjectId, SessionId};
+use alvin_protocol::{CheckoutId, CheckoutSummary, ProjectId, ProjectSummary, SessionId, UnresolvedCause, Vcs};
 use code_workspace::Workspace;
 
 use crate::{Error, Result};
@@ -96,8 +95,7 @@ pub fn group(sessions: impl IntoIterator<Item = (PathBuf, SessionId)>) -> Result
 mod tests {
   use std::path::{Path, PathBuf};
 
-  use alvin_protocol::projects::{CheckoutSummary, ProjectSummary, UnresolvedCause, Vcs};
-  use alvin_protocol::{CheckoutId, ProjectId, SessionId};
+  use alvin_protocol::{CheckoutId, CheckoutSummary, ProjectId, ProjectSummary, SessionId, UnresolvedCause, Vcs};
 
   use super::group;
   use crate::scan;
