@@ -11,6 +11,13 @@ pub enum Error {
     /// The rejected value.
     id: Uuid,
   },
+
+  /// A digest id was not 64 lowercase hex digits.
+  #[error("{value:?} is not a 64-digit lowercase hex digest")]
+  InvalidDigest {
+    /// The rejected value.
+    value: String,
+  },
 }
 
 /// Result alias for this crate.

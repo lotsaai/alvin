@@ -1,0 +1,13 @@
+[package]
+name = "alvin-session-index"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "Read-only view of omp session files, grouped by project"
+
+[dependencies]
+alvin-protocol = { path = "../alvin-protocol" }
+alvin-workspace-hack = { version = "0.1", path = "../alvin-workspace-hack" }
+blake3 = "1.8.7"
+code-workspace = "0.2.0"
+thiserror = "2.0.21"

@@ -9,4 +9,7 @@ description = "workspace-hack package, managed by hakari"
 # list in the root Cargo.toml.
 
 ### BEGIN HAKARI SECTION
+[dependencies]
+memchr = { version = "2" }
+
 ### END HAKARI SECTION

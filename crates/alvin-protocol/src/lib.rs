@@ -3,11 +3,12 @@
 pub mod error_codes;
 pub mod ids;
 pub mod omp_wire;
+pub mod projects;
 
 mod error;
 
 pub use error::{Error, Result};
-pub use ids::{EventId, LiveSessionId};
+pub use ids::{CheckoutId, EventId, LiveSessionId, ProjectId, SessionId};
 
 #[cfg(test)]
 mod client_tests {
