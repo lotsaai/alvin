@@ -3,6 +3,7 @@
 use std::cell::Cell;
 
 use alvin_protocol::{LiveSessionId, WidgetPlacement};
+use gpui_kit::base::StyledExt as _;
 use gpui_kit::base::TestSupportExt as _;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -87,6 +88,7 @@ impl SessionView {
   fn send_button(&self) -> impl IntoElement {
     let (model, composer, live) = (self.model.clone(), self.composer.clone(), self.live);
     Button::new(self.id("session-send"))
+      .small()
       .primary()
       .label("Send")
       .on_click(move |_, window, cx| {
@@ -288,6 +290,61 @@ impl SessionView {
           }),
       )
   }
+
+  /// Session context alongside the transcript, derived from the same live state as the controls.
+  fn context_panel(&self, cx: &App) -> impl IntoElement {
+    let model = self.model.read(cx);
+    let view = model.conversation().live(self.live);
+    let mut panel = v_flex()
+      .id(self.id("session-context"))
+      .test_support()
+      .w(gpui_kit::rems(16.))
+      .min_w_0()
+      .h_full()
+      .border_l_1()
+      .border_color(cx.theme().border)
+      .p_4()
+      .gap_4()
+      .text_sm()
+      .child(div().font_semibold().child("Session"));
+    if let Some(view) = view {
+      panel = panel.child(
+        v_flex()
+          .gap_1()
+          .child(div().text_color(cx.theme().muted_foreground).child("Working directory"))
+          .child(div().child(SharedString::from(view.cwd.display().to_string()))),
+      );
+      if let Some(model) = &view.model {
+        panel = panel.child(
+          v_flex()
+            .gap_1()
+            .child(div().text_color(cx.theme().muted_foreground).child("Model"))
+            .child(div().child(SharedString::from(model.name.clone())))
+            .child(
+              div()
+                .text_color(cx.theme().muted_foreground)
+                .child(SharedString::from(model.provider.clone())),
+            ),
+        );
+      }
+      panel = panel.child(
+        v_flex()
+          .gap_1()
+          .child(div().text_color(cx.theme().muted_foreground).child("Messages"))
+          .child(div().child(SharedString::from(view.total_messages.to_string()))),
+      );
+    }
+    if let Some(stats) = model.stats(self.live) {
+      panel = panel.child(
+        v_flex()
+          .gap_1()
+          .child(div().text_color(cx.theme().muted_foreground).child("Usage"))
+          .child(div().child(SharedString::from(format!("{} tool calls", stats.tool_calls))))
+          .child(div().child(SharedString::from(format!("{} tokens", stats.tokens.total)))),
+      );
+    }
+    panel
+  }
 }
 
 /// Opens the rename dialog, with the session's current title typed in.
@@ -383,6 +440,7 @@ impl Render for SessionView {
       .items_stretch()
       .size_full()
       .child(column)
+      .children((!self.history_open).then(|| self.context_panel(cx)))
       .children(self.history_open.then(|| self.history.clone()))
   }
 }
@@ -439,6 +497,7 @@ mod tests {
       cx.update_window(opened.handle, |_, window, _| {
         assert_eq!(window.find(format!("session-status-{id}")).label(), Some("idle"));
         assert_eq!(window.find(format!("session-send-{id}")).label(), Some("Send"));
+        assert!(window.find(format!("session-context-{id}")).visible());
       })
       .unwrap();
     });
@@ -514,11 +573,16 @@ mod tests {
         .await;
       cx.update_window(opened.handle, |_, window, cx| {
         assert!(window.try_find("history-tree").is_some());
+        assert!(window.try_find(format!("session-context-{id}")).is_none());
         window.click(format!("history-toggle-{id}"), cx);
       })
       .unwrap();
       cx.wait_for(opened.handle, BUDGET, |window, _| window.try_find("history-tree").is_none())
         .await;
+      cx.update_window(opened.handle, |_, window, _| {
+        assert!(window.find(format!("session-context-{id}")).visible());
+      })
+      .unwrap();
     });
   }
 
@@ -565,6 +629,7 @@ mod tests {
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
   async fn a_slash_offers_omps_commands_and_enter_picks_one_instead_of_sending(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
     let executor = cx.foreground_executor().clone();
     executor.block_test(async {
       let (opened, session) = opened_session(cx).await;

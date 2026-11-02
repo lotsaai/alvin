@@ -7,10 +7,12 @@
 use std::ops::Range;
 use std::rc::Rc;
 
+use gpui_kit::base::TextViewDefaults;
+use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::input::{
   EditorState, FoldRange, HighlightStyleResolver, InputEdit, InputHighlighter, InputHighlighterFactory, Rope,
 };
-use gpui_kit::{Context, HighlightStyle, SharedString, Window};
+use gpui_kit::{App, Context, HighlightStyle, SharedString, Window};
 use verdant::Processor;
 use verdant::language_set::SupportedLanguage as _;
 use verdant_parsers_git::{Lang, LanguageSetImpl};
@@ -26,6 +28,30 @@ pub(crate) fn factory() -> InputHighlighterFactory {
   Rc::new(|language| (language == LANGUAGE).then(|| Box::new(MarkdownHighlighter::default()) as Box<dyn InputHighlighter>))
 }
 
+/// Installs code-fence highlighting using the active syntax theme.
+pub fn refresh_markdown_theme(cx: &mut App) {
+  let theme = cx.theme().highlight_theme.clone();
+  TextViewDefaults::global(cx)
+    .with_code_block_highlighter(move |block| {
+      let Some(language) = block.lang() else {
+        return Vec::new();
+      };
+      let code = block.code();
+      match highlight_language(&code, &language) {
+        Ok(highlights) => highlights
+          .into_iter()
+          .filter_map(|(range, key)| theme.style(theme_name(key)).map(|style| (range, style)))
+          .collect(),
+        Err(verdant::Error::UnsupportedLanguage(_)) => Vec::new(),
+        Err(error) => {
+          tracing::warn!(%error, %language, "code highlighting failed");
+          Vec::new()
+        }
+      }
+    })
+    .install(cx);
+}
+
 /// Parses the whole text on every change. Composer text is a few lines, so an incremental parse buys nothing.
 #[derive(Default)]
 struct MarkdownHighlighter {
@@ -35,12 +61,16 @@ struct MarkdownHighlighter {
 /// The highlighted ranges of `text`. Inline markup and fenced code are injected into the block grammar by verdant; a fence in
 /// a language this build has no grammar for stays unhighlighted.
 fn highlight(text: &str) -> verdant::Result<Highlights> {
+  highlight_language(text, LANGUAGE)
+}
+
+fn highlight_language(text: &str, language: &str) -> verdant::Result<Highlights> {
   thread_local! {
     // Compiled queries are cached per set, so one set per thread keeps every later parse cheap.
     static SET: LanguageSetImpl = LanguageSetImpl::new();
   }
   SET.with(|set| {
-    let language = Lang::for_name(LANGUAGE, set)?;
+    let language = Lang::for_name(language, set)?;
     let lines = Processor::process_once(text, language, set)?;
     let base = text.as_ptr() as usize;
     Ok(
@@ -116,7 +146,19 @@ impl InputHighlighter for MarkdownHighlighter {
 
 #[cfg(test)]
 mod tests {
-  use super::{highlight, theme_name};
+  use super::{highlight, highlight_language, theme_name};
+
+  #[test]
+  fn code_fences_use_language_grammars() {
+    let code = "fn main() { let n = 42; }\n";
+    let highlights = highlight_language(code, "rust").unwrap();
+    assert!(key_of(code, &highlights, "fn").is_some());
+    assert!(key_of(code, &highlights, "42").is_some());
+    assert!(matches!(
+      highlight_language(code, "not-a-language"),
+      Err(verdant::Error::UnsupportedLanguage(_))
+    ));
+  }
 
   /// The key verdant assigns to the first occurrence of `needle`, whatever else covers it.
   fn key_of<'t>(text: &str, highlights: &[(std::ops::Range<usize>, &'t str)], needle: &str) -> Option<&'t str> {

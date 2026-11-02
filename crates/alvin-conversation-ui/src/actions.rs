@@ -26,6 +26,7 @@ const TOGGLE_SIDEBAR_KEY: &str = "ctrl-b";
 
 /// Registers this crate's key bindings. Call after `gpui_kit::init`.
 pub fn init(cx: &mut App) {
+  crate::markdown::refresh_markdown_theme(cx);
   cx.bind_keys([
     KeyBinding::new("escape", Abort, Some(SESSION_CONTEXT)),
     KeyBinding::new(TOGGLE_SIDEBAR_KEY, ToggleSidebar, Some(WORKSPACE_CONTEXT)),

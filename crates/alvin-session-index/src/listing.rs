@@ -6,16 +6,16 @@ use std::io::{BufRead, BufReader};
 
 use alvin_protocol::{SessionCursor, SessionPage, SessionStatus, SessionSummary};
 
-use crate::header::{SessionHead, has_assistant_marker};
+use crate::header::{SessionHead, first_user_title, has_assistant_marker};
 use crate::status::{is_assistant_message, read_tail, status_of};
 use crate::{Error, Result};
 
 /// The sessions of `heads` after `after`, newest first, at most `limit` of them.
 ///
 /// Order is by modification time, then id, so a [`SessionCursor`] names an exact position and paging returns every
-/// session exactly once. Only the tail of a file whose turn comes is read: pages before it never touch it.
-/// Sessions omp hides from its own picker are skipped, by omp's rule: no title, a `Pending` or `Unknown` status,
-/// and no assistant turn anywhere in the file. They do not count toward `limit`.
+/// session exactly once. Only files whose turn comes are read beyond their head window. If the head has no title,
+/// the first user message is sought in the rest of the file. Sessions with no title, a `Pending` or `Unknown`
+/// status, and no assistant turn anywhere in the file are skipped. They do not count toward `limit`.
 pub fn list_page(mut heads: Vec<SessionHead>, after: Option<&SessionCursor>, limit: usize) -> Result<SessionPage> {
   heads.sort_by(|a, b| (Reverse(a.modified), Reverse(&a.id)).cmp(&(Reverse(b.modified), Reverse(&b.id))));
   let remaining = heads
@@ -24,8 +24,12 @@ pub fn list_page(mut heads: Vec<SessionHead>, after: Option<&SessionCursor>, lim
 
   let mut sessions = Vec::new();
   let mut more = false;
-  for head in remaining {
+  for mut head in remaining {
     let (status, assistant_in_tail) = tail_status(&head)?;
+    if head.title.is_none() {
+      let file = File::open(&head.path).map_err(|source| read_file(&head, source))?;
+      head.title = first_user_title(&head.path, BufReader::new(file))?;
+    }
     if head.title.is_none()
       && matches!(status, SessionStatus::Pending | SessionStatus::Unknown)
       && !head.assistant_in_head

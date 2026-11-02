@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
 #MISE description="Run the desktop app"
-#MISE sources=["Cargo.toml", "Cargo.lock", "crates/**/*.rs", "crates/**/Cargo.toml"]
+#MISE sources=["Cargo.toml", "Cargo.lock", "crates/**/*.rs", "crates/**/Cargo.toml", "assets/chipmunk-mascot.webp", ".mise/tasks/package"]
 
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
 
 set -euo pipefail
 
+if [[ "$(uname -s)" == "Darwin" ]]; then
+	mise run package
+	exec "$proj_dir/target/debug/Alvin.app/Contents/MacOS/alvin-app" "$@"
+fi
 cargo run --quiet -p alvin-app -- "$@"

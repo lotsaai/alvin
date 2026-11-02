@@ -2,17 +2,54 @@
 
 use alvin_conversation::LiveView;
 use alvin_protocol::{AgentMessage, AssistantContent, LiveSessionId, MessageContent, UserContent};
-use gpui_kit::component::bubble::{Bubble, BubbleVariant};
+use gpui_kit::component::bubble::{Bubble, BubbleContent, BubbleVariant};
 use gpui_kit::component::marker::{Marker, MarkerContent, MarkerLoadingStyle, MarkerVariant};
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent as MessageBody, MessageHeader};
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{ActiveTheme as _, v_flex};
-use gpui_kit::{AnyElement, App, ElementId, Entity, IntoElement as _, ParentElement as _, SharedString, Styled as _, Window, div};
+use gpui_kit::{
+  AnyElement, App, ElementId, Entity, Global, Hsla, IntoElement as _, ParentElement as _, SharedString, Styled as _, Window, div,
+};
 use serde_json::Value;
 
 use crate::model::Model;
 use crate::tool_card::{ToolCard, fenced};
+
+/// Application-provided colors for user message bubbles.
+///
+/// Install this global before refreshing windows after a theme change. If absent,
+/// user messages use the active theme's primary colors.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UserMessageColors {
+  background: Hsla,
+  foreground: Hsla,
+}
+
+impl UserMessageColors {
+  /// Creates user message colors from a background and its contrasting foreground.
+  pub fn new(background: Hsla, foreground: Hsla) -> Self {
+    Self { background, foreground }
+  }
+
+  /// Returns the user message background.
+  pub fn background(&self) -> Hsla {
+    self.background
+  }
+
+  /// Returns the user message foreground.
+  pub fn foreground(&self) -> Hsla {
+    self.foreground
+  }
+
+  fn current(cx: &App) -> Self {
+    cx.try_global::<Self>()
+      .copied()
+      .unwrap_or_else(|| Self::new(cx.theme().primary, cx.theme().primary_foreground))
+  }
+}
+
+impl Global for UserMessageColors {}
 
 /// How many rows the transcript has: every committed message and, while one is being built, the streaming message.
 pub(crate) fn row_count(view: &LiveView) -> usize {
@@ -47,7 +84,7 @@ fn row(model: &Entity<Model>, live: LiveSessionId, index: usize, cx: &App) -> An
     }
   };
   let id = SharedString::from(id);
-  let body = message_row(&id, message, view, cx);
+  let body = message_row(&id, message, view, streaming, cx);
   if !streaming {
     return body;
   }
@@ -65,14 +102,22 @@ fn row(model: &Entity<Model>, live: LiveSessionId, index: usize, cx: &App) -> An
     .into_any_element()
 }
 
-fn message_row(id: &SharedString, message: &AgentMessage, view: &LiveView, cx: &App) -> AnyElement {
+fn message_row(id: &SharedString, message: &AgentMessage, view: &LiveView, streaming: bool, cx: &App) -> AnyElement {
   let row = Message::new().id(ElementId::from(id.clone()));
   match message {
     AgentMessage::User(user) => {
       let text = user.content.as_ref().map(content_text).unwrap_or_default();
+      let colors = UserMessageColors::current(cx);
       row
         .alignment(MessageAlignment::End)
-        .content(MessageBody::new().bubble(Bubble::new().with_variant(BubbleVariant::Filled).child(SharedString::from(text))))
+        .content(
+          MessageBody::new().bubble(
+            Bubble::new()
+              .with_variant(BubbleVariant::Filled)
+              .content(BubbleContent::new().bg(colors.background()).text_color(colors.foreground()))
+              .child(TextView::markdown(SharedString::from(format!("{id}-text")), text)),
+          ),
+        )
         .into_any_element()
     }
     AgentMessage::Assistant(assistant) => {
@@ -81,7 +126,7 @@ fn message_row(id: &SharedString, message: &AgentMessage, view: &LiveView, cx: &
         .iter()
         .flatten()
         .enumerate()
-        .map(|(position, block)| assistant_block(id, position, block, view, cx))
+        .map(|(position, block)| assistant_block(id, position, block, view, streaming, cx))
         .collect::<Vec<_>>();
       row
         .header(MessageHeader::new().child("omp"))
@@ -152,11 +197,20 @@ fn message_row(id: &SharedString, message: &AgentMessage, view: &LiveView, cx: &
 }
 
 /// One block of an assistant message.
-fn assistant_block(row: &SharedString, position: usize, block: &AssistantContent, view: &LiveView, cx: &App) -> AnyElement {
+fn assistant_block(
+  row: &SharedString,
+  position: usize,
+  block: &AssistantContent,
+  view: &LiveView,
+  streaming: bool,
+  cx: &App,
+) -> AnyElement {
   let part = SharedString::from(format!("{row}-{position}"));
   let marker = |part: SharedString, text: &'static str| Marker::new().id(part).content(MarkerContent::new().text(text)).into_any_element();
   match block {
-    AssistantContent::Text(text) => TextView::markdown(part, text.text.clone().unwrap_or_default()).into_any_element(),
+    AssistantContent::Text(text) => TextView::markdown(part, text.text.clone().unwrap_or_default())
+      .stream_fade(streaming)
+      .into_any_element(),
     AssistantContent::Thinking(thinking) => div()
       .text_sm()
       .text_color(cx.theme().muted_foreground)
@@ -237,15 +291,34 @@ mod tests {
   use std::time::Duration;
 
   use alvin_protocol::MessagesPage;
+  use gpui_kit::component::ActiveTheme as _;
   use gpui_kit::test::{TestAppContextExt as _, TestEventExt as _, TestQueryExt as _};
   use gpui_kit::{AppContext as _, MouseButton, TestAppContext};
 
+  use super::UserMessageColors;
   use crate::test_support::{live_session, open_workspace};
 
   const BUDGET: Duration = Duration::from_secs(1);
 
   /// An omp turn that called every built-in tool once, as omp recorded it.
   const TOOLS_TURN: &str = include_str!("../fixtures/tools_turn.messages.json");
+
+  #[gpui_kit::test]
+  fn user_message_colors_follow_global_or_primary_theme(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+      gpui_kit::init(cx);
+      let default = UserMessageColors::current(cx);
+      assert_eq!(default.background(), cx.theme().primary);
+      assert_eq!(default.foreground(), cx.theme().primary_foreground);
+
+      let chosen = UserMessageColors::new(cx.theme().foreground, cx.theme().background);
+      cx.set_global(chosen);
+      assert_eq!(UserMessageColors::current(cx), chosen);
+
+      cx.set_global(default);
+      assert_eq!(UserMessageColors::current(cx), default);
+    });
+  }
 
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]

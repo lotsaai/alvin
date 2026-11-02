@@ -169,10 +169,13 @@ dependencies = [
  "dirs 7.0.0",
  "eyre",
  "gpui-kit",
+ "serde_json",
+ "thiserror 2.0.21",
  "tokio",
  "toml_edit 0.25.17+spec-1.1.0",
  "tracing",
  "url",
+ "verdant-themes",
 ]
 
 [[package]]
@@ -298,6 +301,7 @@ dependencies = [
  "anstyle",
  "arrayvec",
  "bitflags 2.13.2",
+ "byteorder",
  "cc",
  "chrono",
  "clap",
@@ -337,6 +341,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "percent-encoding",
+ "phf_shared 0.12.1",
  "phf_shared 0.13.1",
  "proc-macro2",
  "quote",
@@ -862,7 +867,7 @@ dependencies = [
  "bitflags 2.13.2",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -4014,7 +4019,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.57.0",
 ]
 
 [[package]]
@@ -7669,7 +7674,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8050abb251097357e24aff63ba2c52a6309ecb7d23a5474023df960a02694d8"
 dependencies = [
  "annotate-snippets",
- "base64 0.23.1",
+ "base64 0.22.1",
  "encoding_rs_io",
  "granit-parser",
  "nohash-hasher",
@@ -9292,7 +9297,7 @@ checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 [[package]]
 name = "verdant"
 version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#948e6f6616c1c912919123ebc09fb69856a7a909"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
 dependencies = [
  "aho-corasick",
  "thiserror 2.0.21",
@@ -9303,7 +9308,7 @@ dependencies = [
 [[package]]
 name = "verdant-core"
 version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#948e6f6616c1c912919123ebc09fb69856a7a909"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
 dependencies = [
  "palate",
  "palette",
@@ -9315,7 +9320,7 @@ dependencies = [
 [[package]]
 name = "verdant-highlight"
 version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#948e6f6616c1c912919123ebc09fb69856a7a909"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
 dependencies = [
  "regex",
  "streaming-iterator",
@@ -9326,7 +9331,7 @@ dependencies = [
 [[package]]
 name = "verdant-macros"
 version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#948e6f6616c1c912919123ebc09fb69856a7a909"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
 dependencies = [
  "heck 0.5.0",
  "once_cell",
@@ -9341,7 +9346,7 @@ dependencies = [
 [[package]]
 name = "verdant-parsers-git"
 version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#948e6f6616c1c912919123ebc09fb69856a7a909"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
 dependencies = [
  "cc",
  "once_cell",
@@ -9356,7 +9361,15 @@ dependencies = [
 [[package]]
 name = "verdant-queries"
 version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#948e6f6616c1c912919123ebc09fb69856a7a909"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
+
+[[package]]
+name = "verdant-themes"
+version = "0.7.3"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
+dependencies = [
+ "verdant-core",
+]
 
 [[package]]
 name = "version_check"
@@ -9880,7 +9893,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

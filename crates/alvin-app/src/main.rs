@@ -2,12 +2,17 @@
 
 mod app;
 mod config;
+mod error;
+mod project_preferences;
 mod settings;
 #[cfg(test)]
 mod test_support;
 
 use alvin_gateway::{Service, Telemetry};
 use clap::Parser as _;
+use error::Error;
+
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 fn main() -> eyre::Result<()> {
   let settings = config::Cli::parse().settings()?;

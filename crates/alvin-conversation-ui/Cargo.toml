@@ -15,7 +15,7 @@ lsp-types = "0.97.0"
 serde_json = "1.0.154"
 tracing = "0.1.44"
 verdant = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3" }
-verdant-parsers-git = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3", features = ["markdown", "markdown_inline"] }
+verdant-parsers-git = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3", features = ["markdown", "markdown_inline", "some"] }
 
 [dev-dependencies]
 alvin-gateway = { path = "../alvin-gateway" }

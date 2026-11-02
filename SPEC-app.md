@@ -59,6 +59,37 @@ Sources, highest precedence first (confique's builder: earlier sources win):
 
 Missing files are skipped, as confique and crumbs do. No project-local file: alvin is not scoped to one repository. No secrets file: the app holds no credentials.
 
+Settings provide independent `light_theme` and `dark_theme` selections from the Verdant catalog. Their defaults are
+`github::light` and `github::dark`. `appearance` selects `system`, `light`, or `dark`; system mode switches between the
+two selections when the window appearance changes. The corresponding command-line flags and environment variables
+are `--light-theme` / `ALVIN_LIGHT_THEME`, `--dark-theme` / `ALVIN_DARK_THEME`, and `--appearance` /
+`ALVIN_APPEARANCE`. `accent_color` defaults to `module`; `user_message_color` defaults to `operator` and may be
+`accent` to follow the accent selection. Both accept the representative Verdant keys; their flags and environment
+variables are `--accent-color` / `ALVIN_ACCENT_COLOR` and `--user-message-color` / `ALVIN_USER_MESSAGE_COLOR`.
+Settings presents compact, keyboard-accessible color samples instead of the internal keys: accent samples resemble
+buttons, message samples resemble bubbles, and a check marks the current selection. Selected samples retain their
+hover-strength theme color when the pointer moves away, with a separate keyboard focus indicator. `Use accent` previews
+and follows the current accent. Samples resolve from the active Verdant theme and update when appearance or theme changes.
+Appearance, theme, and color selections save and apply immediately. Each gateway field saves independently when Enter
+is pressed, then reconnects if the effective gateway changed. Unsubmitted edits in other fields are not saved. The
+existing source precedence still applies, and save or connection errors appear in settings.
+The sidebar's settings control opens Settings; Back to sessions returns to the workspace and restores its focus.
+
+Project aliases, pins, and hidden projects, plus pinned and hidden sessions within each project, are local presentation
+preferences. They are stored in `projects.json` beside the writable `config.toml` (or beside the file passed with
+`--config-file`) and apply across gateway reconnects. Delete in the project menu hides a project; restoring it does not
+change omp files. A missing preferences file starts empty; older entries without session lists start with empty lists.
+Malformed or unreadable preferences stop startup; save errors appear in the window and the unsaved change is reverted.
+
+Verdant's `_normal` supplies base foreground and background. Exact `comment`, `markup.list.unchecked`,
+`ibl.indent.char.1`, and `ibl.whitespace.char.1` provide muted text, borders, and control surfaces when available;
+missing interface shades are derived from base colors. Secondary panes are derived away from the foreground, and
+selection blends the muted text into the background at 25%. Accent and user-message colors resolve through Verdant's
+`find_style`: exact key, dotted parent, then theme foreground. The user-message foreground chooses the higher-contrast
+theme foreground or background, falling back to black or white when needed for 4.5:1 contrast. Links resolve from
+`function`, the caret from `markup.link.url`, and status colors from `diff.plus`, `diff.minus`, `comment.warning`,
+and `comment.note`. Missing status styles retain GPUI Kit's mode defaults. Mapping is independent of theme name.
+
 After loading, `AppConfig` converts once into `Settings`, an enum: `Remote(Url)` when `endpoint` is set, else `Embedded { omp, model, sessions_dir }` with the sessions directory resolved. The conversion is the only check, and it is syntactic (`AGENTS.md`, Faces): `endpoint` must be `ws` or `wss`; `endpoint` together with `gateway.model` or `gateway.sessions_dir` from any source is an error naming both keys, since they configure a gateway the app does not start. Whether the executable or directory exists, or the model is valid, is decided by the gateway or omp and surfaces as their typed errors.
 
 ### omp sessions directory
@@ -79,7 +110,19 @@ When `gateway.sessions_dir` is absent, the face resolves it from omp's own rules
 2. Telemetry: `alvin_gateway::telemetry` with service name `alvin-app` and the crate version (`SPEC-gateway.md`, Telemetry). First, before runtime threads start.
 3. `#[tokio::main]` supplies the runtime (`skill://gpui-tokio-client-wiring`). No other runtime is created.
 4. Embedded: build `GatewayConfig` from the settings, start the gateway, take its channel pair (`Gateway::connect_channel`, `SPEC-client.md`), and connect `Client::connect(Endpoint::Channel(pair))`. Remote: `Client::connect(Endpoint::WebSocket(url))`.
-5. `gpui_kit::application().with_assets(gpui_kit::assets::Assets).run(..)`: `gpui_kit::init(cx)`, then `alvin_conversation_ui::init(cx)` (actions and key bindings), then open the window with gpui-kit's `Root` over `Workspace::new(client, ..)`.
+5. `gpui_kit::application().with_assets(..).run(..)`: register GPUI Kit's default assets plus the selected `GitFork` and `Smartphone` icons, then `gpui_kit::init(cx)`, `alvin_conversation_ui::init(cx)` (actions and key bindings), and open the window with gpui-kit's `Root` over `Workspace::new(client, ..)`.
+
+The face supplies the local user name to the workspace from `USER` on Unix or `USERNAME` on Windows. A missing or
+blank value leaves the neutral “Local user” identity; a non-Unicode value is reported as a startup error. Gateway
+reconnection carries the displayed identity to the replacement workspace. This is a local display name, not an
+authenticated account.
+
+On macOS GPUI Kit `TitleBar::window_options()` provides transparent full-size content and native traffic lights; the
+sidebar header supplies the matching `TitleBar`. Other platforms retain their default native window decorations.
+
+On macOS, `mise run package` builds `target/debug/Alvin.app` and generates its `Alvin.icns` from
+`assets/chipmunk-mascot.webp`. `mise dev` runs the bundled executable so macOS can use the bundle icon;
+running the raw `target/debug/alvin-app` binary does not provide bundle icon metadata.
 
 Errors before the window opens are `eyre` reports at the edge, printed and exiting non-zero. After the window opens, errors are the UI's (`SPEC-conversation-ui.md`).
 
@@ -92,8 +135,7 @@ On quit (`Context::on_app_quit`, gpui-pre 0.3.10, read on docs.rs; bounded by GP
 ## Out of Scope (v1)
 
 - A web face. `alvin-protocol`, `alvin-client`, and `alvin-conversation-ui` build for wasm32 so it can be added; a browser entry point (`wasm-bindgen`, served bundle, fonts, per gpui-kit's WebAssembly docs) is a later module.
-- Packaging, signing, installers, and `dist/` tasks.
-- A config file and settings UI.
+- Signing, installers, and distribution tasks.
 
 ## Dependencies
 
@@ -105,7 +147,8 @@ On quit (`Context::on_app_quit`, gpui-pre 0.3.10, read on docs.rs; bounded by GP
 crates/alvin-app/src/main.rs       thin: settings, telemetry, run
 crates/alvin-app/src/config.rs     confique schema, layer loading, Settings conversion, sessions-directory resolution
 crates/alvin-app/src/app.rs        gateway or remote client, window, quit hook
-.mise/tasks/dev                    cargo run -p alvin-app (SPEC-scaffold.md)
+.mise/tasks/dev                    run the desktop app; uses the macOS bundle on macOS
+.mise/tasks/package                build the macOS application bundle
 ```
 
 ## Testing Strategy

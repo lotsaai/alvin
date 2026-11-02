@@ -4,16 +4,42 @@
 //! the last window closing, which shut the gateway down in full and only then ask GPUI to quit. The hook stays as a
 //! best-effort start for the cases that bypass both, such as a platform quit.
 
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use alvin_client::{ChannelPair, Client, Endpoint};
 use alvin_conversation_ui::{Model, Workspace};
 use alvin_gateway::Gateway;
-use gpui_kit::{App, AppContext as _, Bounds, Entity, KeyBinding, WindowBounds, WindowOptions, actions, px, size};
+use gpui_kit::component::TitleBar;
+use gpui_kit::{
+  App, AppContext as _, AssetSource, Bounds, Entity, KeyBinding, SharedString, WindowBounds, WindowOptions, actions, px, size,
+};
 
 use crate::config::{Configuration, Settings, gateway_config};
+use crate::project_preferences::ProjectPreferencesFile;
 use crate::settings::AppView;
+
+gpui_kit::assets::icon_assets!(ExtraIcons, [GitFork, Smartphone]);
+
+struct AppAssets;
+
+impl AssetSource for AppAssets {
+  fn load(&self, path: &str) -> gpui_kit::Result<Option<Cow<'static, [u8]>>> {
+    if let Some(bytes) = ExtraIcons.load(path)? {
+      return Ok(Some(bytes));
+    }
+    gpui_kit::assets::Assets.load(path)
+  }
+
+  fn list(&self, path: &str) -> gpui_kit::Result<Vec<SharedString>> {
+    let mut paths = gpui_kit::assets::Assets.list(path)?;
+    paths.extend(ExtraIcons.list(path)?);
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+  }
+}
 
 actions!(
   alvin_app,
@@ -65,6 +91,20 @@ pub(crate) async fn connect(settings: &Settings) -> eyre::Result<(Client, Embedd
   }
 }
 
+fn local_user_name(value: Result<String, std::env::VarError>) -> Result<Option<String>, std::env::VarError> {
+  match value {
+    Ok(name) if name.trim().is_empty() => Ok(None),
+    Ok(name) => Ok(Some(name)),
+    Err(std::env::VarError::NotPresent) => Ok(None),
+    Err(error) => Err(error),
+  }
+}
+
+fn read_local_user_name() -> Result<Option<String>, std::env::VarError> {
+  let variable = if cfg!(windows) { "USERNAME" } else { "USER" };
+  local_user_name(std::env::var(variable))
+}
+
 /// Opens the window and registers the quit paths. Returns the workspace.
 #[cfg(test)]
 pub(crate) fn start(cx: &mut App, client: Client, embedded: Embedded) -> eyre::Result<Entity<Workspace>> {
@@ -72,6 +112,15 @@ pub(crate) fn start(cx: &mut App, client: Client, embedded: Embedded) -> eyre::R
 }
 
 fn start_with_config(cx: &mut App, client: Client, embedded: Embedded, config: Option<Configuration>) -> eyre::Result<Entity<Workspace>> {
+  let user_name = read_local_user_name()?;
+  let preferences_file = config
+    .as_ref()
+    .map(|config| ProjectPreferencesFile::new(config.project_preferences_path()));
+  let preferences = preferences_file
+    .as_ref()
+    .map(ProjectPreferencesFile::load)
+    .transpose()?
+    .unwrap_or_default();
   gpui_kit::init(cx);
   alvin_conversation_ui::init(cx);
   cx.bind_keys([KeyBinding::new(QUIT_KEY, Quit, None)]);
@@ -110,15 +159,22 @@ fn start_with_config(cx: &mut App, client: Client, embedded: Embedded, config: O
   let (_window, _) = gpui_kit::open_window(
     WindowOptions {
       window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1200.), px(800.))))),
-      ..Default::default()
+      ..if cfg!(target_os = "macos") {
+        TitleBar::window_options()
+      } else {
+        WindowOptions::default()
+      }
     },
     cx,
     |window, cx| {
       let model = cx.new(|cx| Model::new(client, cx));
       model.update(cx, |model, cx| model.refresh_projects(cx)).detach();
       let view = cx.new(|cx| Workspace::new(model, window, cx));
+      if let Some(name) = user_name {
+        view.update(cx, |workspace, cx| workspace.set_user_name(name, cx));
+      }
       *saved_workspace.borrow_mut() = Some(view.clone());
-      cx.new(|cx| AppView::new(view, embedded, config, window, cx))
+      cx.new(|cx| AppView::new(view, embedded, config, preferences_file, preferences, window, cx))
     },
   )
   .map_err(|error| eyre::eyre!("opening the main window: {error}"))?;
@@ -148,7 +204,7 @@ pub(crate) fn run(settings: Configuration) -> eyre::Result<()> {
   let (client, embedded) = runtime.block_on(connect(&settings.gateway))?;
   let failure = Rc::new(RefCell::new(None));
   let reported = Rc::clone(&failure);
-  gpui_kit::application().with_assets(gpui_kit::assets::Assets).run(move |cx| {
+  gpui_kit::application().with_assets(AppAssets).run(move |cx| {
     if let Err(error) = start_with_config(cx, client, embedded, Some(settings)) {
       *reported.borrow_mut() = Some(error);
       cx.quit();
@@ -164,8 +220,32 @@ mod tests {
   use alvin_protocol::{BashRequest, LiveApiClient};
   use gpui_kit::TestAppContext;
 
-  use super::{Embedded, Quit, start};
+  use super::{AppAssets, Embedded, Quit, local_user_name, start};
   use crate::test_support::{Child, Fixture, sleeper};
+
+  #[test]
+  fn application_assets_include_sidebar_and_default_icons() {
+    use gpui_kit::AssetSource as _;
+
+    for path in ["icons/git-fork.svg", "icons/smartphone.svg", "icons/settings.svg"] {
+      assert!(AppAssets.load(path).unwrap().is_some(), "missing {path}");
+    }
+  }
+
+  #[test]
+  fn local_user_name_preserves_absence_and_decoding_errors() {
+    use std::env::VarError;
+    use std::ffi::OsString;
+
+    assert_eq!(local_user_name(Ok("alice".to_owned())).unwrap(), Some("alice".to_owned()));
+    assert_eq!(local_user_name(Ok("  ".to_owned())).unwrap(), None);
+    assert_eq!(local_user_name(Err(VarError::NotPresent)).unwrap(), None);
+    let invalid = OsString::from("invalid");
+    assert_eq!(
+      local_user_name(Err(VarError::NotUnicode(invalid.clone()))).unwrap_err(),
+      VarError::NotUnicode(invalid)
+    );
+  }
 
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]

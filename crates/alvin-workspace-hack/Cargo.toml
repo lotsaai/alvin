@@ -12,10 +12,12 @@ description = "workspace-hack package, managed by hakari"
 [dependencies]
 anstyle = { version = "1" }
 arrayvec = { version = "0.7", default-features = false, features = ["std"] }
+byteorder = { version = "1" }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 clap_builder = { version = "4", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
 crossbeam-utils = { version = "0.8" }
+fastrand = { version = "2" }
 form_urlencoded = { version = "1" }
 futures = { version = "0.3", features = ["bilock", "unstable"] }
 futures-channel = { version = "0.3", features = ["sink", "unstable"] }
@@ -33,10 +35,11 @@ log = { version = "0.4", default-features = false, features = ["serde", "std"] }
 memchr = { version = "2" }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 percent-encoding = { version = "2" }
+phf_shared-5ef9efb8ec2df382 = { package = "phf_shared", version = "0.12", default-features = false, features = ["std"] }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", default-features = false, features = ["small_rng", "std", "std_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 rust-i18n-support = { version = "4", default-features = false, features = ["codegen"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
@@ -74,13 +77,12 @@ gpui-pre-platform = { version = "0.3", features = ["font-kit", "runtime_shaders"
 gpui-pre-windows = { version = "0.3", default-features = false, features = ["test-support"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Registry", "Win32_System_Time", "Win32_UI_Shell"] }
-windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_Debug"] }
+windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_SystemInformation"] }
 windows-sys-d4189bed749088b6 = { package = "windows-sys", version = "0.61", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
 digest = { version = "0.10", features = ["mac", "std"] }
-fastrand = { version = "2" }
 futures-util = { version = "0.3", features = ["bilock", "channel", "io", "sink", "unstable"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
@@ -90,7 +92,7 @@ hashbrown = { version = "0.17", default-features = false, features = ["default-h
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
 mio = { version = "1", features = ["net", "os-ext"] }
 once_cell = { version = "1" }
-phf_shared = { version = "0.13", default-features = false, features = ["std"] }
+phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 rustix = { version = "1", features = ["event", "net", "pipe", "process", "shm", "system", "time"] }
 smallvec = { version = "1", default-features = false, features = ["write"] }
@@ -105,15 +107,17 @@ zvariant = { version = "5", features = ["enumflags2", "gvariant", "serde_bytes"]
 anstyle = { version = "1" }
 cc = { version = "1", default-features = false, features = ["parallel"] }
 crossbeam-utils = { version = "0.8" }
+fastrand = { version = "2" }
 indexmap = { version = "2", features = ["serde"] }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
 memchr = { version = "2" }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
+phf_shared-5ef9efb8ec2df382 = { package = "phf_shared", version = "0.12", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = { version = "1" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", default-features = false, features = ["small_rng", "std", "std_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 rust-i18n-support = { version = "4", default-features = false, features = ["codegen"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
@@ -142,14 +146,14 @@ typenum = { version = "1", default-features = false, features = ["const-generics
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Registry", "Win32_System_Time", "Win32_UI_Shell"] }
+windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_SystemInformation"] }
 windows-sys-d4189bed749088b6 = { package = "windows-sys", version = "0.61", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-fastrand = { version = "2" }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 hashbrown = { version = "0.17", default-features = false, features = ["default-hasher", "inline-more"] }
 once_cell = { version = "1" }
-phf_shared = { version = "0.13", default-features = false, features = ["std"] }
+phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13", default-features = false, features = ["std"] }
 smallvec = { version = "1", default-features = false, features = ["write"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 zvariant = { version = "5", features = ["enumflags2", "gvariant", "serde_bytes"] }

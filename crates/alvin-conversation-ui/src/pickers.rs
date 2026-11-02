@@ -156,12 +156,12 @@ impl Pickers {
         Select::new(&self.models)
           .id("model-picker")
           .accessibility_label("Model")
-          .small()
+          .xsmall()
           .menu_width(rems(20.)),
       )
       .child(
         Button::new(ElementId::from("model-cycle"))
-          .small()
+          .xsmall()
           .ghost()
           .label("Next model")
           .on_click(move |_, _, cx| cycle_model.update(cx, |model, cx| model.cycle_model(live, cx)).detach()),
@@ -170,11 +170,11 @@ impl Pickers {
         Select::new(&self.levels)
           .id("thinking-picker")
           .accessibility_label("Thinking level")
-          .small(),
+          .xsmall(),
       )
       .child(
         Button::new(ElementId::from("thinking-cycle"))
-          .small()
+          .xsmall()
           .ghost()
           .label("Next thinking")
           .on_click(move |_, _, cx| cycle_thinking.update(cx, |model, cx| model.cycle_thinking(live, cx)).detach()),

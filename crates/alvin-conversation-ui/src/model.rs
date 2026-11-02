@@ -6,11 +6,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use alvin_client::{Client, ConnectionState, Error, ResyncReason};
 use alvin_conversation::{Connection, Conversation, Notice, Run, SessionsKey};
 use alvin_protocol::{
-  BashRequest, CheckoutId, CompactRequest, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode, ErrorData, ExportRequest,
-  ExtensionUiResponse, ForkRequest, LabelRequest, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesPage,
-  MessagesRequest, ModelApiClient, ModelInfo, NavigateRequest, OpenRequest, OpenTarget, ProjectId, ProjectsApiClient, PromoteQueuedRequest,
-  PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RenameRequest, RespondRequest, SessionCursor, SessionId,
-  SessionStats, SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest, ThinkingLevel,
+  BashRequest, CheckoutId, CompactRequest, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode, ErrorData, EventId,
+  ExportRequest, ExtensionUiResponse, ForkRequest, LabelRequest, ListSessions, LiveApiClient, LiveSessionId, LiveSessionSummary,
+  MessagesPage, MessagesRequest, ModelApiClient, ModelInfo, NavigateRequest, OpenRequest, OpenTarget, ProjectId, ProjectsApiClient,
+  PromoteQueuedRequest, PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest, RenameRequest, RespondRequest,
+  SessionCursor, SessionId, SessionPage, SessionStats, SessionsApiClient, SetModelRequest, SetThinkingRequest, SubscribeRequest,
+  ThinkingLevel,
 };
 use gpui_kit::{AsyncApp, Context, EventEmitter, SharedString, Task, WeakEntity};
 
@@ -27,8 +28,13 @@ pub enum ModelEvent {
     /// What went wrong, for the user.
     message: SharedString,
   },
-  /// A live session was opened and is tracked.
-  Opened(LiveSessionId),
+  /// A live session was opened and is tracked, with the navigation intent that requested it.
+  Opened {
+    /// The tracked session.
+    live: LiveSessionId,
+    /// The navigation intent that requested the open.
+    intent: EventId,
+  },
   /// A live session was closed.
   Closed(LiveSessionId),
   /// Text for a session's composer: queued messages an abort withdrew (one per line), or what an extension asked to put
@@ -64,6 +70,68 @@ pub(crate) struct Catalog {
   pub(crate) levels: Vec<ThinkingLevel>,
 }
 
+#[derive(Default)]
+struct PageLoads {
+  generations: BTreeMap<SessionsKey, EventId>,
+}
+
+struct PageLoad {
+  key: SessionsKey,
+  after: Option<SessionCursor>,
+  expected: Option<Option<SessionCursor>>,
+  generation: EventId,
+}
+
+impl PageLoads {
+  fn start(&mut self, conversation: &Conversation, key: SessionsKey, after: Option<SessionCursor>) -> PageLoad {
+    let generation = if after.is_none() {
+      let generation = EventId::new();
+      self.generations.insert(key.clone(), generation);
+      generation
+    } else {
+      *self.generations.entry(key.clone()).or_default()
+    };
+    let expected = conversation.workspace().sessions(&key).map(|list| list.next.clone());
+    PageLoad {
+      key,
+      after,
+      expected,
+      generation,
+    }
+  }
+
+  fn apply(&self, conversation: &mut Conversation, load: PageLoad, page: SessionPage) -> bool {
+    let current = conversation.workspace().sessions(&load.key).map(|list| list.next.clone());
+    if self.generations.get(&load.key) != Some(&load.generation)
+      || current != load.expected
+      || load
+        .after
+        .as_ref()
+        .is_some_and(|after| current.as_ref().and_then(Option::as_ref) != Some(after))
+    {
+      return false;
+    }
+    conversation.load_sessions(load.key, load.after.as_ref(), page);
+    true
+  }
+}
+
+#[derive(Default)]
+struct Navigation {
+  intent: EventId,
+}
+
+impl Navigation {
+  fn begin(&mut self) -> EventId {
+    self.intent = EventId::new();
+    self.intent
+  }
+
+  fn is_current(&self, intent: EventId) -> bool {
+    self.intent == intent
+  }
+}
+
 /// Projects, sessions and live sessions, and the commands that change them.
 pub struct Model {
   catalogs: BTreeMap<LiveSessionId, Catalog>,
@@ -76,6 +144,9 @@ pub struct Model {
   /// The counts omp last gave for each session.
   stats: BTreeMap<LiveSessionId, SessionStats>,
   conversation: Conversation,
+  session_ids: BTreeMap<LiveSessionId, SessionId>,
+  page_loads: PageLoads,
+  navigation: Navigation,
   client: Client,
   /// Live sessions with a `!` command running, so Escape aborts that and not the turn.
   bash_running: BTreeSet<LiveSessionId>,
@@ -115,6 +186,9 @@ impl Model {
       summarizing: BTreeSet::new(),
       stats: BTreeMap::new(),
       conversation: Conversation::default(),
+      session_ids: BTreeMap::new(),
+      page_loads: PageLoads::default(),
+      navigation: Navigation::default(),
       client,
       bash_running: BTreeSet::new(),
       sessions: BTreeMap::new(),
@@ -203,19 +277,21 @@ impl Model {
   /// Loads a page of a checkout's sessions, newest first. Without a cursor it is the first page and replaces the list.
   pub fn load_sessions(&mut self, key: SessionsKey, after: Option<SessionCursor>, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
+    let load = self.page_loads.start(&self.conversation, key, after);
     cx.spawn(async move |this, cx| {
       let request = ListSessions {
-        project: key.project.clone(),
-        checkout: key.checkout.clone(),
-        after: after.clone(),
+        project: load.key.project.clone(),
+        checkout: load.key.checkout.clone(),
+        after: load.after.clone(),
         limit: SESSIONS_PAGE,
       };
       match SessionsApiClient::list(&client, request).await.map_err(Error::from) {
         Ok(page) => {
           if this
             .update(cx, |model, cx| {
-              model.conversation.load_sessions(key, after.as_ref(), page);
-              cx.notify();
+              if model.page_loads.apply(&mut model.conversation, load, page) {
+                cx.notify();
+              }
             })
             .is_err()
           {
@@ -224,6 +300,63 @@ impl Model {
         }
         Err(error) => fail(&this, cx, &error),
       }
+    })
+  }
+  /// Loads every remaining session page for the currently known checkouts.
+  pub(crate) fn load_all_sessions(&mut self, cx: &mut Context<Self>) -> Task<bool> {
+    let client = self.client.clone();
+    let keys: Vec<_> = self
+      .conversation
+      .workspace()
+      .projects()
+      .iter()
+      .flat_map(|project| {
+        project.checkouts.iter().map(|checkout| SessionsKey {
+          project: project.id.clone(),
+          checkout: Some(checkout.id.clone()),
+        })
+      })
+      .collect();
+    cx.spawn(async move |this, cx| {
+      for key in keys {
+        loop {
+          let load = match this.update(cx, |model, _| {
+            let after = match model.conversation.workspace().sessions(&key) {
+              Some(list) => list.next.clone().map(Some),
+              None => Some(None),
+            }?;
+            Some(model.page_loads.start(&model.conversation, key.clone(), after))
+          }) {
+            Ok(Some(after)) => after,
+            Ok(None) => break,
+            Err(_) => return false,
+          };
+          let request = ListSessions {
+            project: load.key.project.clone(),
+            checkout: load.key.checkout.clone(),
+            after: load.after.clone(),
+            limit: SESSIONS_PAGE,
+          };
+          let page = match SessionsApiClient::list(&client, request).await.map_err(Error::from) {
+            Ok(page) => page,
+            Err(error) => {
+              fail(&this, cx, &error);
+              return false;
+            }
+          };
+          if this
+            .update(cx, |model, cx| {
+              if model.page_loads.apply(&mut model.conversation, load, page) {
+                cx.notify();
+              }
+            })
+            .is_err()
+          {
+            return false;
+          }
+        }
+      }
+      true
     })
   }
 
@@ -238,6 +371,11 @@ impl Model {
   }
 
   fn open(&mut self, target: OpenTarget, cx: &mut Context<Self>) -> Task<()> {
+    let session = match &target {
+      OpenTarget::Session { session } => Some(session.clone()),
+      OpenTarget::New { .. } => None,
+    };
+    let intent = self.navigation.begin();
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let opened = LiveApiClient::open(&client, OpenRequest { target, model: None })
@@ -245,7 +383,7 @@ impl Model {
         .map_err(Error::from);
       match opened {
         Ok(summary) => {
-          if this.update(cx, |model, cx| model.opened(summary, cx)).is_err() {
+          if this.update(cx, |model, cx| model.opened(summary, session, intent, cx)).is_err() {
             tracing::debug!("model released before the command finished");
           }
         }
@@ -254,15 +392,37 @@ impl Model {
     })
   }
 
-  fn opened(&mut self, summary: LiveSessionSummary, cx: &mut Context<Self>) {
+  fn opened(&mut self, summary: LiveSessionSummary, session: Option<SessionId>, intent: EventId, cx: &mut Context<Self>) {
     let live = summary.live;
+    if let Some(session) = session {
+      self.session_ids.insert(live, session);
+    }
     self.conversation.open(&summary);
     if !self.sessions.contains_key(&live) {
       let task = self.attach(live, cx);
       self.sessions.insert(live, task);
     }
-    cx.emit(ModelEvent::Opened(live));
+    cx.emit(ModelEvent::Opened { live, intent });
     cx.notify();
+  }
+
+  pub(crate) fn navigation_is_current(&self, intent: EventId) -> bool {
+    self.navigation.is_current(intent)
+  }
+
+  pub(crate) fn session_id(&self, live: LiveSessionId) -> Option<&SessionId> {
+    self.session_ids.get(&live)
+  }
+
+  fn set_state(&mut self, live: LiveSessionId, state: &alvin_protocol::SessionState) {
+    if self.conversation.live(live).is_some() {
+      self.session_ids.insert(live, SessionId::from(state.session_id.clone()));
+      self.conversation.set_state(live, state);
+    }
+  }
+
+  pub(crate) fn select_tab(&mut self) {
+    self.navigation.begin();
   }
 
   /// Loads a live session's state and transcript, then folds its events until it is closed. A stream that cannot
@@ -274,7 +434,7 @@ impl Model {
         match load(&client, live).await {
           Ok((state, page)) => {
             let loaded = this.update(cx, |model, cx| {
-              model.conversation.set_state(live, &state);
+              model.set_state(live, &state);
               model.conversation.load_page(live, page);
               model.load_catalog(live, cx);
               model.refresh_tree(live, cx);
@@ -567,7 +727,7 @@ impl Model {
       Ok((state, page)) => {
         if this
           .update(cx, |model, cx| {
-            model.conversation.set_state(live, &state);
+            model.set_state(live, &state);
             model.conversation.load_page(live, page);
             if new_file {
               model.conversation.forget_tree(live);
@@ -838,7 +998,7 @@ impl Model {
         Ok(state) => {
           if this
             .update(cx, |model, cx| {
-              model.conversation.set_state(live, &state);
+              model.set_state(live, &state);
               cx.notify();
             })
             .is_err()
@@ -968,6 +1128,7 @@ impl Model {
               model.stats.remove(&live);
               model.catalogs.remove(&live);
               model.tree_reads.remove(&live);
+              model.session_ids.remove(&live);
               model.conversation.close(live);
               cx.emit(ModelEvent::Closed(live));
               cx.notify();
@@ -1007,7 +1168,11 @@ impl Model {
   /// Tracks a live session and announces it, as `live/open` would have. No omp starts.
   pub(crate) fn seed_open(&mut self, summary: &LiveSessionSummary, cx: &mut Context<Self>) {
     self.conversation.open(summary);
-    cx.emit(ModelEvent::Opened(summary.live));
+    let intent = self.navigation.begin();
+    cx.emit(ModelEvent::Opened {
+      live: summary.live,
+      intent,
+    });
     cx.notify();
   }
 
@@ -1077,5 +1242,76 @@ fn fail(this: &WeakEntity<Model>, cx: &mut AsyncApp, error: &Error) {
   let event = failure(error);
   if this.update(cx, |_, cx| cx.emit(event)).is_err() {
     tracing::debug!("model released before the command finished");
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use alvin_conversation::{Conversation, SessionsKey};
+  use alvin_protocol::{ProjectId, SessionCursor, SessionPage};
+
+  use super::{Navigation, PageLoads};
+  use crate::test_support::session_summary;
+
+  fn page(id: &str, next: Option<SessionCursor>) -> SessionPage {
+    SessionPage {
+      sessions: vec![session_summary(id, id)],
+      next,
+    }
+  }
+
+  #[test]
+  fn refresh_rejects_older_refresh_and_pages_even_when_cursor_is_unchanged() {
+    let key = SessionsKey {
+      project: ProjectId::from("project".to_owned()),
+      checkout: None,
+    };
+    let other = SessionsKey {
+      project: ProjectId::from("other".to_owned()),
+      checkout: None,
+    };
+    let mut conversation = Conversation::default();
+    let mut loads = PageLoads::default();
+    let cursor = SessionCursor {
+      modified: session_summary("cursor", "cursor").modified,
+      id: alvin_protocol::SessionId::from("cursor".to_owned()),
+    };
+    let first = loads.start(&conversation, key.clone(), None);
+    assert!(loads.apply(&mut conversation, first, page("initial", Some(cursor.clone()))));
+    let old_page = loads.start(&conversation, key.clone(), Some(cursor.clone()));
+    let old_refresh = loads.start(&conversation, key.clone(), None);
+    let unrelated = loads.start(&conversation, other.clone(), None);
+    let latest = loads.start(&conversation, key.clone(), None);
+    assert!(loads.apply(&mut conversation, latest, page("latest", Some(cursor.clone()))));
+    assert!(!loads.apply(&mut conversation, old_refresh, page("stale", Some(cursor.clone()))));
+    assert!(!loads.apply(&mut conversation, old_page, page("stale-page", None)));
+    assert!(loads.apply(&mut conversation, unrelated, page("other", None)));
+    assert_eq!(conversation.workspace().sessions(&key).unwrap().sessions[0].id.as_str(), "latest");
+    assert_eq!(conversation.workspace().sessions(&other).unwrap().sessions[0].id.as_str(), "other");
+
+    let wrong_cursor = SessionCursor {
+      id: alvin_protocol::SessionId::from("wrong".to_owned()),
+      ..cursor.clone()
+    };
+    let wrong = loads.start(&conversation, key.clone(), Some(wrong_cursor));
+    assert!(!loads.apply(&mut conversation, wrong, page("wrong", None)));
+    let next = loads.start(&conversation, key.clone(), Some(cursor.clone()));
+    let duplicate = loads.start(&conversation, key.clone(), Some(cursor));
+    assert!(loads.apply(&mut conversation, next, page("next", None)));
+    assert!(!loads.apply(&mut conversation, duplicate, page("duplicate", None)));
+    assert_eq!(conversation.workspace().sessions(&key).unwrap().sessions.len(), 2);
+  }
+
+  #[test]
+  fn latest_navigation_intent_wins_even_if_older_open_completes_last() {
+    let mut navigation = Navigation::default();
+    let first_open = navigation.begin();
+    let second_open = navigation.begin();
+    assert!(navigation.is_current(second_open));
+    assert!(!navigation.is_current(first_open));
+    let pending_open = navigation.begin();
+    let tab_switch = navigation.begin();
+    assert!(navigation.is_current(tab_switch));
+    assert!(!navigation.is_current(pending_open));
   }
 }

@@ -21,5 +21,7 @@ mod transcript;
 mod workspace;
 
 pub use actions::{Abort, ToggleSidebar, init};
+pub use markdown::refresh_markdown_theme;
 pub use model::{Model, ModelEvent};
-pub use workspace::Workspace;
+pub use transcript::UserMessageColors;
+pub use workspace::{ProjectPreference, ProjectPreferences, Workspace, WorkspaceEvent};

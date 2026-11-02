@@ -1,6 +1,7 @@
 //! Typed parsing of the head of an omp session file: the optional title slot, the session header, and the
 //! records that fit in the window after it.
 
+use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
 use alvin_protocol::SessionId;
@@ -141,6 +142,36 @@ fn torn_user_text(fragment: &[u8]) -> Option<String> {
   Some(serde_json::from_str::<String>(&format!("\"{raw}\"")).unwrap_or_else(|_| raw.to_owned()))
 }
 
+/// Finds the first user message when it lies beyond the head window.
+pub(crate) fn first_user_title(path: &Path, mut reader: impl BufRead) -> Result<Option<String>> {
+  let mut line = Vec::new();
+  let mut offset = 0;
+  loop {
+    line.clear();
+    let count = reader.read_until(b'\n', &mut line).map_err(|source| Error::ReadFile {
+      path: path.to_path_buf(),
+      source,
+    })?;
+    if count == 0 {
+      return Ok(None);
+    }
+    let Some(record) = line.strip_suffix(b"\n") else {
+      return Ok(torn_user_text(&line).as_deref().and_then(sanitize));
+    };
+    let entry: Entry = serde_json::from_slice(record).map_err(|source| Error::DecodeRecord {
+      path: path.to_path_buf(),
+      offset,
+      source,
+    })?;
+    if let Entry::Message { message } = entry
+      && message.role == "user"
+    {
+      return Ok(sanitize(&text_of(&message.content)));
+    }
+    offset += count;
+  }
+}
+
 /// Parses the head bytes of the session file at `path`, last modified at `modified`. Complete lines are decoded;
 /// the line cut off by the end of the window is a torn record, which can only still name the session.
 pub(crate) fn parse(path: &Path, head: &[u8], modified: Timestamp) -> Result<SessionHead> {
@@ -217,7 +248,7 @@ pub(crate) fn parse(path: &Path, head: &[u8], modified: Timestamp) -> Result<Ses
 mod tests {
   use std::path::Path;
 
-  use super::parse;
+  use super::{first_user_title, parse};
   use crate::Error;
   use crate::test_support::{TempDir, run_omp};
 
@@ -227,6 +258,21 @@ mod tests {
 
   fn user_message(text: &str) -> String {
     format!(r#"{{"type":"message","id":"u1","message":{{"role":"user","content":[{{"type":"text","text":"{text}"}}]}}}}"#)
+  }
+
+  #[test]
+  fn finds_first_user_title_after_large_metadata_records() {
+    let records = format!(
+      "{{\"type\":\"custom\",\"data\":\"{}\"}}\n{{\"type\":\"custom_message\",\"content\":\"{}\"}}\n{}\n{}\n",
+      "x".repeat(5000),
+      "y".repeat(5000),
+      user_message("hi are you there?"),
+      user_message("later")
+    );
+
+    let title = first_user_title(Path::new("s.jsonl"), records.as_bytes()).unwrap();
+
+    assert_eq!(title.as_deref(), Some("hi are you there?"));
   }
 
   /// The head of a real omp session: the title slot line, then the header line.

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+#MISE description="Build the macOS application bundle"
+
+set -euo pipefail
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir"
+
+cargo build --quiet -p alvin-app
+
+bundle="$proj_dir/target/debug/Alvin.app/Contents"
+iconset=$(mktemp -d "${TMPDIR:-/tmp}/alvin.XXXXXX")
+trap 'rm -rf "$iconset"' EXIT
+mkdir -p "$iconset/Alvin.iconset" "$bundle/MacOS" "$bundle/Resources"
+for size in 16 32 128 256 512; do
+	sips -s format png -z "$size" "$size" assets/chipmunk-mascot.webp --out "$iconset/Alvin.iconset/icon_${size}x${size}.png" >/dev/null
+	double=$((size * 2))
+	sips -s format png -z "$double" "$double" assets/chipmunk-mascot.webp --out "$iconset/Alvin.iconset/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset/Alvin.iconset" -o "$bundle/Resources/Alvin.icns"
+cp target/debug/alvin-app "$bundle/MacOS/alvin-app"
+cat >"$bundle/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key><string>alvin-app</string>
+  <key>CFBundleIdentifier</key><string>app.alvin.desktop</string>
+  <key>CFBundleName</key><string>Alvin</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>Alvin</string>
+</dict>
+</plist>
+PLIST

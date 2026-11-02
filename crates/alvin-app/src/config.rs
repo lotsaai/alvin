@@ -9,6 +9,70 @@ use confique::Config as _;
 use eyre::{bail, eyre};
 use url::Url;
 
+/// Verdant style keys offered for interface colors.
+pub(crate) const COLOR_CHOICES: &[ColorChoice] = &[
+  ColorChoice("markup.link.url"),
+  ColorChoice("constructor.lua"),
+  ColorChoice("attribute.builtin"),
+  ColorChoice("keyword"),
+  ColorChoice("diff.minus"),
+  ColorChoice("markup.italic"),
+  ColorChoice("attribute"),
+  ColorChoice("type"),
+  ColorChoice("string"),
+  ColorChoice("character"),
+  ColorChoice("constructor"),
+  ColorChoice::OPERATOR,
+  ColorChoice("function"),
+  ColorChoice::MODULE,
+];
+
+/// A supported Verdant color key, or the user-message accent sentinel.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ColorChoice(&'static str);
+
+impl ColorChoice {
+  pub(crate) const MODULE: Self = Self("module");
+  pub(crate) const OPERATOR: Self = Self("operator");
+  pub(crate) const ACCENT: Self = Self("accent");
+
+  pub(crate) fn as_str(self) -> &'static str {
+    self.0
+  }
+}
+
+impl std::str::FromStr for ColorChoice {
+  type Err = String;
+
+  fn from_str(value: &str) -> Result<Self, Self::Err> {
+    COLOR_CHOICES
+      .iter()
+      .copied()
+      .chain([Self::ACCENT])
+      .find(|choice| choice.as_str() == value)
+      .ok_or_else(|| format!("unknown color choice: {value}"))
+  }
+}
+
+impl std::fmt::Display for ColorChoice {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(self.0)
+  }
+}
+
+impl<'de> confique::serde::Deserialize<'de> for ColorChoice {
+  fn deserialize<D: confique::serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    let value = <String as confique::serde::Deserialize>::deserialize(deserializer)?;
+    value.parse().map_err(confique::serde::de::Error::custom)
+  }
+}
+
+impl confique::serde::Serialize for ColorChoice {
+  fn serialize<S: confique::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(self.0)
+  }
+}
+
 /// What the app reads from its sources.
 #[derive(confique::Config, Debug, Clone)]
 #[config(layer_attr(derive(clap::Args, Clone)))]
@@ -23,6 +87,22 @@ pub struct AppConfig {
   #[config(default = "system", env = "ALVIN_APPEARANCE")]
   #[config(layer_attr(arg(long)))]
   pub appearance: String,
+  /// Verdant theme used in light appearance.
+  #[config(default = "github::light", env = "ALVIN_LIGHT_THEME")]
+  #[config(layer_attr(arg(long)))]
+  pub light_theme: String,
+  /// Verdant theme used in dark appearance.
+  #[config(default = "github::dark", env = "ALVIN_DARK_THEME")]
+  #[config(layer_attr(arg(long)))]
+  pub dark_theme: String,
+  /// Verdant key used for primary interface color.
+  #[config(default = "module", env = "ALVIN_ACCENT_COLOR")]
+  #[config(layer_attr(arg(long)))]
+  pub accent_color: ColorChoice,
+  /// Verdant key used for user messages, or `accent` to follow the accent.
+  #[config(default = "operator", env = "ALVIN_USER_MESSAGE_COLOR")]
+  #[config(layer_attr(arg(long)))]
+  pub user_message_color: ColorChoice,
   /// The embedded gateway's settings. They do not apply to a remote gateway, which is configured where it runs.
   #[config(nested)]
   #[config(layer_attr(command(flatten)))]
@@ -96,6 +176,7 @@ impl Cli {
     let config = load(self.config.clone(), &files)?;
     let gateway = settings(config.clone(), &home, |name| std::env::var_os(name))?;
     Appearance::parse(&config.appearance)?;
+    validate_themes(&config)?;
     Ok(Configuration {
       config,
       gateway,
@@ -155,6 +236,18 @@ impl Appearance {
   }
 }
 
+fn validate_themes(config: &AppConfig) -> eyre::Result<()> {
+  if config.accent_color == ColorChoice::ACCENT {
+    bail!("accent_color must be a Verdant color key");
+  }
+  for name in [&config.light_theme, &config.dark_theme] {
+    if !verdant_themes::THEMES.contains(&name.as_str()) {
+      bail!("unknown Verdant theme: {name}");
+    }
+  }
+  Ok(())
+}
+
 /// Config sources and the currently effective settings.
 pub(crate) struct Configuration {
   pub(crate) config: AppConfig,
@@ -166,11 +259,35 @@ pub(crate) struct Configuration {
 }
 
 impl Configuration {
+  pub(crate) fn project_preferences_path(&self) -> PathBuf {
+    self.path.with_file_name("projects.json")
+  }
+
+  #[cfg(test)]
+  pub(crate) fn for_test(path: PathBuf) -> eyre::Result<Self> {
+    use confique::Layer as _;
+
+    let flags = <AppConfig as confique::Config>::Layer::empty();
+    let files = vec![path.clone()];
+    let config = load(flags.clone(), &files)?;
+    let home = path.parent().ok_or_else(|| eyre!("config path has no parent"))?.to_path_buf();
+    let gateway = settings(config.clone(), &home, |name| std::env::var_os(name))?;
+    Ok(Self {
+      config,
+      gateway,
+      path,
+      files,
+      flags,
+      home,
+    })
+  }
+
   /// Writes only known keys while retaining the rest of the TOML document.
   pub(crate) fn save(&mut self, config: AppConfig) -> eyre::Result<()> {
     use std::io::Write as _;
 
     Appearance::parse(&config.appearance)?;
+    validate_themes(&config)?;
     settings(config.clone(), &self.home, |name| std::env::var_os(name))?;
     let target = match std::fs::symlink_metadata(&self.path) {
       Ok(metadata) if metadata.file_type().is_symlink() => std::fs::canonicalize(&self.path)?,
@@ -189,6 +306,22 @@ impl Configuration {
     }
     if config.appearance != self.config.appearance {
       set_table_value(document.as_table_mut(), "appearance", Some(&config.appearance));
+    }
+    if config.light_theme != self.config.light_theme {
+      set_table_value(document.as_table_mut(), "light_theme", Some(&config.light_theme));
+    }
+    if config.dark_theme != self.config.dark_theme {
+      set_table_value(document.as_table_mut(), "dark_theme", Some(&config.dark_theme));
+    }
+    if config.accent_color != self.config.accent_color {
+      set_table_value(document.as_table_mut(), "accent_color", Some(config.accent_color.as_str()));
+    }
+    if config.user_message_color != self.config.user_message_color {
+      set_table_value(
+        document.as_table_mut(),
+        "user_message_color",
+        Some(config.user_message_color.as_str()),
+      );
     }
     if config.gateway.omp != self.config.gateway.omp
       || config.gateway.model != self.config.gateway.model
@@ -251,6 +384,7 @@ impl Configuration {
       let effective = load(self.flags.clone(), &files)?;
       let gateway = settings(effective.clone(), &self.home, |name| std::env::var_os(name))?;
       Appearance::parse(&effective.appearance)?;
+      validate_themes(&effective)?;
       std::fs::rename(&temporary, &target)?;
       Ok((effective, gateway))
     })();
@@ -384,6 +518,59 @@ mod tests {
     assert!(saved.contains("omp = '/opt/omp' # executable"));
     assert!(saved.contains("model = 'provider/model'"));
     assert_eq!(configuration.config.appearance, "dark");
+  }
+
+  #[test]
+  fn color_choices_default_persist_reload_and_obey_flags() {
+    for &choice in COLOR_CHOICES.iter().chain([&ColorChoice::ACCENT]) {
+      assert_eq!(choice.as_str().parse::<ColorChoice>().unwrap(), choice);
+    }
+    let tmp = Scratch::new();
+    let path = tmp.file("config.toml", "# retained\n");
+    let mut configuration = Configuration::for_test(path.clone()).unwrap();
+    assert_eq!(configuration.config.accent_color, ColorChoice::MODULE);
+    assert_eq!(configuration.config.user_message_color, ColorChoice::OPERATOR);
+    let mut next = configuration.config.clone();
+    next.accent_color = "function".parse().unwrap();
+    next.user_message_color = ColorChoice::ACCENT;
+    configuration.save(next).unwrap();
+    let reloaded = Configuration::for_test(path.clone()).unwrap();
+    assert_eq!(reloaded.config.accent_color.as_str(), "function");
+    assert_eq!(reloaded.config.user_message_color, ColorChoice::ACCENT);
+    let mut flags = no_flags();
+    flags.accent_color = Some(ColorChoice::MODULE);
+    assert_eq!(load(flags, std::slice::from_ref(&path)).unwrap().accent_color, ColorChoice::MODULE);
+    std::fs::write(&path, "accent_color = 'not-a-key'\n").unwrap();
+    assert!(load(no_flags(), &[path]).is_err());
+  }
+
+  #[test]
+  fn theme_preferences_persist_and_invalid_names_are_rejected() {
+    let tmp = Scratch::new();
+    let path = tmp.file("config.toml", "# retained\n");
+    let files = vec![path.clone()];
+    let config = load(no_flags(), &files).unwrap();
+    let gateway = embedded(config.clone());
+    let mut configuration = Configuration {
+      config,
+      gateway,
+      path: path.clone(),
+      files,
+      flags: no_flags(),
+      home: tmp.0.clone(),
+    };
+    let mut next = configuration.config.clone();
+    next.light_theme = "catppuccin::latte".into();
+    next.dark_theme = "catppuccin::mocha".into();
+    configuration.save(next).unwrap();
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains("catppuccin::latte"));
+    assert!(saved.contains("catppuccin::mocha"));
+    assert!(saved.contains("# retained"));
+    let mut invalid = configuration.config.clone();
+    invalid.dark_theme = "not-a-theme".into();
+    assert!(configuration.save(invalid).is_err());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), saved);
   }
 
   #[test]
