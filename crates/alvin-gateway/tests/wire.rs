@@ -98,28 +98,25 @@ impl Project {
   /// A gateway that starts real omp, with a home and an agent directory of its own so nothing under the real home is read,
   /// and the model key from the environment the tests run in. Its sessions go where the index looks them.
   fn live_gateway(&mut self) -> Arc<Gateway> {
-    self.gateway_with(&["--no-tools"])
+    self.gateway_with(&["--no-tools"], true)
   }
 
   /// A live gateway whose omp has the `ask` tool, which opens a dialog and waits for its answer.
   fn ask_gateway(&mut self) -> Arc<Gateway> {
-    self.gateway_with(&["--tools", "ask"])
+    self.gateway_with(&["--tools", "ask"], true)
   }
 
-  fn gateway_with(&mut self, tools: &[&str]) -> Arc<Gateway> {
+  fn gateway_with(&mut self, tools: &[&str], session_dir: bool) -> Arc<Gateway> {
     let agent_dir = self.home.join("agent");
-    let args = tools
+    let mut args: Vec<OsString> = tools
       .iter()
-      .chain(&[
-        "--no-skills",
-        "--no-rules",
-        "--no-extensions",
-        "--no-context-files",
-        "--session-dir",
-      ])
+      .chain(&["--no-skills", "--no-rules", "--no-extensions", "--no-context-files"])
       .map(OsString::from)
-      .chain([self.sessions.join("-repo").into_os_string()])
       .collect();
+    if session_dir {
+      args.push(OsString::from("--session-dir"));
+      args.push(self.sessions.join("-repo").into_os_string());
+    }
     let omp = HostConfig::builder()
       .omp(PathBuf::from("omp"))
       .extra_args(args)
@@ -513,6 +510,61 @@ async fn a_turn_streams_and_settles_over_websocket(project: &mut Project) {
   let (client, server) = ws_client(&gateway).await;
   full_turn(&client).await;
   drop(client);
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+#[test_context(Project)]
+#[tokio::test]
+async fn new_sessions_are_fresh_when_omp_auto_resume_is_enabled(project: &mut Project) {
+  let agent_dir = project.home.join("agent");
+  project.sessions = agent_dir.join("sessions");
+  std::fs::create_dir_all(project.sessions.join("-repo")).unwrap();
+  std::fs::write(agent_dir.join("config.yml"), "autoResume: true\n").unwrap();
+  project.sessions(1);
+
+  let gateway = project.gateway_with(&["--no-tools"], false);
+  let ([channel, ws], server) = both_transports(&gateway).await;
+  let previous = open_new(&channel).await;
+  LiveApiClient::rename(
+    &channel,
+    RenameRequest {
+      live: previous.live,
+      name: "Previous session".to_owned(),
+    },
+  )
+  .await
+  .unwrap();
+  let output = LiveApiClient::bash(
+    &channel,
+    BashRequest {
+      live: previous.live,
+      command: "printf previous-session-marker".to_owned(),
+    },
+  )
+  .await
+  .unwrap();
+  assert_eq!(output.output, "previous-session-marker");
+  let old_state = LiveApiClient::state(&channel, previous.live).await.unwrap();
+  assert_eq!(old_state.session_name.as_deref(), Some("Previous session"));
+  assert!(old_state.message_count > 0);
+  LiveApiClient::close(&channel, previous.live).await.unwrap();
+
+  let fresh = open_new(&ws).await;
+  let fresh_state = LiveApiClient::state(&ws, fresh.live).await.unwrap();
+  assert_ne!(fresh.file, previous.file);
+  assert_ne!(fresh_state.session_id, old_state.session_id);
+  assert_eq!(fresh_state.session_name, None);
+  assert_eq!(fresh_state.message_count, 0);
+
+  let resumed = open_session(&channel, &old_state.session_id).await;
+  let resumed_state = LiveApiClient::state(&channel, resumed.live).await.unwrap();
+  assert_eq!(resumed.file, previous.file);
+  assert_eq!(resumed_state.session_id, old_state.session_id);
+  assert_eq!(resumed_state.session_name.as_deref(), Some("Previous session"));
+  assert_eq!(resumed_state.message_count, old_state.message_count);
+
+  drop((channel, ws));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
 }

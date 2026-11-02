@@ -45,8 +45,11 @@ serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
-toml_edit = { version = "0.22", features = ["serde"] }
+toml_datetime = { version = "1", features = ["serde"] }
+toml_edit-2ffb4c3fe830441c = { package = "toml_edit", version = "0.25" }
+toml_edit-3c51e837cfc5589a = { package = "toml_edit", version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
+toml_writer = { version = "1" }
 tracing-core = { version = "0.1" }
 url = { version = "2", features = ["serde"] }
 winnow = { version = "1" }
@@ -120,8 +123,10 @@ smallvec = { version = "1", default-features = false, features = ["const_new", "
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 toml_datetime = { version = "1", features = ["serde"] }
-toml_edit = { version = "0.22", features = ["serde"] }
+toml_edit-2ffb4c3fe830441c = { package = "toml_edit", version = "0.25" }
+toml_edit-3c51e837cfc5589a = { package = "toml_edit", version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
+toml_writer = { version = "1" }
 winnow = { version = "1" }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 

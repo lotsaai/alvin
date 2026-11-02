@@ -2,6 +2,7 @@
 //! they hold no domain state, create no runtime and never see the gateway directly.
 
 mod actions;
+mod ansi;
 mod ask;
 mod composer;
 mod dialogs;

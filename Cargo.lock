@@ -170,6 +170,7 @@ dependencies = [
  "eyre",
  "gpui-kit",
  "tokio",
+ "toml_edit 0.25.17+spec-1.1.0",
  "tracing",
  "url",
 ]
@@ -208,6 +209,7 @@ dependencies = [
  "alvin-gateway",
  "alvin-omp-host",
  "alvin-protocol",
+ "anstyle-parse",
  "gpui-kit",
  "lsp-types",
  "serde_json",
@@ -357,7 +359,9 @@ dependencies = [
  "tokio",
  "toml_datetime 1.1.2+spec-1.1.0",
  "toml_edit 0.22.27",
+ "toml_edit 0.25.17+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "tracing",
  "tracing-core",
  "typenum",
@@ -8730,6 +8734,7 @@ dependencies = [
  "indexmap 2.14.2",
  "toml_datetime 1.1.2+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "winnow 1.0.4",
 ]
 

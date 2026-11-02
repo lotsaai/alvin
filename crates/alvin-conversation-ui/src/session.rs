@@ -256,7 +256,8 @@ impl SessionView {
 
   /// The row under the transcript: status line, session menu and the history toggle.
   fn status_row(&self, cx: &Context<Self>) -> impl IntoElement {
-    let line = self.status_line(cx);
+    let (text, highlights) = crate::ansi::parse(&self.status_line(cx));
+    let line = SharedString::from(text);
     let toggle_view = cx.entity();
     h_flex()
       .px_4()
@@ -270,7 +271,7 @@ impl SessionView {
           .text_color(cx.theme().muted_foreground)
           .role(gpui_kit::Role::Status)
           .aria_label(line.clone())
-          .child(line),
+          .child(gpui_kit::StyledText::new(line).with_highlights(highlights)),
       )
       .child(self.session_menu())
       .child(

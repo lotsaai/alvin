@@ -8,7 +8,7 @@ use std::sync::atomic::AtomicBool;
 use tokio::process::Command as Process;
 
 use alvin_protocol::EventBody;
-use omp_rpc::{Command, SetAskDialogCommand, SwitchSessionCommand};
+use omp_rpc::{Command, NewSessionCommand, SetAskDialogCommand, SwitchSessionCommand};
 use tokio::sync::mpsc;
 use typed_builder::TypedBuilder;
 
@@ -48,7 +48,7 @@ pub struct StartRequest {
   /// Where omp writes its session file.
   #[builder(default)]
   session_dir: Option<PathBuf>,
-  /// An existing session file to resume. omp starts on a new session and switches to it, restoring its saved model.
+  /// An existing session file to resume. omp switches to it, restoring its saved model.
   #[builder(default)]
   resume: Option<PathBuf>,
 }
@@ -66,8 +66,9 @@ impl Host {
   }
 
   /// Spawns `omp --mode rpc-ui` in the request's working directory and waits for its handshake. Returns the session handle
-  /// and its one event stream; the stream is the caller's to drain. `rpc-ui` is the same
-  /// transport as `rpc` with extension dialogs enabled; omp-rpc speaks it unchanged.
+  /// and its one event stream; the stream is the caller's to drain. A new request starts a fresh session even when omp
+  /// auto-resume is enabled. When no model is specified, omp may restore the previous session's model before starting
+  /// the fresh session, or fail at startup if that model is unavailable. `rpc-ui` enables extension dialogs.
   pub async fn start(&self, request: StartRequest) -> Result<(Session, mpsc::Receiver<EventBody>)> {
     launch(&self.config, request).await
   }
@@ -132,6 +133,14 @@ async fn launch(config: &HostConfig, request: StartRequest) -> Result<(Session, 
       .map_err(|source| Error::from_rpc(&cwd, SwitchSessionCommand::NAME, source))?;
     if switched.cancelled {
       return Err(Error::ResumeCancelled { cwd, path: path.clone() });
+    }
+  } else {
+    let created = client
+      .call(&NewSessionCommand::default())
+      .await
+      .map_err(|source| Error::from_rpc(&cwd, NewSessionCommand::NAME, source))?;
+    if created.cancelled {
+      return Err(Error::NewSessionCancelled { cwd });
     }
   }
   let pid = client.pid().ok_or_else(|| Error::from_rpc(&cwd, "spawn", RpcError::Closed))?;

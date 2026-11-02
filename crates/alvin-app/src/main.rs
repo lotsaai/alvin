@@ -2,6 +2,7 @@
 
 mod app;
 mod config;
+mod settings;
 #[cfg(test)]
 mod test_support;
 
@@ -15,7 +16,7 @@ fn main() -> eyre::Result<()> {
     name: "alvin-app",
     version: env!("CARGO_PKG_VERSION"),
   })?;
-  let outcome = app::run(&settings);
+  let outcome = app::run(settings);
   telemetry.shutdown();
   outcome
 }

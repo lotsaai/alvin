@@ -9,6 +9,7 @@ description = "gpui-kit views over alvin-conversation state"
 alvin-client = { version = "0.1.0", path = "../alvin-client" }
 alvin-conversation = { version = "0.1.0", path = "../alvin-conversation" }
 alvin-protocol = { version = "0.1.0", path = "../alvin-protocol" }
+anstyle-parse = "1.0.0"
 gpui-kit = "0.8.1"
 lsp-types = "0.97.0"
 serde_json = "1.0.154"

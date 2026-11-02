@@ -12,7 +12,8 @@ use alvin_conversation_ui::{Model, Workspace};
 use alvin_gateway::Gateway;
 use gpui_kit::{App, AppContext as _, Bounds, Entity, KeyBinding, WindowBounds, WindowOptions, actions, px, size};
 
-use crate::config::{Settings, gateway_config};
+use crate::config::{Configuration, Settings, gateway_config};
+use crate::settings::AppView;
 
 actions!(
   alvin_app,
@@ -30,11 +31,20 @@ const QUIT_KEY: &str = "ctrl-q";
 
 /// The gateway the app embeds, if any. A remote gateway is not the app's to shut down: its sessions stay live.
 #[derive(Clone)]
-pub(crate) struct Embedded(Option<Gateway>);
+pub(crate) struct Embedded(Rc<RefCell<Option<Gateway>>>);
 
 impl Embedded {
-  async fn shutdown(&self) {
-    if let Some(gateway) = &self.0
+  pub(crate) fn new(gateway: Option<Gateway>) -> Self {
+    Self(Rc::new(RefCell::new(gateway)))
+  }
+
+  pub(crate) fn replace(&self, other: &Self) -> Self {
+    Self::new(self.0.replace(other.0.borrow_mut().take()))
+  }
+
+  pub(crate) async fn shutdown(&self) {
+    let gateway = self.0.borrow_mut().take();
+    if let Some(gateway) = gateway
       && let Err(error) = gateway.shutdown().await
     {
       tracing::error!(%error, "closing the live sessions on quit");
@@ -49,14 +59,19 @@ pub(crate) async fn connect(settings: &Settings) -> eyre::Result<(Client, Embedd
     Settings::Embedded { omp, model, sessions_dir } => {
       let gateway = Gateway::new(gateway_config(omp, model.as_deref(), sessions_dir));
       let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64)?))).await?;
-      Ok((client, Embedded(Some(gateway))))
+      Ok((client, Embedded::new(Some(gateway))))
     }
-    Settings::Remote(url) => Ok((Client::connect(Endpoint::WebSocket(url.clone())).await?, Embedded(None))),
+    Settings::Remote(url) => Ok((Client::connect(Endpoint::WebSocket(url.clone())).await?, Embedded::new(None))),
   }
 }
 
 /// Opens the window and registers the quit paths. Returns the workspace.
+#[cfg(test)]
 pub(crate) fn start(cx: &mut App, client: Client, embedded: Embedded) -> eyre::Result<Entity<Workspace>> {
+  start_with_config(cx, client, embedded, None)
+}
+
+fn start_with_config(cx: &mut App, client: Client, embedded: Embedded, config: Option<Configuration>) -> eyre::Result<Entity<Workspace>> {
   gpui_kit::init(cx);
   alvin_conversation_ui::init(cx);
   cx.bind_keys([KeyBinding::new(QUIT_KEY, Quit, None)]);
@@ -90,7 +105,9 @@ pub(crate) fn start(cx: &mut App, client: Client, embedded: Embedded) -> eyre::R
   })
   .detach();
 
-  let (_window, workspace) = gpui_kit::open_window(
+  let workspace = Rc::new(RefCell::new(None));
+  let saved_workspace = Rc::clone(&workspace);
+  let (_window, _) = gpui_kit::open_window(
     WindowOptions {
       window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1200.), px(800.))))),
       ..Default::default()
@@ -99,11 +116,14 @@ pub(crate) fn start(cx: &mut App, client: Client, embedded: Embedded) -> eyre::R
     |window, cx| {
       let model = cx.new(|cx| Model::new(client, cx));
       model.update(cx, |model, cx| model.refresh_projects(cx)).detach();
-      cx.new(|cx| Workspace::new(model, window, cx))
+      let view = cx.new(|cx| Workspace::new(model, window, cx));
+      *saved_workspace.borrow_mut() = Some(view.clone());
+      cx.new(|cx| AppView::new(view, embedded, config, window, cx))
     },
   )
   .map_err(|error| eyre::eyre!("opening the main window: {error}"))?;
-  Ok(workspace)
+  let view = workspace.borrow_mut().take().ok_or_else(|| eyre::eyre!("opening the workspace"))?;
+  Ok(view)
 }
 
 /// Shuts the embedded gateway down in full, then quits. Does nothing the second time.
@@ -121,15 +141,15 @@ fn quit(embedded: &Embedded, quitting: &Rc<Cell<bool>>, cx: &mut App) {
 
 /// Runs the app until the user quits: builds the runtime, connects, and runs GPUI on this thread. Flushing telemetry is the
 /// caller's, after this returns.
-pub fn run(settings: &Settings) -> eyre::Result<()> {
+pub(crate) fn run(settings: Configuration) -> eyre::Result<()> {
   let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
   // GPUI runs on this thread; the guard gives its futures, and the client's, the runtime's timers and tasks.
   let _entered = runtime.enter();
-  let (client, embedded) = runtime.block_on(connect(settings))?;
+  let (client, embedded) = runtime.block_on(connect(&settings.gateway))?;
   let failure = Rc::new(RefCell::new(None));
   let reported = Rc::clone(&failure);
   gpui_kit::application().with_assets(gpui_kit::assets::Assets).run(move |cx| {
-    if let Err(error) = start(cx, client, embedded) {
+    if let Err(error) = start_with_config(cx, client, embedded, Some(settings)) {
       *reported.borrow_mut() = Some(error);
       cx.quit();
     }
@@ -162,7 +182,7 @@ mod tests {
     // A second connection to the same gateway: it runs a command in the session and sees that quit closed it.
     let probe = Client::connect(Endpoint::Channel(channel(16))).await.unwrap();
 
-    let workspace = cx.update(|cx| start(cx, client, Embedded(Some(gateway.clone())))).unwrap();
+    let workspace = cx.update(|cx| start(cx, client, Embedded::new(Some(gateway.clone())))).unwrap();
     let model = cx.read(|cx| workspace.read(cx).model().clone());
     cx.update(|cx| model.update(cx, |model, cx| model.refresh_projects(cx))).await;
 

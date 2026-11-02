@@ -19,6 +19,10 @@ pub struct AppConfig {
   #[config(env = "ALVIN_ENDPOINT")]
   #[config(layer_attr(arg(long)))]
   pub endpoint: Option<Url>,
+  /// Interface appearance: system, light, or dark.
+  #[config(default = "system", env = "ALVIN_APPEARANCE")]
+  #[config(layer_attr(arg(long)))]
+  pub appearance: String,
   /// The embedded gateway's settings. They do not apply to a remote gateway, which is configured where it runs.
   #[config(nested)]
   #[config(layer_attr(command(flatten)))]
@@ -82,11 +86,24 @@ pub(crate) fn gateway_config(omp: &Path, model: Option<&str>, sessions_dir: &Pat
 
 impl Cli {
   /// Merges every source into [`Settings`], reading omp's own environment variables to find its sessions directory.
-  pub fn settings(self) -> eyre::Result<Settings> {
+  pub(crate) fn settings(self) -> eyre::Result<Configuration> {
     let home = dirs::home_dir().ok_or_else(|| eyre!("cannot determine the home directory"))?;
     let files = config_files(self.config_file, dirs::config_dir(), &home);
-    let config = load(self.config, &files)?;
-    settings(config, &home, |name| std::env::var_os(name))
+    let path = files
+      .first()
+      .cloned()
+      .ok_or_else(|| eyre!("cannot determine the config directory"))?;
+    let config = load(self.config.clone(), &files)?;
+    let gateway = settings(config.clone(), &home, |name| std::env::var_os(name))?;
+    Appearance::parse(&config.appearance)?;
+    Ok(Configuration {
+      config,
+      gateway,
+      path,
+      files,
+      flags: self.config,
+      home,
+    })
   }
 }
 
@@ -111,6 +128,171 @@ fn load(flags: <AppConfig as confique::Config>::Layer, files: &[PathBuf]) -> Res
   files.iter().fold(builder, |builder, file| builder.file(file)).load()
 }
 
+/// A user-selected interface appearance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Appearance {
+  System,
+  Light,
+  Dark,
+}
+
+impl Appearance {
+  pub(crate) fn parse(value: &str) -> eyre::Result<Self> {
+    match value {
+      "system" => Ok(Self::System),
+      "light" => Ok(Self::Light),
+      "dark" => Ok(Self::Dark),
+      _ => bail!("appearance must be system, light, or dark"),
+    }
+  }
+
+  pub(crate) fn as_str(self) -> &'static str {
+    match self {
+      Self::System => "system",
+      Self::Light => "light",
+      Self::Dark => "dark",
+    }
+  }
+}
+
+/// Config sources and the currently effective settings.
+pub(crate) struct Configuration {
+  pub(crate) config: AppConfig,
+  pub(crate) gateway: Settings,
+  path: PathBuf,
+  files: Vec<PathBuf>,
+  flags: <AppConfig as confique::Config>::Layer,
+  home: PathBuf,
+}
+
+impl Configuration {
+  /// Writes only known keys while retaining the rest of the TOML document.
+  pub(crate) fn save(&mut self, config: AppConfig) -> eyre::Result<()> {
+    use std::io::Write as _;
+
+    Appearance::parse(&config.appearance)?;
+    settings(config.clone(), &self.home, |name| std::env::var_os(name))?;
+    let target = match std::fs::symlink_metadata(&self.path) {
+      Ok(metadata) if metadata.file_type().is_symlink() => std::fs::canonicalize(&self.path)?,
+      Ok(_) => self.path.clone(),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => self.path.clone(),
+      Err(error) => return Err(error.into()),
+    };
+    let contents = match std::fs::read_to_string(&target) {
+      Ok(contents) => contents,
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+      Err(error) => return Err(error.into()),
+    };
+    let mut document = contents.parse::<toml_edit::DocumentMut>()?;
+    if config.endpoint != self.config.endpoint {
+      set_table_value(document.as_table_mut(), "endpoint", config.endpoint.as_ref().map(Url::as_str));
+    }
+    if config.appearance != self.config.appearance {
+      set_table_value(document.as_table_mut(), "appearance", Some(&config.appearance));
+    }
+    if config.gateway.omp != self.config.gateway.omp
+      || config.gateway.model != self.config.gateway.model
+      || config.gateway.sessions_dir != self.config.gateway.sessions_dir
+    {
+      if !document.contains_key("gateway") {
+        document["gateway"] = toml_edit::Item::Table(toml_edit::Table::new());
+      }
+      let gateway = document["gateway"]
+        .as_table_like_mut()
+        .ok_or_else(|| eyre!("gateway must be a TOML table"))?;
+      if config.gateway.omp != self.config.gateway.omp {
+        let omp = config.gateway.omp.to_str().ok_or_else(|| eyre!("omp path is not valid UTF-8"))?;
+        set_table_value(gateway, "omp", Some(omp));
+      }
+      if config.gateway.model != self.config.gateway.model {
+        set_table_value(gateway, "model", config.gateway.model.as_deref());
+      }
+      if config.gateway.sessions_dir != self.config.gateway.sessions_dir {
+        let sessions = config
+          .gateway
+          .sessions_dir
+          .as_ref()
+          .map(|path| path.to_str().ok_or_else(|| eyre!("sessions directory is not valid UTF-8")))
+          .transpose()?;
+        set_table_value(gateway, "sessions_dir", sessions);
+      }
+    }
+    let parent = target
+      .parent()
+      .filter(|path| !path.as_os_str().is_empty())
+      .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let temporary = parent.join(format!(
+      ".alvin-config-{}-{}.toml",
+      std::process::id(),
+      std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos()
+    ));
+    let write_result = (|| -> eyre::Result<(AppConfig, Settings)> {
+      let mut options = std::fs::OpenOptions::new();
+      options.write(true).create_new(true);
+      #[cfg(unix)]
+      {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+      }
+      let mut file = options.open(&temporary)?;
+      match std::fs::metadata(&target) {
+        Ok(metadata) => file.set_permissions(metadata.permissions())?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+      }
+      file.write_all(document.to_string().as_bytes())?;
+      file.sync_all()?;
+      let files: Vec<_> = self
+        .files
+        .iter()
+        .map(|path| if path == &self.path { temporary.clone() } else { path.clone() })
+        .collect();
+      let effective = load(self.flags.clone(), &files)?;
+      let gateway = settings(effective.clone(), &self.home, |name| std::env::var_os(name))?;
+      Appearance::parse(&effective.appearance)?;
+      std::fs::rename(&temporary, &target)?;
+      Ok((effective, gateway))
+    })();
+    if write_result.is_err() && temporary.exists() {
+      std::fs::remove_file(&temporary)?;
+    }
+    let (effective, gateway) = write_result?;
+    self.config = effective;
+    self.gateway = gateway;
+    Ok(())
+  }
+}
+
+fn set_value(item: &mut toml_edit::Item, value: Option<&str>) {
+  if let Some(value) = value {
+    if item.as_str() == Some(value) {
+      return;
+    }
+    let decor = item.as_value().map(|value| value.decor().clone());
+    *item = toml_edit::value(value);
+    if let (Some(decor), Some(value)) = (decor, item.as_value_mut()) {
+      *value.decor_mut() = decor;
+    }
+  } else {
+    *item = toml_edit::Item::None;
+  }
+}
+
+fn set_table_value(table: &mut dyn toml_edit::TableLike, key: &str, value: Option<&str>) {
+  match value {
+    Some(value) => {
+      if let Some(item) = table.get_mut(key) {
+        set_value(item, Some(value));
+      } else {
+        table.insert(key, toml_edit::value(value));
+      }
+    }
+    None => {
+      table.remove(key);
+    }
+  }
+}
 /// Converts the loaded config once. Only checks syntax: the endpoint is a WebSocket URL, and a remote endpoint is not
 /// combined with settings of an embedded gateway.
 fn settings(config: AppConfig, home: &Path, var: impl Fn(&str) -> Option<OsString>) -> eyre::Result<Settings> {
@@ -173,6 +355,57 @@ mod tests {
 
   fn no_env(_: &str) -> Option<OsString> {
     None
+  }
+
+  #[test]
+  fn saving_preserves_comments_and_other_settings() {
+    let tmp = Scratch::new();
+    let path = tmp.file(
+      "config.toml",
+      "# header\nappearance = 'system' # theme\n[gateway]\nomp = '/opt/omp' # executable\nmodel = 'provider/model'\n",
+    );
+    let files = vec![path.clone()];
+    let config = load(no_flags(), &files).unwrap();
+    let gateway = embedded(config.clone());
+    let mut configuration = Configuration {
+      config,
+      gateway,
+      path: path.clone(),
+      files,
+      flags: no_flags(),
+      home: tmp.0.clone(),
+    };
+    let mut next = configuration.config.clone();
+    next.appearance = "dark".into();
+    configuration.save(next).unwrap();
+    let saved = std::fs::read_to_string(path).unwrap();
+    assert!(saved.contains("# header"));
+    assert!(saved.contains("# theme"));
+    assert!(saved.contains("omp = '/opt/omp' # executable"));
+    assert!(saved.contains("model = 'provider/model'"));
+    assert_eq!(configuration.config.appearance, "dark");
+  }
+
+  #[test]
+  fn invalid_edit_does_not_replace_config_file() {
+    let tmp = Scratch::new();
+    let contents = "# keep me\nappearance = 'system'\n";
+    let path = tmp.file("config.toml", contents);
+    let files = vec![path.clone()];
+    let config = load(no_flags(), &files).unwrap();
+    let gateway = embedded(config.clone());
+    let mut configuration = Configuration {
+      config,
+      gateway,
+      path: path.clone(),
+      files,
+      flags: no_flags(),
+      home: tmp.0.clone(),
+    };
+    let mut next = configuration.config.clone();
+    next.endpoint = Some("https://example.com".parse().unwrap());
+    assert!(configuration.save(next).is_err());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), contents);
   }
 
   fn embedded(config: AppConfig) -> Settings {

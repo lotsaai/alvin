@@ -103,6 +103,13 @@ pub enum Error {
     path: PathBuf,
   },
 
+  /// A hook cancelled creation of a new session.
+  #[error("omp did not create a new session in {cwd}")]
+  NewSessionCancelled {
+    /// The working directory the process was started in.
+    cwd: PathBuf,
+  },
+
   /// omp's protocol carries paths as strings, and this one is not UTF-8.
   #[error("{path} is not valid UTF-8")]
   PathNotUtf8 {
