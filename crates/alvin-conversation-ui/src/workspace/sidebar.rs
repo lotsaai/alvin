@@ -24,7 +24,7 @@ use gpui_kit::{
   prelude::FluentBuilder as _, rems,
 };
 
-use crate::model::Model;
+use crate::model::{Model, ModelChange};
 use crate::workspace::ProjectPreferences;
 
 /// What a row of the tree stands for. Rows are found by their item id, which is derived from the domain id behind them.
@@ -94,7 +94,11 @@ impl ProjectTree {
     let tree = cx.new(|cx| TreeState::new(cx));
     let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search sessions"));
     let subscriptions = vec![
-      cx.observe(&model, |this, _, cx| this.sync(cx)),
+      cx.subscribe(&model, |this, _, change: &ModelChange, cx| match change {
+        ModelChange::Workspace => this.sync(cx),
+        ModelChange::SessionMetadata(_) => cx.notify(),
+        ModelChange::Connection | ModelChange::Session(_) => {}
+      }),
       cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
         if matches!(event, InputEvent::Change) {
           this.built_from = None;
@@ -1196,7 +1200,8 @@ mod tests {
         .unwrap();
       assert!(status.success());
       let repo = repo.canonicalize().unwrap();
-      let seed = include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
+      let seed =
+        include_str!("../../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
       for _ in 0..55 {
         let id = alvin_protocol::EventId::new().as_uuid().to_string();
         let record = seed.replace("01a18ff1-ab74-73b8-a3a2-79905565c49b", &id);

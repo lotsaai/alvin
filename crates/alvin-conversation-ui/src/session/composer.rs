@@ -11,7 +11,7 @@ use gpui_kit::component::input::{CompletionProvider, Editor, EditorState, InputE
 use gpui_kit::{App, AppContext as _, Context, Entity, Pixels, Result, Task, Window, rems};
 use lsp_types::{CompletionContext, CompletionItem, CompletionResponse, CompletionTextEdit, Position, Range, TextEdit};
 
-use crate::markdown;
+use super::markdown;
 use crate::model::Model;
 
 /// How many rows the composer shows at least, and at most before its text scrolls.
@@ -131,7 +131,11 @@ pub(crate) fn view(state: &Entity<EditorState>, window: &Window, cx: &App) -> Ed
   let row: Pixels = cx.theme().mono_font_size * LINE_HEIGHT;
   // The editor's own vertical padding on top of its rows.
   let padding = rems(1.).to_pixels(window.rem_size());
-  Editor::new(state).h(row * rows as f32 + padding).aria_label("Message")
+  Editor::new(state)
+    .h(row * rows as f32 + padding)
+    .appearance(false)
+    .bordered(false)
+    .aria_label("Message")
 }
 
 #[cfg(test)]

@@ -18,7 +18,9 @@ mod input;
 mod keys;
 mod links;
 mod options;
+pub(crate) mod panel;
 mod selection;
+mod settings;
 mod source;
 mod state;
 mod stream;
@@ -27,6 +29,7 @@ pub(crate) use element::{KEY_CONTEXT, Terminal};
 pub(crate) use engine::{Engine, ExitStatus};
 pub(crate) use frame::Viewport;
 pub(crate) use options::EngineOptions;
+pub use settings::{TerminalCursor, TerminalSettings, parse_terminal_color, parse_terminal_palette_entry};
 pub(crate) use state::{TerminalConfig, TerminalEvent, TerminalState};
 pub(crate) use stream::{StreamEvent, StreamEvents, StreamSource};
 

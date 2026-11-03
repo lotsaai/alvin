@@ -18,7 +18,7 @@ use gpui_kit::{
   Subscription, Window, div, rems,
 };
 
-use crate::dialogs::Reply;
+use super::dialogs::Reply;
 
 /// What omp appends to the label of the option it recommends.
 const RECOMMENDED: &str = " (Recommended)";

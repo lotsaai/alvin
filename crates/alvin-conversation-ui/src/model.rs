@@ -61,6 +61,14 @@ pub enum ModelEvent {
   },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ModelChange {
+  Workspace,
+  Connection,
+  Session(LiveSessionId),
+  SessionMetadata(LiveSessionId),
+}
+
 /// What a live session can be switched to: omp's models, and the thinking levels the current model accepts.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Catalog {
@@ -145,6 +153,7 @@ pub struct Model {
   stats: BTreeMap<LiveSessionId, SessionStats>,
   conversation: Conversation,
   session_ids: BTreeMap<LiveSessionId, SessionId>,
+  new_sessions: BTreeSet<LiveSessionId>,
   session_checkouts: BTreeMap<LiveSessionId, (ProjectId, CheckoutId)>,
   page_loads: PageLoads,
   navigation: Navigation,
@@ -157,8 +166,16 @@ pub struct Model {
 }
 
 impl EventEmitter<ModelEvent> for Model {}
+impl EventEmitter<ModelChange> for Model {}
 
 impl Model {
+  fn session_event_changed(event: &alvin_protocol::Event, cx: &mut Context<Self>) {
+    cx.emit(ModelChange::Session(event.live));
+    if session_event_changes_metadata(event) {
+      cx.emit(ModelChange::SessionMetadata(event.live));
+    }
+  }
+
   /// A model over a connected client.
   pub fn new(client: Client, cx: &mut Context<Self>) -> Self {
     let mut states = client.watch_connection();
@@ -172,6 +189,7 @@ impl Model {
               ConnectionState::Reconnecting { attempt } => Connection::Reconnecting { attempt },
               ConnectionState::Lost => Connection::Lost,
             });
+            cx.emit(ModelChange::Connection);
             cx.notify();
           })
           .is_ok();
@@ -188,6 +206,7 @@ impl Model {
       stats: BTreeMap::new(),
       conversation: Conversation::default(),
       session_ids: BTreeMap::new(),
+      new_sessions: BTreeSet::new(),
       session_checkouts: BTreeMap::new(),
       page_loads: PageLoads::default(),
       navigation: Navigation::default(),
@@ -250,6 +269,7 @@ impl Model {
           if this
             .update(cx, |model, cx| {
               model.conversation.set_projects(projects);
+              cx.emit(ModelChange::Workspace);
               cx.notify();
             })
             .is_err()
@@ -292,6 +312,7 @@ impl Model {
           if this
             .update(cx, |model, cx| {
               if model.page_loads.apply(&mut model.conversation, load, page) {
+                cx.emit(ModelChange::Workspace);
                 cx.notify();
               }
             })
@@ -349,6 +370,7 @@ impl Model {
           if this
             .update(cx, |model, cx| {
               if model.page_loads.apply(&mut model.conversation, load, page) {
+                cx.emit(ModelChange::Workspace);
                 cx.notify();
               }
             })
@@ -414,6 +436,9 @@ impl Model {
   ) {
     let live = summary.live;
     self.session_checkouts.insert(live, checkout);
+    if session.is_none() {
+      self.new_sessions.insert(live);
+    }
     if let Some(session) = session {
       self.session_ids.insert(live, session);
     }
@@ -423,6 +448,7 @@ impl Model {
       self.sessions.insert(live, task);
     }
     cx.emit(ModelEvent::Opened { live, intent });
+    cx.emit(ModelChange::SessionMetadata(live));
     cx.notify();
   }
 
@@ -432,6 +458,10 @@ impl Model {
 
   pub(crate) fn session_id(&self, live: LiveSessionId) -> Option<&SessionId> {
     self.session_ids.get(&live)
+  }
+
+  pub(crate) fn is_new_session(&self, live: LiveSessionId) -> bool {
+    self.new_sessions.contains(&live)
   }
 
   pub(crate) fn session_checkout(&self, live: LiveSessionId) -> Option<&(ProjectId, CheckoutId)> {
@@ -462,7 +492,8 @@ impl Model {
               model.conversation.load_page(live, page);
               model.load_catalog(live, cx);
               model.refresh_tree(live, cx);
-              cx.notify();
+              cx.emit(ModelChange::Session(live));
+              cx.emit(ModelChange::SessionMetadata(live));
             });
             if loaded.is_err() {
               return;
@@ -495,7 +526,7 @@ impl Model {
                   if model.conversation.live(live).is_some_and(|view| view.state_stale) {
                     model.refresh_state(live, cx);
                   }
-                  cx.notify();
+                  Self::session_event_changed(&event, cx);
                 })
                 .is_err()
               {
@@ -519,7 +550,7 @@ impl Model {
             if this
               .update(cx, |model, cx| {
                 model.conversation.resync(live);
-                cx.notify();
+                cx.emit(ModelChange::Session(live));
               })
               .is_err()
             {
@@ -540,7 +571,7 @@ impl Model {
     if let Some(command) = text.strip_prefix('!') {
       let command = command.to_owned();
       self.bash_running.insert(live);
-      cx.notify();
+      cx.emit(ModelChange::Session(live));
       return cx.spawn(async move |this, cx| {
         let result = LiveApiClient::bash(&client, BashRequest { live, command })
           .await
@@ -552,6 +583,9 @@ impl Model {
         };
         if this
           .update(cx, |model, cx| {
+            if result.is_ok() {
+              model.new_sessions.remove(&live);
+            }
             model.bash_running.remove(&live);
             match (result, reloaded) {
               (Err(error), _) => model.fail(&error, cx),
@@ -559,7 +593,8 @@ impl Model {
               (Ok(_), Some(Err(error))) => model.fail(&error, cx),
               (Ok(_), None) => {}
             }
-            cx.notify();
+            cx.emit(ModelChange::Session(live));
+            cx.emit(ModelChange::SessionMetadata(live));
           })
           .is_err()
         {
@@ -578,8 +613,21 @@ impl Model {
         (true, false) => LiveApiClient::steer(&client, request).await,
         (true, true) => LiveApiClient::follow_up(&client, request).await,
       };
-      if let Err(error) = result.map_err(Error::from) {
-        fail(&this, cx, &error);
+      match result.map_err(Error::from) {
+        Ok(_) => {
+          if this
+            .update(cx, |model, cx| {
+              if model.new_sessions.remove(&live) {
+                cx.emit(ModelChange::Session(live));
+                cx.emit(ModelChange::SessionMetadata(live));
+              }
+            })
+            .is_err()
+          {
+            tracing::debug!("model released before the command finished");
+          }
+        }
+        Err(error) => fail(&this, cx, &error),
       }
     })
   }
@@ -705,7 +753,7 @@ impl Model {
             }
           }
           model.load_branch_candidates(live, cx);
-          cx.notify();
+          cx.emit(ModelChange::Session(live));
           let again = model.tree_reads.insert(live, false).unwrap_or(false);
           if !again {
             model.tree_reads.remove(&live);
@@ -730,7 +778,7 @@ impl Model {
             .update(cx, |model, cx| {
               let ids = messages.into_iter().map(|message| EntryId::from(message.entry_id)).collect();
               model.branch_candidates.insert(live, ids);
-              cx.notify();
+              cx.emit(ModelChange::Session(live));
             })
             .is_err()
           {
@@ -757,7 +805,8 @@ impl Model {
               model.conversation.forget_tree(live);
             }
             model.refresh_tree(live, cx);
-            cx.notify();
+            cx.emit(ModelChange::Session(live));
+            cx.emit(ModelChange::SessionMetadata(live));
           })
           .is_err()
         {
@@ -781,7 +830,7 @@ impl Model {
     let client = self.client.clone();
     if summarize {
       self.summarizing.insert(live);
-      cx.notify();
+      cx.emit(ModelChange::Session(live));
     }
     cx.spawn(async move |this, cx| {
       let request = NavigateRequest {
@@ -804,7 +853,7 @@ impl Model {
             Ok(_) => {}
             Err(error) => model.fail(&error, cx),
           }
-          cx.notify();
+          cx.emit(ModelChange::Session(live));
         })
         .is_err()
       {
@@ -939,7 +988,7 @@ impl Model {
           if this
             .update(cx, |model, cx| {
               model.stats.insert(live, stats);
-              cx.notify();
+              cx.emit(ModelChange::Session(live));
             })
             .is_err()
           {
@@ -1002,7 +1051,7 @@ impl Model {
           if this
             .update(cx, |model, cx| {
               model.conversation.dialog_answered(live, &id);
-              cx.notify();
+              cx.emit(ModelChange::Session(live));
             })
             .is_err()
           {
@@ -1023,7 +1072,8 @@ impl Model {
           if this
             .update(cx, |model, cx| {
               model.set_state(live, &state);
-              cx.notify();
+              cx.emit(ModelChange::Session(live));
+              cx.emit(ModelChange::SessionMetadata(live));
             })
             .is_err()
           {
@@ -1051,7 +1101,7 @@ impl Model {
           if this
             .update(cx, |model, cx| {
               model.catalogs.insert(live, catalog);
-              cx.notify();
+              cx.emit(ModelChange::Session(live));
             })
             .is_err()
           {
@@ -1153,9 +1203,11 @@ impl Model {
               model.catalogs.remove(&live);
               model.tree_reads.remove(&live);
               model.session_ids.remove(&live);
+              model.new_sessions.remove(&live);
               model.session_checkouts.remove(&live);
               model.conversation.close(live);
               cx.emit(ModelEvent::Closed(live));
+              cx.emit(ModelChange::SessionMetadata(live));
               cx.notify();
             })
             .is_err()
@@ -1187,6 +1239,7 @@ impl Model {
     for (key, page) in pages {
       self.conversation.load_sessions(key, None, page);
     }
+    cx.emit(ModelChange::Workspace);
     cx.notify();
   }
 
@@ -1198,32 +1251,46 @@ impl Model {
       live: summary.live,
       intent,
     });
+    cx.emit(ModelChange::SessionMetadata(summary.live));
     cx.notify();
   }
 
   /// Announces that a live session closed, as `live/close` would have.
   pub(crate) fn seed_close(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
     cx.emit(ModelEvent::Closed(live));
+    cx.emit(ModelChange::SessionMetadata(live));
     cx.notify();
   }
 
   /// Folds a live-session event into the state, as the event stream would have.
   pub(crate) fn seed_event(&mut self, event: &alvin_protocol::Event, cx: &mut Context<Self>) {
     self.conversation.apply(event);
-    cx.notify();
+    Self::session_event_changed(event, cx);
   }
 
   /// Puts a page of messages in a live session's transcript, as `live/messages` would have.
   pub(crate) fn seed_messages(&mut self, live: LiveSessionId, page: alvin_protocol::MessagesPage, cx: &mut Context<Self>) {
     self.conversation.load_page(live, page);
-    cx.notify();
+    cx.emit(ModelChange::Session(live));
   }
 
   /// Records the connection state the client would have reported.
   pub(crate) fn seed_connection(&mut self, connection: Connection, cx: &mut Context<Self>) {
     self.conversation.set_connection(connection);
+    cx.emit(ModelChange::Connection);
     cx.notify();
   }
+}
+
+fn session_event_changes_metadata(event: &alvin_protocol::Event) -> bool {
+  matches!(
+    &event.body,
+    alvin_protocol::EventBody::SessionInfoUpdate(_)
+      | alvin_protocol::EventBody::PromptResult(_)
+      | alvin_protocol::EventBody::SessionSettled(_)
+      | alvin_protocol::EventBody::ProcessExited
+      | alvin_protocol::EventBody::Agent(alvin_protocol::RpcAgentEvent::AgentStart(_) | alvin_protocol::RpcAgentEvent::AgentEnd(_))
+  )
 }
 
 /// The state and every message of a live session. omp-rpc drains `get_messages_page` the same way: pages in order until

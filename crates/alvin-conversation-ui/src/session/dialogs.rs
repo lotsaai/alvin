@@ -139,7 +139,7 @@ fn open(
         })
       });
     }
-    ExtensionUiRequest::Ask(ask) => crate::ask::open(reply, ask, window, cx),
+    ExtensionUiRequest::Ask(ask) => super::ask::open(reply, ask, window, cx),
     ExtensionUiRequest::Cancel(_)
     | ExtensionUiRequest::Notify(_)
     | ExtensionUiRequest::SetStatus(_)

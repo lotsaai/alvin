@@ -13,8 +13,8 @@ use gpui_kit::{
 };
 use serde_json::Value;
 
+use super::tool_card::{ToolCard, fenced};
 use crate::model::Model;
-use crate::tool_card::{ToolCard, fenced};
 
 /// Application-provided colors for user message bubbles.
 ///
@@ -301,7 +301,7 @@ mod tests {
   const BUDGET: Duration = Duration::from_secs(1);
 
   /// An omp turn that called every built-in tool once, as omp recorded it.
-  const TOOLS_TURN: &str = include_str!("../fixtures/tools_turn.messages.json");
+  const TOOLS_TURN: &str = include_str!("../../fixtures/tools_turn.messages.json");
 
   #[gpui_kit::test]
   fn user_message_colors_follow_global_or_primary_theme(cx: &mut TestAppContext) {

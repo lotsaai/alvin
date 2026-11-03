@@ -5,12 +5,11 @@
 
 use alvin_conversation::LiveView;
 use alvin_protocol::{LiveSessionId, ModelInfo, ThinkingLevel};
-use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::searchable_list::SearchableListItem;
 use gpui_kit::component::select::{Select, SelectEvent, SelectState};
 use gpui_kit::component::{Sizable as _, h_flex};
 use gpui_kit::{
-  App, AppContext as _, Context, ElementId, Entity, IntoElement, ParentElement as _, SharedString, Styled as _, Subscription, Window, rems,
+  App, AppContext as _, Context, Entity, IntoElement, ParentElement as _, SharedString, Styled as _, Subscription, Window, div, rems,
 };
 
 use crate::model::{Catalog, Model};
@@ -145,39 +144,30 @@ impl Pickers {
     }
   }
 
-  /// The pickers and their cycle buttons.
-  pub(crate) fn view(&self, model: &Entity<Model>, live: LiveSessionId) -> impl IntoElement {
-    let cycle_model = model.clone();
-    let cycle_thinking = model.clone();
+  /// Compact model and thinking controls for the composer toolbar.
+  pub(crate) fn view(&self) -> impl IntoElement {
     h_flex()
-      .gap_2()
-      .px_2()
+      .flex_1()
+      .min_w(rems(10.))
+      .gap_1()
       .child(
-        Select::new(&self.models)
-          .id("model-picker")
-          .accessibility_label("Model")
-          .xsmall()
-          .menu_width(rems(20.)),
+        div().flex_1().min_w_0().max_w(rems(16.)).child(
+          Select::new(&self.models)
+            .id("model-picker")
+            .accessibility_label("Model")
+            .xsmall()
+            .appearance(false)
+            .menu_width(rems(20.)),
+        ),
       )
       .child(
-        Button::new(ElementId::from("model-cycle"))
-          .xsmall()
-          .ghost()
-          .label("Next model")
-          .on_click(move |_, _, cx| cycle_model.update(cx, |model, cx| model.cycle_model(live, cx)).detach()),
-      )
-      .child(
-        Select::new(&self.levels)
-          .id("thinking-picker")
-          .accessibility_label("Thinking level")
-          .xsmall(),
-      )
-      .child(
-        Button::new(ElementId::from("thinking-cycle"))
-          .xsmall()
-          .ghost()
-          .label("Next thinking")
-          .on_click(move |_, _, cx| cycle_thinking.update(cx, |model, cx| model.cycle_thinking(live, cx)).detach()),
+        div().w(rems(7.)).min_w_0().child(
+          Select::new(&self.levels)
+            .id("thinking-picker")
+            .accessibility_label("Thinking level")
+            .xsmall()
+            .appearance(false),
+        ),
       )
   }
 }

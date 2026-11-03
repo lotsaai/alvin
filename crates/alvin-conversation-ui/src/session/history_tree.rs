@@ -19,7 +19,7 @@ use gpui_kit::{
 };
 use serde_json::Value;
 
-use crate::model::Model;
+use crate::model::{Model, ModelChange};
 
 /// How tall a row is, and how far each level of a branch point indents.
 const ROW_HEIGHT: Rems = rems(1.5);
@@ -111,9 +111,11 @@ impl HistoryTreeView {
   pub(crate) fn new(model: Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut Context<Self>) -> Self {
     let label = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 2).placeholder("Label"));
     let instructions = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 3).placeholder("Summary instructions"));
-    let subscription = cx.observe(&model, |this, _, cx| {
-      this.sync(cx);
-      cx.notify();
+    let subscription = cx.subscribe(&model, |this, _, change: &ModelChange, cx| {
+      if matches!(change, ModelChange::Session(live) if *live == this.live) {
+        this.sync(cx);
+        cx.notify();
+      }
     });
     let mut view = Self {
       live,

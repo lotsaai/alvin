@@ -1,5 +1,7 @@
 //! The window's root view: the project tree, the open sessions as tabs, and the active session.
 
+mod sidebar;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use alvin_client::Client;
@@ -20,10 +22,10 @@ use gpui_kit::{
 };
 
 use crate::actions::{ToggleSidebar, ToggleTerminal, WORKSPACE_CONTEXT};
-use crate::model::{Model, ModelEvent};
+use crate::model::{Model, ModelChange, ModelEvent};
 use crate::session::SessionView;
-use crate::sidebar::ProjectTree;
-use crate::terminal_panel::{TerminalPanel, TerminalPanelEvent};
+use crate::terminal::panel::{TerminalPanel, TerminalPanelEvent};
+use sidebar::ProjectTree;
 
 /// Local presentation preferences indexed by the gateway's stable project ID.
 pub type ProjectPreferences = BTreeMap<String, ProjectPreference>;
@@ -141,9 +143,15 @@ impl Workspace {
     focus.focus(window, cx);
     let projects = cx.new(|cx| ProjectTree::new(model.clone(), window, cx));
     let subscriptions = vec![
-      cx.observe(&model, |this, _, cx| {
-        this.sync_active_sidebar(cx);
-        cx.notify();
+      cx.subscribe(&model, |this, _, change: &ModelChange, cx| match change {
+        ModelChange::Connection | ModelChange::Workspace => cx.notify(),
+        ModelChange::SessionMetadata(live) => {
+          if this.active == Some(*live) {
+            this.sync_active_sidebar(cx);
+          }
+          cx.notify();
+        }
+        ModelChange::Session(_) => {}
       }),
       cx.subscribe_in(&model, window, |this, _, event: &ModelEvent, window, cx| {
         this.model_event(event, window, cx);
@@ -317,6 +325,8 @@ impl Workspace {
           self.history.visit(live);
           self.sync_active_sidebar(cx);
         }
+        self.repair_terminal_focus(window, cx);
+        cx.notify();
       }
       ModelEvent::Closed(live) => {
         self.tabs.retain(|(tab, _)| tab != live);
@@ -334,6 +344,8 @@ impl Workspace {
           }
           self.sync_active_sidebar(cx);
         }
+        self.repair_terminal_focus(window, cx);
+        cx.notify();
       }
       // The banner already says it: the stream has to be read again, and a notification would say it twice.
       ModelEvent::Failed {
@@ -359,8 +371,6 @@ impl Workspace {
         window.push_notification(notification, cx);
       }
     }
-    self.repair_terminal_focus(window, cx);
-    cx.notify();
   }
 
   fn sync_active_sidebar(&mut self, cx: &mut Context<Self>) {
@@ -459,6 +469,11 @@ impl Workspace {
     let label = if self.sidebar_visible { "Hide sidebar" } else { "Show sidebar" };
     let back = self.history.target(false).is_some();
     let forward = self.history.target(true).is_some();
+    let session_menu = self
+      .tabs
+      .iter()
+      .find(|(live, _)| Some(*live) == self.active)
+      .map(|(_, view)| view.read(cx).session_menu().into_any_element());
     let controls = h_flex()
       .id("titlebar-sidebar-controls")
       .flex_1()
@@ -502,7 +517,23 @@ impl Workspace {
               .on_click(cx.listener(|this, _, window, cx| this.traverse(true, window, cx))),
           ),
       )
-      .child(div().flex_1().min_w_0().child(self.render_tabs(cx)))
+      .child(
+        h_flex()
+          .min_w_0()
+          .child(
+            div()
+              .min_w_0()
+              .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+              .child(self.render_tabs(cx)),
+          )
+          .child(
+            h_flex()
+              .flex_shrink_0()
+              .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+              .children(session_menu),
+          ),
+      )
+      .child(div().flex_1().min_w_0().h_full())
       .child(
         h_flex()
           .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -765,7 +796,6 @@ mod tests {
   use crate::workspace::{NavigationHistory, ProjectPreference, ProjectPreferences};
 
   const BUDGET: Duration = Duration::from_secs(1);
-
   #[test]
   fn navigation_history_traverses_branches_and_prunes_closed_sessions() {
     let (a, b, c) = (
@@ -872,9 +902,10 @@ mod tests {
     }
     impl TerminalProbe {
       fn new(
-        panel: &Entity<crate::terminal_panel::TerminalPanel>,
+        panel: &Entity<crate::terminal::panel::TerminalPanel>,
         ready: gpui_kit::base::async_util::Sender<std::result::Result<(), String>>,
         output: gpui_kit::base::async_util::Sender<std::result::Result<(), String>>,
+        closed: gpui_kit::base::async_util::Sender<()>,
         cx: &mut Context<Self>,
       ) -> Self {
         if let Some(result) = panel.read(cx).test_ready() {
@@ -884,6 +915,9 @@ mod tests {
         let state = panel.read(cx).test_state();
         Self {
           _subscriptions: vec![
+            cx.subscribe(panel, move |_, _, _: &crate::terminal::panel::TerminalPanelEvent, _| {
+              closed.try_send(()).unwrap();
+            }),
             cx.observe(panel, move |_, panel, cx| {
               if let Some(result) = panel.read(cx).test_ready() {
                 if let Err(error) = &result
@@ -1017,6 +1051,70 @@ mod tests {
           .unwrap();
           assert_eq!(rx.recv().await, Some(false));
         }
+        let (first, second) = cx
+          .update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let second = workspace.read(cx).active().unwrap();
+            let composer = window.find_by_label("Message").bounds().center();
+            window.pointer_down(composer, MouseButton::Left, cx);
+            window.pointer_up(composer, MouseButton::Left, cx);
+            window.input("second draft", cx);
+            window.click("navigation-back", cx);
+            let first = workspace.read(cx).active().unwrap();
+            let composer = window.find_by_label("Message").bounds().center();
+            window.pointer_down(composer, MouseButton::Left, cx);
+            window.pointer_up(composer, MouseButton::Left, cx);
+            window.input("first draft", cx);
+            window.click("navigation-forward", cx);
+            (first, second)
+          })
+          .unwrap();
+        let model = cx.update(|cx| workspace.read(cx).model().clone());
+        cx.update(|cx| {
+          model.update(cx, |model, cx| {
+            model.seed_event(
+              &crate::test_support::event(first, serde_json::json!({ "kind": "agent", "frame": { "type": "agent_start" } })),
+              cx,
+            );
+            model.seed_event(
+              &crate::test_support::event(
+                first,
+                serde_json::json!({
+                  "kind": "sessionInfoUpdate", "frame": { "sessionId": "first", "title": "Renamed" }
+                }),
+              ),
+              cx,
+            );
+            let events: Vec<alvin_protocol::Event> =
+              serde_json::from_str(include_str!("../../alvin-conversation/fixtures/plain_turn.events.json")).unwrap();
+            for mut event in events.into_iter().filter(|event| {
+              matches!(
+                &event.body,
+                alvin_protocol::EventBody::Agent(
+                  alvin_protocol::RpcAgentEvent::MessageStart(_) | alvin_protocol::RpcAgentEvent::MessageUpdate(_)
+                )
+              )
+            }) {
+              event.live = first;
+              model.seed_event(&event, cx);
+            }
+          });
+        });
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          assert_eq!(workspace.read(cx).active(), Some(second));
+          assert_eq!(
+            workspace.read(cx).session(second).unwrap().read(cx).composer_text(cx),
+            "second draft"
+          );
+          assert!(model.read(cx).conversation().live(first).unwrap().streaming.is_some());
+          assert!(model.read(cx).conversation().live(second).unwrap().streaming.is_none());
+          assert!(window.find_by_label("Renamed").visible());
+          window.click("navigation-back", cx);
+          assert_eq!(workspace.read(cx).session(first).unwrap().read(cx).composer_text(cx), "first draft");
+          window.click("navigation-forward", cx);
+        })
+        .unwrap();
         cx.update_window(handle, |_, window, cx| {
           window.render_frame(cx);
           let second = workspace.read(cx).active().unwrap();
@@ -1041,10 +1139,11 @@ mod tests {
         .unwrap();
         let (ready_tx, ready_rx) = gpui_kit::base::async_util::unbounded();
         let (output_tx, output_rx) = gpui_kit::base::async_util::unbounded();
+        let (closed_tx, closed_rx) = gpui_kit::base::async_util::unbounded();
         let _probe = cx.update(|cx| {
           let checkout = workspace.read(cx).selected_checkout(cx).unwrap();
           let panel = workspace.read(cx).terminals.get(&checkout).unwrap().clone();
-          cx.new(|cx| TerminalProbe::new(&panel, ready_tx, output_tx, cx))
+          cx.new(|cx| TerminalProbe::new(&panel, ready_tx, output_tx, closed_tx, cx))
         });
         ready_rx.recv().await.unwrap().unwrap();
         cx.update_window(handle, |_, window, cx| {
@@ -1054,8 +1153,20 @@ mod tests {
         .unwrap();
         output_rx.recv().await.unwrap().unwrap();
         cx.update_window(handle, |_, window, cx| {
-          window.click("close-terminal", cx);
-          assert!(workspace.read(cx).focus.is_focused(window));
+          let size = window.find("close-terminal").bounds().size;
+          // Startup notifications can cover the button's center; use its exposed trailing edge.
+          window.click_at("close-terminal", gpui_kit::point(size.width - px(2.), size.height / 2.), cx);
+        })
+        .unwrap();
+        closed_rx.recv().await.unwrap();
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          assert!(window.try_find("close-terminal").is_none());
+          let key = if cfg!(target_os = "macos") { "cmd-j" } else { "ctrl-j" };
+          window.press(key, cx);
+          assert!(window.find("close-terminal").visible());
+          window.press(key, cx);
+          assert!(window.try_find("close-terminal").is_none());
         })
         .unwrap();
         let cleanup = cx.update(|cx| workspace.update(cx, |workspace, cx| workspace.shutdown(cx)));

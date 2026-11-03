@@ -20,22 +20,21 @@ Gupi features that do not go through omp-rpc: file browser, git changes panel, w
 ## Layout
 
 ```
-┌ TitleBar: live session tabs ─────────────────────────────────────────┐
-│ Sidebar        │ Session view                         │ History tree │
-│  projects      │  transcript (MessageScroller)        │ (toggle)     │
-│   checkouts    │                                      │              │
-│    sessions    │  widgets from extensions             │              │
-│                │  queue                               │              │
-│                │  composer                            │              │
-├ StatusBar: connection · model · thinking · context use · ext status ┤
-└──────────────────────────────────────────────────────────────────────┘
+┌ TitleBar: navigation · live session tabs · session menu · terminal ┐
+│ Sidebar        │ Session view                    │ Context/History │
+│  projects      │  transcript (MessageScroller)   │ (toggle)        │
+│   checkouts    │  queue and status               │                 │
+│    sessions    │  composer card                  │                 │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-Components (gpui-kit 0.9.0, import paths from the skill's catalog; exact signatures read from the component pages when implementing): `TitleBar`, `TabBar`, `Sidebar`, `Resizable`, `MessageScroller`, `Message`/`Bubble`, `TextView::markdown`, `ShimmerText`, `Collapsible`, `Diff`, `Textarea`, `Combobox`, `Select`, `Command`, `Dialog`/`AlertDialog`, `Notification`, `StatusBar`, `Spinner`, `Badge`, `v_virtual_list`.
+The title bar keeps one title per tab and puts the active session menu beside the tabs. The remaining title-bar space supports window dragging. The composer groups the editor, model and thinking controls, and Send or Stop in one card. History and Context toggle the auxiliary panel.
+
+Components include `TitleBar`, `TabBar`, `Resizable`, `MessageScroller`, `Editor`, `Select`, `Dialog`, `Notification`, and `v_virtual_list`.
 
 ## Views
 
-One file per view; each is an `Entity<T>` with `Render` where it retains state, `RenderOnce` otherwise (coding guides, "Choose the right unit").
+Modules are grouped by capability: workspace composition, live-session interaction, and terminal interaction. Each capability declares its own implementation modules; `lib.rs` contains only crate documentation, capability declarations, and explicit public exports. Views use `Entity<T>` with `Render` where they retain state, `RenderOnce` otherwise (coding guides, "Choose the right unit").
 
 - `Workspace` (root view, one per window): owns the `alvin_client::Client`, the `Entity<Model>` (below), the sidebar, the open tabs, and the active session view. Placed directly under gpui-kit's `Root`.
 - `ProjectSidebar`: projects → checkouts (main, git worktrees, jj workspaces) → sessions, newest first, loaded in pages. Search and recently updated grouping load all remaining pages before displaying results, with loading and retry states. The project/worktree hierarchy retains explicit controls for loading more pages. Project and checkout scope rows use distinct icons and stronger type. A sole root checkout is flattened into its project. New sessions start from a compact `+` on the applicable scope; projects with multiple checkouts expose creation on each checkout. Scope actions appear on hover or keyboard focus and remain visible while their menu is open.
@@ -43,16 +42,16 @@ One file per view; each is an `Entity<T>` with `Render` where it retains state, 
   The sidebar keeps New session, Automations, and Plugins above the independently scrolling projects; Automations and Plugins are disabled and marked Coming soon. New session asks for an existing project checkout instead of choosing one implicitly. The fixed footer shows the local display name and avatar, a user menu with Settings…, a disabled mobile control, and a Settings button. The face supplies the local name; absent names display Local user. The top strip retains sidebar toggle and session back/forward controls even when the sidebar is hidden.
   Project aliases, pins, and hidden state and session pins and hidden state are local Alvin preferences. Hiding never deletes repositories or omp files; hidden projects and sessions have restore controls. Session rows show the file's relative modification age, recalculated when the view renders. A spinner means an open live session is running, not that a historical transcript ends with an unanswered message.
   The active session is highlighted by its session ID, known on open for listed sessions and from `live/state` for new sessions; the live file identifies a new session until its state loads. Keyboard tree selection remains independent of the active tab.
-- `SessionView` (one per live session): transcript, widgets, queue, composer, and the session menu (rename, compact, stats, export HTML, close).
+- `SessionView` (one per live session): transcript, widgets, queue, status, composer, and the session menu (rename, compact, stats, export HTML, and model and thinking cycling). The tab closes the session. A newly opened session has a centred greeting and composer until a command succeeds. An existing session with an empty transcript remains a transcript, not a new-session view. The gateway opens a new live session when the user selects a checkout, before the first command.
 - `TerminalPanel`: one retained terminal per checkout and workspace window, below the active conversation in a vertical resizable region. The titlebar button and `ToggleTerminal` action show or hide it without stopping its shell. Closing the panel stops the gateway-owned process; opening after close starts a new shell. The terminal is a sibling of `SessionView`, so its keys do not invoke composer actions.
 - Terminal rendering uses the private gpui-cn terminal source cut and `ghostty-vt`; chrome uses the active gpui-kit theme. The retained engine consumes ordered output while hidden. A reconnect resumes into the same engine from the last accepted event; input is never automatically retried.
 - Terminal font family, ordered fallbacks, size, colors, palette, and cursor defaults come from the application's terminal appearance settings. The workspace applies changes to retained panels and supplies them to new panels. Unset font values follow the theme's monospace defaults rather than app zoom; a terminal's explicit zoom remains until reset.
 - `Transcript`: `MessageScroller` over the active branch. Rows are committed messages plus one streaming row. Row kinds follow omp's `AgentMessage` variants: user (text, images), assistant (markdown text, thinking in a `Collapsible`, tool calls), tool result, bash execution, branch summary, compaction summary, custom messages. Older pages load on scroll to the top (`live/messages` cursor); `MessageScroller` keeps the reader's position on insert.
   User bubbles use the application-provided `UserMessageColors` background and foreground, falling back to the theme's primary colors when no global is installed. Assistant and tool roles keep their own theme colors.
 - `ToolCard`: one per tool call, keyed by `tool_call_id`. Running state with streamed output (`tool_execution_update`/`stream_update`), then the result. Renderers by tool name for omp's built-in tools (bash: command and output; read; edit and write: `Diff` when the result carries a patch; grep, find, glob: match lists; task: subagent summary). Any other tool name renders its args and result as formatted JSON; tool args and results are open JSON in omp's schema, so a tool alvin does not know is a normal case, not an error. Which result fields carry patches is read from recorded fixtures in the first slice.
-- `Composer`: `Textarea`. Enter sends, Shift+Enter inserts a newline. Text starting with `!` goes to `live/bash` with the rest as the command; everything else goes to `live/prompt` unchanged, and omp expands `/` commands, skills, templates, and `^model` (`SPEC.md`). While a run is active, Enter sends with omp's `streamingBehavior` (steer by default, follow-up with a modifier). Escape aborts (`live/abort`; `live/abortBash` while a bash command runs). Images pasted or dropped become the prompt's `images` (`docs/rpc.md:130`). `/` opens completion from the session's command catalog (`available_commands_update`); choosing one inserts text, it does not run anything. `set_editor_text` requests replace the composer text.
-- `QueueView`: steering and follow-up entries from `queue_update`, with remove and promote (`queue/remove`, `queue/promote`). Entries counted in `live_steered` show as sent and have no actions. After an abort, `queue/restore` returns withdrawn text to the composer.
-- `ModelPicker` and `ThinkingPicker`: `Combobox` over `model/list`, `Select` over `thinking/levels`; set and cycle via `model/*` and `thinking/*`. Current values from `live/state` and the model and thinking events.
+- `Composer`: a markdown `Editor`. Enter sends, Shift+Enter inserts a newline. Text starting with `!` goes to `live/bash` with the rest as the command; everything else goes to `live/prompt` unchanged, and omp expands `/` commands, skills, templates, and `^model` (`SPEC.md`). While a run is active, Enter steers by default; modified Enter queues a follow-up. With an empty editor, Stop aborts the active turn or bash command. If messages are queued, Restore queue returns them to the editor instead of aborting. Interrupt and send replaces the active turn with the editor text. `/` offers completion from the session's command catalogue; choosing one inserts text without running it. `set_editor_text` requests replace the composer text.
+- `QueueView`: steering and follow-up entries from `queue_update`, with remove and promote (`queue/remove`, `queue/promote`). Entries counted in `live_steered` show as sent and have no actions.
+- `ModelPicker` and `ThinkingPicker`: `Select` controls for `model/list` and `thinking/levels`; set values in the composer and cycle them from the session menu. Current values come from `live/state` and model and thinking events.
 - `HistoryTreeView`: the session's tree (`alvin-conversation` `tree`), rendered as rows in a `v_virtual_list`: a chain of single children stays at one indent, a branch point indents its children, so a long linear session is a flat list. The active path (root to leaf) is highlighted; labels show inline. Actions on a row: navigate here (`live/navigateTree`, with optional summary and custom instructions), branch from a user message (`live/branch`, candidates from `live/branchMessages`), fork (`live/fork`), set or clear a label (`live/label`), cancel a running branch summary (`live/abortBranchSummary`). gpui-kit's `Tree` is not used: it nests one level per child, which for omp's chains means one level per message.
 - `DialogHost`: extension UI requests by request id. `select`, `confirm`, `input`, `editor` open a `Dialog` (one at a time per session, queued in arrival order) and answer with `dialog/respond`; a `cancel` from omp for that id closes it. `notify` pushes a `Notification`. `setStatus` updates the status bar segment for that key. `setWidget` renders the widget lines above the composer.
 - `ConnectionBanner` and `SessionBanner`: `Reconnecting { attempt }` and `Lost` from `Client::state()`; reload-needed after `Resync`; process exited with a close action.
@@ -60,7 +59,7 @@ One file per view; each is an `Entity<T>` with `Render` where it retains state, 
 ## State and Async
 
 - `Model` (`Entity`): wraps `alvin_conversation` state. It is the only owner of domain state; views read it and keep only transient view state (scroll, expanded cards, composer text) per the coding guides' "State ownership".
-- One task per open live session, started with `cx.spawn` when the tab opens and dropped when it closes, reads `Client::events(live)` and calls `Model::apply` through a weak handle, notifying once per event. A `Resync` item calls `resync`, then reloads with `live/messages` and `live/tree` and starts a new stream.
+- One task per open live session, started with `cx.spawn` when the tab opens and dropped when it closes, reads `Client::events(live)` and folds events through a weak model handle. State-change events distinguish session content, session metadata, workspace lists, and connection state. A session view subscribes only to its own session changes; streaming content does not synchronize other sessions or rebuild workspace navigation. Run-state and title changes still update sidebar and tab metadata. A `Resync` item calls `resync`, then reloads history and starts a new stream.
 - `tree_stale` triggers `live/entries { since: tree_cursor }`; one request in flight per session, later triggers coalesce into it.
 - A first-page session refresh invalidates outstanding page requests for that list; replies apply only while their generation and expected cursor remain current. Concurrent opens all register tabs, but only the latest navigation intent activates one; selecting a tab supersedes pending opens.
 - Session navigation history is transient per workspace. Opening a session or selecting a tab records the active visit; back and forward traverse without recording another visit, supersede pending opens, and disable at their bounds. Closing a session removes its entries.
@@ -70,7 +69,7 @@ One file per view; each is an `Entity<T>` with `Render` where it retains state, 
 
 ## Actions and Keys
 
-`actions!` in `actions.rs`: `Submit`, `Newline`, `Abort`, `FocusComposer`, `ToggleSidebar`, `ToggleHistoryTree`, `NextTab`, `PreviousTab`, `CloseTab`, `CycleModel`, `CycleThinking`, `NewSession`. Bindings are registered by the crate's `init(cx)`, which the face calls after `gpui_kit::init`.
+`actions!` in `actions.rs` registers `Abort`, `ToggleSidebar`, and `ToggleTerminal`. The crate's `init(cx)`, called after `gpui_kit::init`, binds Escape to Abort in a session, and the platform modifier plus B or J to the workspace sidebar or terminal.
 
 ## Identity
 
@@ -87,20 +86,19 @@ Image paste and drop, and clipboard copy, go through GPUI's platform APIs; where
 ## Project Structure
 
 ```
-crates/alvin-conversation-ui/src/lib.rs           thin: init(cx), re-exports Workspace
-crates/alvin-conversation-ui/src/actions.rs
-crates/alvin-conversation-ui/src/model.rs         Entity wrapper over alvin-conversation, event tasks
-crates/alvin-conversation-ui/src/workspace.rs
-crates/alvin-conversation-ui/src/sidebar.rs
-crates/alvin-conversation-ui/src/session.rs
-crates/alvin-conversation-ui/src/transcript.rs
-crates/alvin-conversation-ui/src/tool_card.rs
-crates/alvin-conversation-ui/src/composer.rs
-crates/alvin-conversation-ui/src/queue.rs
-crates/alvin-conversation-ui/src/pickers.rs
-crates/alvin-conversation-ui/src/history_tree.rs
-crates/alvin-conversation-ui/src/dialogs.rs
-crates/alvin-conversation-ui/src/status.rs        status bar and banners
+crates/alvin-conversation-ui/src/
+  lib.rs                 capability declarations and public exports only
+  actions.rs             application key bindings
+  error.rs               crate error boundary
+  model.rs               domain state, typed change events, client tasks
+  workspace.rs           window composition and navigation
+  workspace/sidebar.rs   project and session browsing
+  session.rs             live-session composition and subscriptions
+  session/               composer, transcript, queue, history, dialogs,
+                         pickers, status, tool cards, markdown and ANSI
+  terminal.rs            terminal capability interface and key bindings
+  terminal/              panel, settings, rendering engine and transport
+  test_support.rs        shared headless test setup
 ```
 
 ## Testing Strategy

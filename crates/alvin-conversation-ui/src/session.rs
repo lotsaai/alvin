@@ -1,5 +1,20 @@
 //! One live session: transcript, status line and its composer.
 
+mod ansi;
+mod ask;
+mod composer;
+mod dialogs;
+mod history_tree;
+mod markdown;
+mod pickers;
+mod queue;
+mod status;
+mod tool_card;
+mod transcript;
+
+pub use markdown::refresh_markdown_theme;
+pub use transcript::UserMessageColors;
+
 use std::cell::Cell;
 
 use alvin_protocol::{LiveSessionId, WidgetPlacement};
@@ -11,7 +26,7 @@ use gpui_kit::component::dialog::{DialogFooter, DialogHeader, DialogTitle};
 use gpui_kit::component::input::{EditorState, Input, InputEvent, InputState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::message_scroller::MessageScrollerState;
-use gpui_kit::component::{ActiveTheme as _, IconName, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Disableable as _, IconName, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
   AnyElement, App, AppContext as _, Context, ElementId, Entity, Focusable as _, InteractiveElement as _, IntoElement, ParentElement as _,
@@ -19,12 +34,11 @@ use gpui_kit::{
 };
 
 use crate::actions::{Abort, SESSION_CONTEXT};
-use crate::dialogs::Dialogs;
-use crate::history_tree::HistoryTreeView;
-use crate::model::{Model, ModelEvent};
-use crate::pickers::Pickers;
-use crate::status::Banner;
-use crate::{composer, queue, status, transcript};
+use crate::model::{Model, ModelChange, ModelEvent};
+use dialogs::Dialogs;
+use history_tree::HistoryTreeView;
+use pickers::Pickers;
+use status::Banner;
 
 /// A live session's view. Holds only local view state: scroll position, the composer and how many rows the scroller was
 /// last told about. Everything else is read from the model.
@@ -38,6 +52,7 @@ pub(crate) struct SessionView {
   /// The history panel, whether it is open.
   history: Entity<HistoryTreeView>,
   history_open: bool,
+  context_open: bool,
   /// The name typed into the rename dialog.
   name: Entity<InputState>,
   rows: usize,
@@ -59,13 +74,12 @@ impl SessionView {
       .conversation()
       .live(live)
       .is_some_and(|view| view.run == alvin_conversation::Run::Running);
-    if !running {
+    if !running || self.composer.read(cx).value().trim().is_empty() {
       return None;
     }
     let (model, composer) = (self.model.clone(), self.composer.clone());
     Some(
-      h_flex()
-        .px_4()
+      div()
         .child(
           Button::new(self.id("session-interrupt"))
             .small()
@@ -84,13 +98,34 @@ impl SessionView {
     )
   }
 
-  /// Sends what the composer holds, as Enter does.
-  fn send_button(&self) -> impl IntoElement {
+  /// Sends the draft, or stops the running operation when there is no draft.
+  fn send_button(&self, cx: &App) -> AnyElement {
     let (model, composer, live) = (self.model.clone(), self.composer.clone(), self.live);
+    let running = model.read(cx).bash_running(live)
+      || model
+        .read(cx)
+        .conversation()
+        .live(live)
+        .is_some_and(|view| view.run == alvin_conversation::Run::Running);
+    let empty = composer.read(cx).value().trim().is_empty();
+    if running && empty {
+      let queued = !model.read(cx).bash_running(live)
+        && model
+          .read(cx)
+          .conversation()
+          .live(live)
+          .is_some_and(|view| !view.queue.steering.is_empty() || !view.queue.follow_up.is_empty());
+      return Button::new(self.id("session-stop"))
+        .small()
+        .label(if queued { "Restore queue" } else { "Stop" })
+        .on_click(move |_, _, cx| model.update(cx, |model, cx| model.abort(live, cx)).detach())
+        .into_any_element();
+    }
     Button::new(self.id("session-send"))
       .small()
       .primary()
       .label("Send")
+      .disabled(empty)
       .on_click(move |_, window, cx| {
         let text = composer.read(cx).value().trim().to_owned();
         if text.is_empty() {
@@ -99,10 +134,11 @@ impl SessionView {
         composer.update(cx, |composer, cx| composer.set_value("", window, cx));
         model.update(cx, |model, cx| model.send(live, &text, false, cx)).detach();
       })
+      .into_any_element()
   }
 
   /// The session menu: rename, compact, export and the counts omp gives.
-  fn session_menu(&self) -> impl IntoElement {
+  pub(crate) fn session_menu(&self) -> impl IntoElement {
     let live = self.live;
     let model = self.model.clone();
     let name = self.name.clone();
@@ -132,6 +168,8 @@ impl SessionView {
           .item(command("Export as HTML", Model::export_html))
           .separator()
           .item(command("Refresh statistics", Model::refresh_stats))
+          .item(command("Next model", Model::cycle_model))
+          .item(command("Next thinking", Model::cycle_thinking))
           .when_some(stats, |menu, text| menu.label(SharedString::from(text)))
       })
   }
@@ -145,11 +183,13 @@ impl SessionView {
     let name = cx.new(|cx| InputState::new(window, cx).placeholder("Session name"));
     let subscriptions = vec![
       cx.observe(&scroller, |_, _, cx| cx.notify()),
-      cx.observe_in(&model, window, |this, model, window, cx| {
-        this.sync_rows(cx);
-        this.pickers.sync(&model, this.live, window, cx);
-        this.dialogs.sync(&model, this.live, window, cx);
-        cx.notify();
+      cx.subscribe_in(&model, window, |this, model, change: &ModelChange, window, cx| {
+        if matches!(change, ModelChange::Session(live) if *live == this.live) {
+          this.sync_rows(cx);
+          this.pickers.sync(model, this.live, window, cx);
+          this.dialogs.sync(model, this.live, window, cx);
+          cx.notify();
+        }
       }),
       cx.subscribe_in(&model, window, |this, _, event: &ModelEvent, window, cx| {
         if let ModelEvent::ComposerText { live, text } = event
@@ -182,11 +222,14 @@ impl SessionView {
       dialogs,
       history,
       history_open: false,
+      context_open: true,
       name,
       rows: 0,
       _subscriptions: subscriptions,
     };
     view.sync_rows(cx);
+    view.pickers.sync(&view.model, live, window, cx);
+    view.dialogs.sync(&view.model, live, window, cx);
     view
   }
 
@@ -256,9 +299,9 @@ impl SessionView {
     )
   }
 
-  /// The row under the transcript: status line, session menu and the history toggle.
+  /// The session status and inspector controls.
   fn status_row(&self, cx: &Context<Self>) -> impl IntoElement {
-    let (text, highlights) = crate::ansi::parse(&self.status_line(cx));
+    let (text, highlights) = ansi::parse(&self.status_line(cx));
     let line = SharedString::from(text);
     let toggle_view = cx.entity();
     h_flex()
@@ -269,13 +312,14 @@ impl SessionView {
           .id(self.id("session-status"))
           .test_support()
           .flex_1()
+          .min_w_0()
+          .overflow_hidden()
           .text_sm()
           .text_color(cx.theme().muted_foreground)
           .role(gpui_kit::Role::Status)
           .aria_label(line.clone())
           .child(gpui_kit::StyledText::new(line).with_highlights(highlights)),
       )
-      .child(self.session_menu())
       .child(
         Button::new(self.id("history-toggle"))
           .small()
@@ -288,6 +332,18 @@ impl SessionView {
               cx.notify();
             });
           }),
+      )
+      .child(
+        Button::new(self.id("context-toggle"))
+          .small()
+          .ghost()
+          .label("Context")
+          .selected(self.context_open && !self.history_open)
+          .on_click(cx.listener(|this, _, _, cx| {
+            this.context_open = this.history_open || !this.context_open;
+            this.history_open = false;
+            cx.notify();
+          })),
       )
   }
 
@@ -404,12 +460,10 @@ impl Render for SessionView {
         .live(live)
         .and_then(|view| status::widgets(view, placement, cx))
     };
-    let column = v_flex()
-      .flex_1()
+    let new_session = self.model.read(cx).is_new_session(live);
+    let dock = v_flex()
+      .w_full()
       .min_w_0()
-      .h_full()
-      .children(self.banner(cx))
-      .child(transcript::transcript(&self.model, live, &self.scroller))
       .children(
         self
           .model
@@ -419,18 +473,58 @@ impl Render for SessionView {
           .and_then(|view| queue::view(&self.model, live, &view.queue, cx)),
       )
       .child(self.status_row(cx))
-      .children(self.interrupt_button(cx))
-      .child(self.pickers.view(&self.model, live))
       .children(widgets(WidgetPlacement::AboveEditor))
       .child(
-        h_flex()
-          .p_2()
+        v_flex()
+          .mx_2()
+          .mb_2()
+          .min_w_0()
           .gap_2()
-          .items_end()
-          .child(div().flex_1().min_w_0().child(composer::view(&self.composer, window, cx)))
-          .child(self.send_button()),
+          .rounded(cx.theme().radius)
+          .border_1()
+          .border_color(cx.theme().border)
+          .bg(cx.theme().background)
+          .child(composer::view(&self.composer, window, cx))
+          .child(
+            h_flex()
+              .flex_wrap()
+              .px_2()
+              .pb_2()
+              .gap_2()
+              .min_w_0()
+              .child(self.pickers.view())
+              .children(self.interrupt_button(cx))
+              .child(self.send_button(cx)),
+          ),
       )
       .children(widgets(WidgetPlacement::BelowEditor));
+    let content = if new_session {
+      v_flex()
+        .flex_1()
+        .min_h_0()
+        .px_4()
+        .py_4()
+        .justify_center()
+        .items_center()
+        .child(
+          v_flex()
+            .w_full()
+            .max_w(gpui_kit::rems(42.))
+            .min_w_0()
+            .gap_4()
+            .child(div().px_4().text_color(cx.theme().muted_foreground).child("Start a conversation"))
+            .child(dock),
+        )
+        .into_any_element()
+    } else {
+      v_flex()
+        .flex_1()
+        .min_h_0()
+        .child(transcript::transcript(&self.model, live, &self.scroller))
+        .child(dock)
+        .into_any_element()
+    };
+    let column = v_flex().flex_1().min_w_0().h_full().children(self.banner(cx)).child(content);
     h_flex()
       .id(self.id("session"))
       .key_context(SESSION_CONTEXT)
@@ -440,7 +534,7 @@ impl Render for SessionView {
       .items_stretch()
       .size_full()
       .child(column)
-      .children((!self.history_open).then(|| self.context_panel(cx)))
+      .children((self.context_open && !self.history_open).then(|| self.context_panel(cx)))
       .children(self.history_open.then(|| self.history.clone()))
   }
 }
@@ -498,6 +592,31 @@ mod tests {
         assert_eq!(window.find(format!("session-status-{id}")).label(), Some("idle"));
         assert_eq!(window.find(format!("session-send-{id}")).label(), Some("Send"));
         assert!(window.find(format!("session-context-{id}")).visible());
+        let editor = window.find_by_label("Message").bounds();
+        let model = window.find("model-picker").bounds();
+        let send = window.find(format!("session-send-{id}")).bounds();
+        assert!(editor.bottom() <= model.top());
+        assert!(editor.bottom() <= send.top());
+      })
+      .unwrap();
+      feed(
+        cx,
+        &opened,
+        &session,
+        serde_json::json!({ "kind": "agent", "frame": { "type": "agent_start" } }),
+      );
+      cx.update_window(opened.handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find(format!("session-stop-{id}")).label(), Some("Stop"));
+        window.click(format!("context-toggle-{id}"), cx);
+        assert!(window.try_find(format!("session-context-{id}")).is_none());
+        window.click(format!("context-toggle-{id}"), cx);
+        assert!(window.find(format!("session-context-{id}")).visible());
+        let editor = window.find_by_label("Message").bounds().center();
+        window.pointer_down(editor, gpui_kit::MouseButton::Left, cx);
+        window.pointer_up(editor, gpui_kit::MouseButton::Left, cx);
+        window.input("hello", cx);
+        assert_eq!(window.find(format!("session-send-{id}")).label(), Some("Send"));
       })
       .unwrap();
     });

@@ -415,8 +415,8 @@ mod tests {
     body(&name, args.as_ref(), result.as_ref())
   }
 
-  const TOOLS: &str = include_str!("../fixtures/tools_turn.events.json");
-  const TASK: &str = include_str!("../fixtures/task_turn.events.json");
+  const TOOLS: &str = include_str!("../../fixtures/tools_turn.events.json");
+  const TASK: &str = include_str!("../../fixtures/task_turn.events.json");
 
   #[test]
   fn bash_shows_the_command_and_its_output() {
