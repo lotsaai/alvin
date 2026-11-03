@@ -12,6 +12,7 @@ mod omp_wire;
 mod projects;
 mod queue;
 mod sessions;
+mod terminal;
 
 #[cfg(feature = "server")]
 pub use dialog::DialogApiServer;
@@ -20,7 +21,7 @@ pub use error::{Error, Result};
 pub use error_codes::{ErrorCode, ErrorData};
 pub use events::{Event, EventBody};
 pub use history::{EntriesRequest, Entry, EntryKind, HistoryEntries};
-pub use ids::{CheckoutId, EntryId, EventId, LiveSessionId, ProjectId, QueuedMessageId, SessionId};
+pub use ids::{CheckoutId, EntryId, EventId, LiveSessionId, ProjectId, QueuedMessageId, SessionId, TerminalId};
 pub use live::{
   BashRequest, CompactRequest, EntryRequest, EventsApiClient, ExportRequest, ForkRequest, LabelRequest, LiveApiClient, LiveSessionSummary,
   MessagesRequest, NavigateRequest, OpenRequest, OpenTarget, PromptRequest, RenameRequest, SubscribeRequest,
@@ -40,6 +41,11 @@ pub use queue::{PromoteQueuedRequest, QueueApiClient, RemoveQueuedRequest};
 #[cfg(feature = "server")]
 pub use sessions::SessionsApiServer;
 pub use sessions::{ListSessions, SessionCursor, SessionPage, SessionStatus, SessionSummary, SessionsApiClient};
+#[cfg(feature = "server")]
+pub use terminal::TerminalApiServer;
+pub use terminal::{
+  TerminalAccepted, TerminalApiClient, TerminalEvent, TerminalEventBody, TerminalInput, TerminalResize, TerminalSize, TerminalSubscription,
+};
 
 #[cfg(test)]
 mod client_tests {

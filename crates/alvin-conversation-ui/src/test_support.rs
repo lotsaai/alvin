@@ -114,7 +114,7 @@ pub(crate) async fn open_workspace(cx: &mut TestAppContext) -> Opened {
   };
   let (handle, workspace, model) = cx.update(|cx| {
     let model = cx.new(|cx| {
-      let mut model = Model::new(client, cx);
+      let mut model = Model::new(client.clone(), cx);
       model.seed_workspace(vec![summary], vec![(key, page)], cx);
       model
     });
@@ -124,7 +124,7 @@ pub(crate) async fn open_workspace(cx: &mut TestAppContext) -> Opened {
         ..Default::default()
       },
       cx,
-      |window, cx| cx.new(|cx| Workspace::new(model.clone(), window, cx)),
+      |window, cx| cx.new(|cx| Workspace::new(model.clone(), client, window, cx)),
     )
     .expect("open the test window");
     (handle, workspace, model)

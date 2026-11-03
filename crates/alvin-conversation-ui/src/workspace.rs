@@ -2,15 +2,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use alvin_client::Client;
 use alvin_conversation::{Connection, Level};
-use alvin_protocol::{ErrorCode, LiveSessionId};
+use alvin_protocol::{CheckoutId, ErrorCode, LiveSessionId, OpenTarget, ProjectId};
 use gpui_kit::base::TestSupportExt as _;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::avatar::Avatar;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonVariants as _, Toggle};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::resizable::{h_resizable, resizable_panel};
+use gpui_kit::component::resizable::{h_resizable, resizable_panel, v_resizable};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, IconName, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
@@ -18,10 +19,11 @@ use gpui_kit::{
   SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, div, prelude::FluentBuilder as _, relative,
 };
 
-use crate::actions::{ToggleSidebar, WORKSPACE_CONTEXT};
+use crate::actions::{ToggleSidebar, ToggleTerminal, WORKSPACE_CONTEXT};
 use crate::model::{Model, ModelEvent};
 use crate::session::SessionView;
 use crate::sidebar::ProjectTree;
+use crate::terminal_panel::{TerminalPanel, TerminalPanelEvent};
 
 /// Local presentation preferences indexed by the gateway's stable project ID.
 pub type ProjectPreferences = BTreeMap<String, ProjectPreference>;
@@ -117,12 +119,16 @@ impl NavigationHistory {
 /// The root view of a window: one per window, placed directly under gpui-kit's `Root`.
 pub struct Workspace {
   model: Entity<Model>,
+  client: Client,
   projects: Entity<ProjectTree>,
   tabs: Vec<(LiveSessionId, Entity<SessionView>)>,
   active: Option<LiveSessionId>,
   history: NavigationHistory,
   user_name: String,
   sidebar_visible: bool,
+  terminals: BTreeMap<(ProjectId, CheckoutId), Entity<TerminalPanel>>,
+  terminal_visible: bool,
+  terminal_settings: crate::TerminalSettings,
   /// Keeps the window's key bindings in reach when nothing inside it has focus.
   focus: FocusHandle,
   _subscriptions: Vec<Subscription>,
@@ -130,7 +136,7 @@ pub struct Workspace {
 
 impl Workspace {
   /// A workspace over the model it shows.
-  pub fn new(model: Entity<Model>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+  pub fn new(model: Entity<Model>, client: Client, window: &mut Window, cx: &mut Context<Self>) -> Self {
     let focus = cx.focus_handle();
     focus.focus(window, cx);
     let projects = cx.new(|cx| ProjectTree::new(model.clone(), window, cx));
@@ -148,15 +154,33 @@ impl Workspace {
     ];
     Self {
       model,
+      client,
       projects,
       tabs: Vec::new(),
       active: None,
       history: NavigationHistory::default(),
       user_name: "Local user".to_owned(),
       sidebar_visible: true,
+      terminals: BTreeMap::new(),
+      terminal_visible: false,
+      terminal_settings: crate::TerminalSettings::default(),
       focus,
       _subscriptions: subscriptions,
     }
+  }
+
+  /// Current terminal appearance used for new and retained panels.
+  pub fn terminal_settings(&self) -> &crate::TerminalSettings {
+    &self.terminal_settings
+  }
+
+  /// Apply terminal appearance to both retained and future panels.
+  pub fn set_terminal_settings(&mut self, settings: crate::TerminalSettings, cx: &mut Context<Self>) {
+    for panel in self.terminals.values() {
+      panel.update(cx, |panel, cx| panel.set_terminal_settings(&settings, cx));
+    }
+    self.terminal_settings = settings;
+    cx.notify();
   }
 
   /// The model the views render.
@@ -175,11 +199,12 @@ impl Workspace {
     &self.user_name
   }
 
-  fn traverse(&mut self, forward: bool, cx: &mut Context<Self>) {
+  fn traverse(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
     if let Some(live) = self.history.traverse(forward) {
       self.active = Some(live);
       self.model.update(cx, |model, _| model.select_tab());
       self.sync_active_sidebar(cx);
+      self.repair_terminal_focus(window, cx);
       cx.notify();
     }
   }
@@ -204,12 +229,76 @@ impl Workspace {
     self.focus.focus(window, cx);
   }
 
+  /// Closes retained terminals and waits for their engines and gateway processes.
+  pub fn shutdown(&mut self, cx: &mut Context<Self>) -> gpui_kit::Task<()> {
+    let pending: Vec<_> = self
+      .terminals
+      .values()
+      .map(|panel| {
+        let receiver = panel.update(cx, |panel, cx| panel.close_and_wait(cx));
+        (panel.clone(), receiver)
+      })
+      .collect();
+    cx.spawn(async move |_, _| {
+      for (_panel, receiver) in pending {
+        if let Err(error) = receiver.recv().await {
+          tracing::error!(%error, "waiting for terminal cleanup");
+        }
+      }
+    })
+  }
+
   /// Shows or hides the project sidebar.
   pub fn toggle_sidebar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     self.sidebar_visible = !self.sidebar_visible;
     // The tree leaves the window with the sidebar, and the key that brings it back has to stay in reach.
     if !self.sidebar_visible {
       self.focus.focus(window, cx);
+    }
+    cx.notify();
+  }
+
+  fn selected_checkout(&self, cx: &gpui_kit::App) -> Option<(ProjectId, CheckoutId)> {
+    self.active.and_then(|live| self.model.read(cx).session_checkout(live).cloned())
+  }
+
+  fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    let Some(checkout) = self.selected_checkout(cx) else { return };
+    if self.terminal_visible && self.terminals.contains_key(&checkout) {
+      if let Some(panel) = self.terminals.get(&checkout) {
+        panel.update(cx, |panel, cx| panel.set_visible(false, cx));
+      }
+      self.terminal_visible = false;
+      self.focus.focus(window, cx);
+    } else {
+      for panel in self.terminals.values() {
+        panel.update(cx, |panel, cx| panel.set_visible(false, cx));
+      }
+      let panel = if let Some(panel) = self.terminals.get(&checkout) {
+        panel.clone()
+      } else {
+        let target = OpenTarget::New {
+          project: checkout.0.clone(),
+          checkout: checkout.1.clone(),
+        };
+        let panel = cx.new(|cx| TerminalPanel::new(self.client.clone(), target, &self.terminal_settings, window, cx));
+        let key = checkout.clone();
+        self
+          ._subscriptions
+          .push(cx.subscribe(&panel, move |this, _, _: &TerminalPanelEvent, cx| {
+            this.terminals.remove(&key);
+            if this.selected_checkout(cx).as_ref() == Some(&key) {
+              this.terminal_visible = false;
+            }
+            cx.notify();
+          }));
+        self._subscriptions.push(cx.observe(&panel, |_, _, cx| cx.notify()));
+        self.terminals.insert(checkout, panel.clone());
+        panel
+      };
+      panel.update(cx, |panel, cx| panel.set_visible(true, cx));
+      panel.read(cx).focus_handle(cx).focus(window, cx);
+      self.terminal_visible = true;
     }
     cx.notify();
   }
@@ -270,6 +359,7 @@ impl Workspace {
         window.push_notification(notification, cx);
       }
     }
+    self.repair_terminal_focus(window, cx);
     cx.notify();
   }
 
@@ -282,6 +372,23 @@ impl Workspace {
         .map(|view| (model.session_id(live).cloned(), view.file.clone()))
     });
     self.projects.update(cx, |projects, cx| projects.set_active(active, cx));
+    let checkout = self.selected_checkout(cx);
+    for (key, panel) in &self.terminals {
+      panel.update(cx, |panel, cx| {
+        panel.set_visible(self.terminal_visible && checkout.as_ref() == Some(key), cx)
+      });
+    }
+  }
+
+  fn repair_terminal_focus(&self, window: &mut Window, cx: &mut Context<Self>) {
+    let selected = self.selected_checkout(cx);
+    if self
+      .terminals
+      .iter()
+      .any(|(key, panel)| (!self.terminal_visible || selected.as_ref() != Some(key)) && panel.read(cx).focus_handle(cx).is_focused(window))
+    {
+      self.focus.focus(window, cx);
+    }
   }
 
   fn tab_title(&self, live: LiveSessionId, cx: &gpui_kit::App) -> SharedString {
@@ -324,12 +431,13 @@ impl Workspace {
       .and_then(|active| self.tabs.iter().position(|(live, _)| *live == active));
     TabBar::new("tabs")
       .selected_index(selected.unwrap_or_default())
-      .on_click(cx.listener(|this, index: &usize, _, cx| {
+      .on_click(cx.listener(|this, index: &usize, window, cx| {
         if let Some(live) = this.tabs.get(*index).map(|(live, _)| *live) {
           this.active = Some(live);
           this.history.visit(live);
           this.model.update(cx, |model, _| model.select_tab());
           this.sync_active_sidebar(cx);
+          this.repair_terminal_focus(window, cx);
         }
         cx.notify();
       }))
@@ -381,7 +489,7 @@ impl Workspace {
               .accessibility_label("Back")
               .tooltip("Back")
               .disabled(!back)
-              .on_click(cx.listener(|this, _, _, cx| this.traverse(false, cx))),
+              .on_click(cx.listener(|this, _, window, cx| this.traverse(false, window, cx))),
           )
           .child(
             Button::new("navigation-forward")
@@ -391,10 +499,29 @@ impl Workspace {
               .accessibility_label("Forward")
               .tooltip("Forward")
               .disabled(!forward)
-              .on_click(cx.listener(|this, _, _, cx| this.traverse(true, cx))),
+              .on_click(cx.listener(|this, _, window, cx| this.traverse(true, window, cx))),
           ),
       )
-      .child(div().flex_1().min_w_0().child(self.render_tabs(cx)));
+      .child(div().flex_1().min_w_0().child(self.render_tabs(cx)))
+      .child(
+        h_flex()
+          .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+          .child(
+            Toggle::new("titlebar-toggle-terminal")
+              .xsmall()
+              .icon(gpui_kit::assets::IconName::SquareTerminal)
+              .checked(self.terminal_visible && self.selected_checkout(cx).is_some_and(|key| self.terminals.contains_key(&key)))
+              .tooltip(
+                if self.terminal_visible && self.selected_checkout(cx).is_some_and(|key| self.terminals.contains_key(&key)) {
+                  "Hide terminal"
+                } else {
+                  "Show terminal"
+                },
+              )
+              .disabled(self.selected_checkout(cx).is_none())
+              .on_click(cx.listener(|this, _, window, cx| this.toggle_terminal(window, cx))),
+          ),
+      );
     if cfg!(target_os = "macos") {
       gpui_kit::component::TitleBar::new()
         .bg(cx.theme().sidebar)
@@ -536,11 +663,15 @@ impl Render for Workspace {
       .iter()
       .find(|(live, _)| Some(*live) == self.active)
       .map(|(_, view)| view.clone());
+    let terminal = self
+      .selected_checkout(cx)
+      .and_then(|key| self.terminal_visible.then(|| self.terminals.get(&key).cloned()).flatten());
     v_flex()
       .id("workspace")
       .key_context(WORKSPACE_CONTEXT)
       .track_focus(&self.focus)
       .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| this.toggle_sidebar(window, cx)))
+      .on_action(cx.listener(|this, _: &ToggleTerminal, window, cx| this.toggle_terminal(window, cx)))
       .size_full()
       .bg(cx.theme().sidebar)
       .text_color(cx.theme().foreground)
@@ -558,25 +689,55 @@ impl Render for Workspace {
             })
             .child(
               resizable_panel().size_range(rem * 30. ..rem * 400.).child(
-                v_flex().size_full().min_w_0().child(
-                  v_flex()
-                    .flex_1()
-                    .min_h_0()
-                    .m_1()
-                    .rounded(cx.theme().radius)
-                    .overflow_hidden()
-                    .bg(cx.theme().background)
-                    .children(self.connection_banner(cx))
-                    .child(match active {
-                      Some(view) => div().flex_1().min_h_0().child(view).into_any_element(),
-                      None => div()
-                        .flex_1()
-                        .p_4()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("Open a session from the sidebar")
-                        .into_any_element(),
-                    }),
-                ),
+                v_resizable("main-panes")
+                  .child(
+                    resizable_panel().child(
+                      v_flex()
+                        .size_full()
+                        .min_h_0()
+                        .m_1()
+                        .rounded(cx.theme().radius)
+                        .overflow_hidden()
+                        .bg(cx.theme().background)
+                        .children(self.connection_banner(cx))
+                        .child(match active {
+                          Some(view) => div().flex_1().min_h_0().child(view).into_any_element(),
+                          None => div()
+                            .flex_1()
+                            .p_4()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Open a session from the sidebar")
+                            .into_any_element(),
+                        }),
+                    ),
+                  )
+                  .when_some(terminal, |panes, panel| {
+                    let close_panel = panel.clone();
+                    let workspace_focus = self.focus.clone();
+                    panes.child(
+                      resizable_panel().size(rem * 16.).size_range(rem * 8. ..rem * 40.).child(
+                        v_flex()
+                          .size_full()
+                          .min_h_0()
+                          .bg(cx.theme().background)
+                          .child(
+                            h_flex().px_2().justify_between().child("Terminal").child(
+                              Button::new("close-terminal")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Close)
+                                .accessibility_label("Close terminal")
+                                .tooltip("Close terminal")
+                                .on_click(move |_, window, cx| {
+                                  workspace_focus.focus(window, cx);
+                                  close_panel.update(cx, |panel, cx| panel.close(cx));
+                                }),
+                            ),
+                          )
+                          .child(div().flex_1().min_h_0().child(panel)),
+                      ),
+                    )
+                  }),
               ),
             ),
         ),
@@ -706,125 +867,204 @@ mod tests {
       }
     }
 
+    struct TerminalProbe {
+      _subscriptions: Vec<Subscription>,
+    }
+    impl TerminalProbe {
+      fn new(
+        panel: &Entity<crate::terminal_panel::TerminalPanel>,
+        ready: gpui_kit::base::async_util::Sender<std::result::Result<(), String>>,
+        output: gpui_kit::base::async_util::Sender<std::result::Result<(), String>>,
+        cx: &mut Context<Self>,
+      ) -> Self {
+        if let Some(result) = panel.read(cx).test_ready() {
+          ready.try_send(result).unwrap();
+        }
+        let failure = output.clone();
+        let state = panel.read(cx).test_state();
+        Self {
+          _subscriptions: vec![
+            cx.observe(panel, move |_, panel, cx| {
+              if let Some(result) = panel.read(cx).test_ready() {
+                if let Err(error) = &result
+                  && let Err(send_error) = failure.try_send(Err(error.clone()))
+                {
+                  tracing::debug!(%send_error, "terminal output receiver dropped");
+                }
+                if let Err(error) = ready.try_send(result) {
+                  tracing::debug!(%error, "terminal readiness receiver dropped");
+                }
+              }
+            }),
+            cx.observe(&state, move |_, state, cx| {
+              if state.read(cx).frame().rows.iter().any(|row| row.text.contains("ALVIN_OK"))
+                && let Err(error) = output.try_send(Ok(()))
+              {
+                tracing::debug!(%error, "terminal output receiver dropped");
+              }
+            }),
+          ],
+        }
+      }
+    }
+
     cx.executor().allow_parking();
     let executor = cx.foreground_executor().clone();
-    executor.block_test(async {
-      let base = std::env::temp_dir().join(format!("alvin-sidebar-{}", alvin_protocol::EventId::new().as_uuid()));
-      let repo = base.join("repo");
-      let sessions = base.join("sessions").join("-repo");
-      std::fs::create_dir_all(&repo).unwrap();
-      std::fs::create_dir_all(&sessions).unwrap();
-      assert!(
-        std::process::Command::new("git")
-          .args(["init", "--quiet"])
-          .current_dir(&repo)
-          .status()
-          .unwrap()
-          .success()
-      );
-      let repo = repo.canonicalize().unwrap();
-      let seed = include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
-      std::fs::write(
-        sessions.join("2026-01-01T00-00-00-000Z_01a18ff1-ab74-73b8-a3a2-79905565c49b.jsonl"),
-        seed,
-      )
-      .unwrap();
-      let gateway = Gateway::new(
-        GatewayConfig::builder()
-          .sessions_dir(base.join("sessions"))
-          .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
-          .build(),
-      );
-      let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
-        .await
-        .unwrap();
-      let projects = ProjectsApiClient::list(&client).await.unwrap();
-      let project = projects.first().unwrap();
-      let key = alvin_conversation::SessionsKey {
-        project: project.id.clone(),
-        checkout: Some(project.checkouts.first().unwrap().id.clone()),
-      };
-      let page = SessionsApiClient::list(
-        &client,
-        ListSessions {
-          project: key.project.clone(),
-          checkout: key.checkout.clone(),
-          after: None,
-          limit: 50,
-        },
-      )
-      .await
-      .unwrap();
-      let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-      let (handle, workspace, _events) = cx.update(|cx| {
-        gpui_kit::init(cx);
-        crate::init(cx);
-        let model = cx.new(|cx| {
-          let mut model = Model::new(client, cx);
-          model.seed_workspace(projects, vec![(key, page)], cx);
-          model
-        });
-        let (handle, workspace) = gpui_kit::open_window(
-          WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1100.), px(700.))))),
-            ..Default::default()
-          },
-          cx,
-          |window, cx| cx.new(|cx| Workspace::new(model.clone(), window, cx)),
+    // The nested GPUI scheduler cannot return to Tokio to replenish its cooperative budget.
+    tokio::task::coop::unconstrained(async {
+      executor.block_test(async {
+        let base = std::env::temp_dir().join(format!("alvin-sidebar-{}", alvin_protocol::EventId::new().as_uuid()));
+        let repo = base.join("repo");
+        let sessions = base.join("sessions").join("-repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&sessions).unwrap();
+        assert!(
+          std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success()
+        );
+        let repo = repo.canonicalize().unwrap();
+        let seed =
+          include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
+        std::fs::write(
+          sessions.join("2026-01-01T00-00-00-000Z_01a18ff1-ab74-73b8-a3a2-79905565c49b.jsonl"),
+          seed,
         )
         .unwrap();
-        let events = cx.new(|cx| Events::new(&model, &workspace, tx, cx));
-        (handle, workspace, events)
-      });
-      cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        assert_eq!(window.find("automations").disabled(), Some(true));
-        assert_eq!(window.find("plugins").disabled(), Some(true));
-        assert_eq!(window.find("mobile-coming-soon").disabled(), Some(true));
-        assert_eq!(window.find("navigation-back").disabled(), Some(true));
-        window.click("titlebar-toggle-sidebar", cx);
-        assert!(!workspace.read(cx).sidebar_visible());
-        window.click("titlebar-toggle-sidebar", cx);
-        assert!(workspace.read(cx).sidebar_visible());
-        window.click("user-menu", cx);
-        window.render_frame(cx);
-        let settings = window.find_by_label("Settings…").bounds().center();
-        window.pointer_down(settings, MouseButton::Left, cx);
-        window.pointer_up(settings, MouseButton::Left, cx);
-      })
-      .unwrap();
-      assert_eq!(rx.recv().await, Some(true));
-      cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        window.click("sidebar-settings", cx);
-      })
-      .unwrap();
-      assert_eq!(rx.recv().await, Some(true));
-      for _ in 0..2 {
+        let gateway = Gateway::new(
+          GatewayConfig::builder()
+            .sessions_dir(base.join("sessions"))
+            .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
+            .build(),
+        );
+        let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
+          .await
+          .unwrap();
+        let projects = ProjectsApiClient::list(&client).await.unwrap();
+        let project = projects.first().unwrap();
+        let key = alvin_conversation::SessionsKey {
+          project: project.id.clone(),
+          checkout: Some(project.checkouts.first().unwrap().id.clone()),
+        };
+        let page = SessionsApiClient::list(
+          &client,
+          ListSessions {
+            project: key.project.clone(),
+            checkout: key.checkout.clone(),
+            after: None,
+            limit: 50,
+          },
+        )
+        .await
+        .unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let (handle, workspace, _events) = cx.update(|cx| {
+          gpui_kit::init(cx);
+          crate::init(cx);
+          let model = cx.new(|cx| {
+            let mut model = Model::new(client.clone(), cx);
+            model.seed_workspace(projects, vec![(key, page)], cx);
+            model
+          });
+          let (handle, workspace) = gpui_kit::open_window(
+            WindowOptions {
+              window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1100.), px(700.))))),
+              ..Default::default()
+            },
+            cx,
+            |window, cx| cx.new(|cx| Workspace::new(model.clone(), client, window, cx)),
+          )
+          .unwrap();
+          let events = cx.new(|cx| Events::new(&model, &workspace, tx, cx));
+          (handle, workspace, events)
+        });
         cx.update_window(handle, |_, window, cx| {
           window.render_frame(cx);
-          window.click("new-session", cx);
+          assert_eq!(window.find("automations").disabled(), Some(true));
+          assert_eq!(window.find("plugins").disabled(), Some(true));
+          assert_eq!(window.find("mobile-coming-soon").disabled(), Some(true));
+          assert_eq!(window.find("navigation-back").disabled(), Some(true));
+          window.click("titlebar-toggle-sidebar", cx);
+          assert!(!workspace.read(cx).sidebar_visible());
+          window.click("titlebar-toggle-sidebar", cx);
+          assert!(workspace.read(cx).sidebar_visible());
+          window.click("user-menu", cx);
           window.render_frame(cx);
-          let scope = window.find_by_label(repo.to_str().unwrap()).bounds().center();
-          window.pointer_down(scope, MouseButton::Left, cx);
-          window.pointer_up(scope, MouseButton::Left, cx);
+          let settings = window.find_by_label("Settings…").bounds().center();
+          window.pointer_down(settings, MouseButton::Left, cx);
+          window.pointer_up(settings, MouseButton::Left, cx);
         })
         .unwrap();
-        assert_eq!(rx.recv().await, Some(false));
-      }
-      cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        let second = workspace.read(cx).active().unwrap();
-        window.click("navigation-back", cx);
-        let first = workspace.read(cx).active().unwrap();
-        assert_ne!(first, second);
-        window.click("navigation-forward", cx);
-        assert_eq!(workspace.read(cx).active(), Some(second));
-      })
-      .unwrap();
-      gateway.shutdown().await.unwrap();
-      std::fs::remove_dir_all(base).unwrap();
-    });
+        assert_eq!(rx.recv().await, Some(true));
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          window.click("sidebar-settings", cx);
+        })
+        .unwrap();
+        assert_eq!(rx.recv().await, Some(true));
+        for _ in 0..2 {
+          cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("new-session", cx);
+            window.render_frame(cx);
+            let scope = window.find_by_label(repo.to_str().unwrap()).bounds().center();
+            window.pointer_down(scope, MouseButton::Left, cx);
+            window.pointer_up(scope, MouseButton::Left, cx);
+          })
+          .unwrap();
+          assert_eq!(rx.recv().await, Some(false));
+        }
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          let second = workspace.read(cx).active().unwrap();
+          window.click("navigation-back", cx);
+          let first = workspace.read(cx).active().unwrap();
+          assert_ne!(first, second);
+          window.click("navigation-forward", cx);
+          assert_eq!(workspace.read(cx).active(), Some(second));
+          window.click("titlebar-toggle-terminal", cx);
+          window.render_frame(cx);
+          assert!(window.find("close-terminal").visible());
+          let checkout = workspace.read(cx).selected_checkout(cx).unwrap();
+          let terminal = workspace.read(cx).terminals.get(&checkout).unwrap().entity_id();
+          window.click("titlebar-toggle-terminal", cx);
+          window.render_frame(cx);
+          assert!(window.try_find("close-terminal").is_none());
+          window.click("titlebar-toggle-terminal", cx);
+          window.render_frame(cx);
+          assert_eq!(workspace.read(cx).terminals.get(&checkout).unwrap().entity_id(), terminal);
+          assert!(window.find("close-terminal").visible());
+        })
+        .unwrap();
+        let (ready_tx, ready_rx) = gpui_kit::base::async_util::unbounded();
+        let (output_tx, output_rx) = gpui_kit::base::async_util::unbounded();
+        let _probe = cx.update(|cx| {
+          let checkout = workspace.read(cx).selected_checkout(cx).unwrap();
+          let panel = workspace.read(cx).terminals.get(&checkout).unwrap().clone();
+          cx.new(|cx| TerminalProbe::new(&panel, ready_tx, output_tx, cx))
+        });
+        ready_rx.recv().await.unwrap().unwrap();
+        cx.update_window(handle, |_, window, cx| {
+          window.input("printf ALVIN_%s OK", cx);
+          window.press("enter", cx);
+        })
+        .unwrap();
+        output_rx.recv().await.unwrap().unwrap();
+        cx.update_window(handle, |_, window, cx| {
+          window.click("close-terminal", cx);
+          assert!(workspace.read(cx).focus.is_focused(window));
+        })
+        .unwrap();
+        let cleanup = cx.update(|cx| workspace.update(cx, |workspace, cx| workspace.shutdown(cx)));
+        cleanup.await;
+        gateway.shutdown().await.unwrap();
+        std::fs::remove_dir_all(base).unwrap();
+      });
+    })
+    .await;
   }
 
   #[tokio::test(flavor = "multi_thread")]

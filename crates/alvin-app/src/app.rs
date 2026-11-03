@@ -126,10 +126,12 @@ fn start_with_config(cx: &mut App, client: Client, embedded: Embedded, config: O
   cx.bind_keys([KeyBinding::new(QUIT_KEY, Quit, None)]);
 
   let quitting = Rc::new(Cell::new(false));
+  let app_view: Rc<RefCell<Option<Entity<AppView>>>> = Rc::new(RefCell::new(None));
   let on_quit = {
     let embedded = embedded.clone();
     let quitting = Rc::clone(&quitting);
-    move |cx: &mut App| quit(&embedded, &quitting, cx)
+    let app_view = Rc::clone(&app_view);
+    move |cx: &mut App| quit(&embedded, &quitting, &app_view, cx)
   };
   cx.on_action({
     let on_quit = on_quit.clone();
@@ -147,16 +149,25 @@ fn start_with_config(cx: &mut App, client: Client, embedded: Embedded, config: O
   // Best effort: GPUI cuts this off after 200 ms.
   cx.on_app_quit({
     let embedded = embedded.clone();
-    move |_| {
+    let app_view = Rc::clone(&app_view);
+    move |cx| {
+      let view = app_view.borrow_mut().take();
+      let cleanup = view.as_ref().map(|view| view.update(cx, |view, cx| view.shutdown(cx)));
       let embedded = embedded.clone();
-      async move { embedded.shutdown().await }
+      async move {
+        if let Some(cleanup) = cleanup {
+          cleanup.await;
+        }
+        drop(view);
+        embedded.shutdown().await;
+      }
     }
   })
   .detach();
 
   let workspace = Rc::new(RefCell::new(None));
   let saved_workspace = Rc::clone(&workspace);
-  let (_window, _) = gpui_kit::open_window(
+  let (_window, root) = gpui_kit::open_window(
     WindowOptions {
       window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1200.), px(800.))))),
       ..if cfg!(target_os = "macos") {
@@ -167,9 +178,9 @@ fn start_with_config(cx: &mut App, client: Client, embedded: Embedded, config: O
     },
     cx,
     |window, cx| {
-      let model = cx.new(|cx| Model::new(client, cx));
+      let model = cx.new(|cx| Model::new(client.clone(), cx));
       model.update(cx, |model, cx| model.refresh_projects(cx)).detach();
-      let view = cx.new(|cx| Workspace::new(model, window, cx));
+      let view = cx.new(|cx| Workspace::new(model, client, window, cx));
       if let Some(name) = user_name {
         view.update(cx, |workspace, cx| workspace.set_user_name(name, cx));
       }
@@ -178,17 +189,24 @@ fn start_with_config(cx: &mut App, client: Client, embedded: Embedded, config: O
     },
   )
   .map_err(|error| eyre::eyre!("opening the main window: {error}"))?;
+  *app_view.borrow_mut() = Some(root);
   let view = workspace.borrow_mut().take().ok_or_else(|| eyre::eyre!("opening the workspace"))?;
   Ok(view)
 }
 
-/// Shuts the embedded gateway down in full, then quits. Does nothing the second time.
-fn quit(embedded: &Embedded, quitting: &Rc<Cell<bool>>, cx: &mut App) {
+/// Shuts retained terminal views and the embedded gateway down in full, then quits.
+fn quit(embedded: &Embedded, quitting: &Rc<Cell<bool>>, app_view: &Rc<RefCell<Option<Entity<AppView>>>>, cx: &mut App) {
   if quitting.replace(true) {
     return;
   }
   let embedded = embedded.clone();
+  let view = app_view.borrow_mut().take();
+  let cleanup = view.as_ref().map(|view| view.update(cx, |view, cx| view.shutdown(cx)));
   cx.spawn(async move |cx| {
+    if let Some(cleanup) = cleanup {
+      cleanup.await;
+    }
+    drop(view);
     embedded.shutdown().await;
     cx.update(|cx| cx.quit());
   })

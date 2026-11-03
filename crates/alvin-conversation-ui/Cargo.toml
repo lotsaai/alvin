@@ -10,7 +10,8 @@ alvin-client = { version = "0.1.0", path = "../alvin-client" }
 alvin-conversation = { version = "0.1.0", path = "../alvin-conversation" }
 alvin-protocol = { version = "0.1.0", path = "../alvin-protocol" }
 anstyle-parse = "1.0.0"
-gpui-kit = "0.8.1"
+ghostty-vt = "0.8.0"
+gpui-kit = "0.9.0"
 lsp-types = "0.97.0"
 serde_json = "1.0.154"
 tracing = "0.1.44"
@@ -20,5 +21,5 @@ verdant-parsers-git = { git = "https://github.com/casualjim/verdant", branch = "
 [dev-dependencies]
 alvin-gateway = { path = "../alvin-gateway" }
 alvin-omp-host = { path = "../alvin-omp-host" }
-gpui-kit = { version = "0.8.1", features = ["test-support"] }
+gpui-kit = { version = "0.9.0", features = ["test-support"] }
 tokio = { version = "1.54.1", features = ["rt", "macros", "rt-multi-thread", "time"] }

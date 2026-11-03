@@ -37,6 +37,7 @@ pub enum Endpoint {
 - `Client` holds the jsonrpsee client and implements `ClientT` and `SubscriptionClientT` by forwarding to it, so every generated `*ApiClient` trait from `alvin-protocol` applies to `Client` directly. No `Deref` (`AGENTS.md`).
 - Errors: one `Error` in `error.rs`. `From<jsonrpsee::core::client::Error>` maps `Call(ErrorObjectOwned)` to `Error::Rpc { code: ErrorCode, message, data: Option<ErrorData> }`, decoding `code` against `alvin_protocol::error_codes` and `data` as `ErrorData`. A code outside that table is `Error::UnknownCode { code, message }`, not a guess. `RestartNeeded` (jsonrpsee's "background task terminated", per its docs) maps to `Error::Disconnected`; `Transport`, `RequestTimeout`, `ParseError` map to their own variants with the source kept.
 - Typed calls: UI code calls the generated trait methods and converts with `?` into `alvin_client::Error`.
+- Terminal RPCs use the same generated typed client over either transport. The UI retains the emulator and its accepted event cursor across reconnects; it never repeats a shell creation or user input after an ambiguous failure.
 
 ## Reconnect
 

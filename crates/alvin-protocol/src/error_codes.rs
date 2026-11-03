@@ -30,10 +30,26 @@ pub enum ErrorCode {
   InvalidRequest,
   /// Reading omp's session files failed; the error data names the path.
   SessionIndexFailed,
+  /// The terminal id names no terminal.
+  UnknownTerminal,
+  /// Allocating the terminal failed.
+  TerminalAllocateFailed,
+  /// Starting the shell failed.
+  TerminalSpawnFailed,
+  /// Reading terminal output failed.
+  TerminalReadFailed,
+  /// Writing terminal input failed.
+  TerminalWriteFailed,
+  /// Resizing the terminal failed.
+  TerminalResizeFailed,
+  /// Waiting for the shell failed.
+  TerminalWaitFailed,
+  /// Closing the terminal failed.
+  TerminalCloseFailed,
 }
 
 impl ErrorCode {
-  const ALL: [Self; 10] = [
+  const ALL: [Self; 18] = [
     Self::UnknownLiveSession,
     Self::UnknownSession,
     Self::UnknownProject,
@@ -44,6 +60,14 @@ impl ErrorCode {
     Self::OmpProcessExited,
     Self::InvalidRequest,
     Self::SessionIndexFailed,
+    Self::UnknownTerminal,
+    Self::TerminalAllocateFailed,
+    Self::TerminalSpawnFailed,
+    Self::TerminalReadFailed,
+    Self::TerminalWriteFailed,
+    Self::TerminalResizeFailed,
+    Self::TerminalWaitFailed,
+    Self::TerminalCloseFailed,
   ];
 
   /// The JSON-RPC code on the wire.
@@ -59,6 +83,14 @@ impl ErrorCode {
       Self::OmpProcessExited => -32008,
       Self::InvalidRequest => -32009,
       Self::SessionIndexFailed => -32010,
+      Self::UnknownTerminal => -32011,
+      Self::TerminalAllocateFailed => -32012,
+      Self::TerminalSpawnFailed => -32013,
+      Self::TerminalReadFailed => -32014,
+      Self::TerminalWriteFailed => -32015,
+      Self::TerminalResizeFailed => -32016,
+      Self::TerminalWaitFailed => -32017,
+      Self::TerminalCloseFailed => -32018,
     }
   }
 
@@ -110,7 +142,10 @@ mod tests {
   fn code_table_is_pinned() {
     assert_eq!(
       ErrorCode::ALL.map(ErrorCode::code),
-      [-32001, -32002, -32003, -32004, -32005, -32006, -32007, -32008, -32009, -32010],
+      [
+        -32001, -32002, -32003, -32004, -32005, -32006, -32007, -32008, -32009, -32010, -32011, -32012, -32013, -32014, -32015, -32016,
+        -32017, -32018
+      ],
     );
   }
 

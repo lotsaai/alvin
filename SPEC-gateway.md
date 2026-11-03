@@ -28,6 +28,10 @@ Success:
 - omp exiting on its own appends a process-exited event, then later commands on that live session fail with the process-exited error code. The entry stays until `live/close`, so the UI can show what happened.
 - Gateway shutdown closes every live session.
 
+## Interactive terminals
+
+The gateway resolves the requested checkout on its own host and starts an independent shell in a PTY. A terminal has a UUIDv7 identity, an ordered output log and serialized input and resize operations. Output is retained before it is read by subscribers; accepted-event acknowledgements release retained bytes and stop the PTY reader when the bounded log is full. Output precedes the exit event. Explicit close and gateway shutdown terminate the process and await cleanup. Windows teardown is deferred and unverified: the shell is assigned to a Job Object after it starts, so descendants created before assignment may escape the job.
+
 ## Event Log
 
 - A pump task per live session reads the host's event stream, stamps each body with a fresh `EventId` (`Uuid::now_v7`; the uuid crate guarantees ids from one process are ordered by creation) and the `LiveSessionId`, appends it to the log, then publishes it on a `tokio::sync::broadcast` channel.

@@ -47,6 +47,7 @@ enum Node {
   Session {
     id: SessionId,
     project: String,
+    checkout: CheckoutId,
     path: std::path::PathBuf,
     modified: i64,
     pinned: bool,
@@ -234,6 +235,7 @@ fn items(
           Node::Session {
             id: session.id.clone(),
             project: project.id.as_str().to_owned(),
+            checkout: checkout.id.clone(),
             path: session.path.clone(),
             modified: session.modified.as_second(),
             pinned,
@@ -669,8 +671,11 @@ impl Render for ProjectTree {
                 .and_then(|item| this.nodes.get(&item.id))
                 .cloned();
               match node {
-                Some(Node::Session { id, .. }) => {
-                  this.model.update(cx, |model, cx| model.open_session(id, cx)).detach();
+                Some(Node::Session { id, project, checkout, .. }) => {
+                  this
+                    .model
+                    .update(cx, |model, cx| model.open_session(id, ProjectId::from(project), checkout, cx))
+                    .detach();
                   cx.stop_propagation();
                 }
                 Some(Node::More { key, after }) => {
@@ -801,8 +806,12 @@ impl Render for ProjectTree {
                 );
               let model = model.clone();
               match node.cloned() {
-                Some(Node::Session { id, .. }) => row.on_click(move |_, _, cx| {
-                  model.update(cx, |model, cx| model.open_session(id.clone(), cx)).detach();
+                Some(Node::Session { id, project, checkout, .. }) => row.on_click(move |_, _, cx| {
+                  model
+                    .update(cx, |model, cx| {
+                      model.open_session(id.clone(), ProjectId::from(project.clone()), checkout.clone(), cx)
+                    })
+                    .detach();
                 }),
                 Some(Node::More { key, after }) => row.on_click(move |_, _, cx| {
                   model
@@ -898,6 +907,7 @@ mod tests {
     let node = Node::Session {
       id: SessionId::from("one".to_owned()),
       project: "project".to_owned(),
+      checkout: CheckoutId::from("checkout".to_owned()),
       path: PathBuf::from("/sessions/one.jsonl"),
       modified: 0,
       pinned: false,

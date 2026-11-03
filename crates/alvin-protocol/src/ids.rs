@@ -61,6 +61,11 @@ uuid_v7_id! {
 }
 
 uuid_v7_id! {
+  /// One gateway-owned interactive terminal.
+  TerminalId
+}
+
+uuid_v7_id! {
   /// A queued message as a view tracks it. omp names a queued message by its text, so the client mints this id when it first
   /// sees the message and keeps it for as long as the text stays queued.
   QueuedMessageId

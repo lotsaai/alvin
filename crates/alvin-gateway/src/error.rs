@@ -4,7 +4,7 @@ use std::io;
 
 use std::path::PathBuf;
 
-use alvin_protocol::{CheckoutId, ErrorCode, ErrorData, LiveSessionId, ProjectId, SessionId};
+use alvin_protocol::{CheckoutId, ErrorCode, ErrorData, LiveSessionId, ProjectId, SessionId, TerminalId};
 use jsonrpsee::types::error::INTERNAL_ERROR_CODE;
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 
@@ -88,6 +88,94 @@ pub enum Error {
   #[error("the page size must be at least 1")]
   EmptyPage,
 
+  /// The gateway has begun shutting down its terminals.
+  #[error("the gateway is shutting down terminals")]
+  TerminalShutdown,
+
+  /// The terminal has not completed its initial handshake or is closing.
+  #[error("terminal {terminal:?} is not ready")]
+  TerminalNotReady { terminal: TerminalId },
+
+  /// No terminal has this id.
+  #[error("no terminal {terminal:?}")]
+  UnknownTerminal { terminal: TerminalId },
+
+  /// The terminal cursor does not belong to its retained event log.
+  #[error("unknown event cursor for terminal {terminal:?}")]
+  TerminalCursor { terminal: TerminalId },
+
+  /// Allocating or opening a PTY failed.
+  #[error("allocating terminal {terminal:?}")]
+  TerminalAllocate {
+    terminal: TerminalId,
+    #[source]
+    source: Box<dyn std::error::Error + Send + Sync>,
+  },
+
+  /// Starting the shell failed.
+  #[error("starting terminal {terminal:?}")]
+  TerminalSpawn {
+    terminal: TerminalId,
+    #[source]
+    source: Box<dyn std::error::Error + Send + Sync>,
+  },
+
+  /// Reading shell output failed.
+  #[error("reading terminal {terminal:?}")]
+  TerminalRead {
+    terminal: TerminalId,
+    #[source]
+    source: io::Error,
+  },
+
+  /// Writing shell input failed.
+  #[error("writing terminal {terminal:?}")]
+  TerminalWrite {
+    terminal: TerminalId,
+    #[source]
+    source: io::Error,
+  },
+
+  /// Resizing the PTY failed.
+  #[error("resizing terminal {terminal:?}")]
+  TerminalResize {
+    terminal: TerminalId,
+    #[source]
+    source: Box<dyn std::error::Error + Send + Sync>,
+  },
+
+  /// Waiting for the shell failed.
+  #[error("waiting for terminal {terminal:?}")]
+  TerminalWait {
+    terminal: TerminalId,
+    #[source]
+    source: io::Error,
+  },
+
+  /// Terminating the shell failed.
+  #[error("closing terminal {terminal:?}")]
+  TerminalClose {
+    terminal: TerminalId,
+    #[source]
+    source: io::Error,
+  },
+
+  /// A concurrent terminal close failed.
+  #[error("closing terminal {terminal:?}")]
+  TerminalCloseShared {
+    terminal: TerminalId,
+    #[source]
+    source: std::sync::Arc<Error>,
+  },
+
+  /// The terminal close task ended without publishing completion.
+  #[error("waiting for terminal {terminal:?} to close")]
+  TerminalCompletion {
+    terminal: TerminalId,
+    #[source]
+    source: tokio::sync::watch::error::RecvError,
+  },
+
   /// Two protocol areas declare the same method name.
   #[error("registering protocol methods")]
   RegisterMethods(#[from] jsonrpsee::server::RegisterMethodError),
@@ -155,6 +243,20 @@ impl From<Error> for ErrorObjectOwned {
       ),
       Error::EmptyPage | Error::MissingDirectory { .. } => ErrorObject::owned(ErrorCode::InvalidRequest.code(), message, None::<()>),
       Error::StaleCursor { .. } => ErrorObject::owned(ErrorCode::StaleCursor.code(), message, None::<()>),
+      Error::TerminalShutdown | Error::TerminalNotReady { .. } => {
+        ErrorObject::owned(ErrorCode::CommandNotAllowed.code(), message, None::<()>)
+      }
+      Error::UnknownTerminal { .. } => ErrorObject::owned(ErrorCode::UnknownTerminal.code(), message, None::<()>),
+      Error::TerminalCursor { .. } => ErrorObject::owned(ErrorCode::StaleCursor.code(), message, None::<()>),
+      Error::TerminalAllocate { .. } => ErrorObject::owned(ErrorCode::TerminalAllocateFailed.code(), message, None::<()>),
+      Error::TerminalSpawn { .. } => ErrorObject::owned(ErrorCode::TerminalSpawnFailed.code(), message, None::<()>),
+      Error::TerminalRead { .. } => ErrorObject::owned(ErrorCode::TerminalReadFailed.code(), message, None::<()>),
+      Error::TerminalWrite { .. } => ErrorObject::owned(ErrorCode::TerminalWriteFailed.code(), message, None::<()>),
+      Error::TerminalResize { .. } => ErrorObject::owned(ErrorCode::TerminalResizeFailed.code(), message, None::<()>),
+      Error::TerminalWait { .. } => ErrorObject::owned(ErrorCode::TerminalWaitFailed.code(), message, None::<()>),
+      Error::TerminalClose { .. } | Error::TerminalCloseShared { .. } | Error::TerminalCompletion { .. } => {
+        ErrorObject::owned(ErrorCode::TerminalCloseFailed.code(), message, None::<()>)
+      }
       Error::StillRunning { .. } => ErrorObject::owned(ErrorCode::SessionBusy.code(), message, None::<()>),
       Error::Host(alvin_omp_host::Error::ProcessExited { .. }) => {
         ErrorObject::owned(ErrorCode::OmpProcessExited.code(), message, None::<()>)

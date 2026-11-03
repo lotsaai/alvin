@@ -42,9 +42,13 @@ pub(crate) struct AppView {
   appearance: Appearance,
   light_theme: Entity<SelectState<SearchableVec<String>>>,
   dark_theme: Entity<SelectState<SearchableVec<String>>>,
+  terminal_family: Entity<SelectState<SearchableVec<String>>>,
+  terminal_size: Entity<InputState>,
+  terminal_error: Option<String>,
   _settings_subscriptions: Vec<Subscription>,
   open: bool,
   connecting: bool,
+  shutting_down: bool,
   error: Option<String>,
   _workspace_subscription: Subscription,
   _workspace_event_subscription: Subscription,
@@ -52,6 +56,11 @@ pub(crate) struct AppView {
 }
 
 impl AppView {
+  pub(crate) fn shutdown(&mut self, cx: &mut Context<Self>) -> gpui_kit::Task<()> {
+    self.shutting_down = true;
+    self.workspace.update(cx, |workspace, cx| workspace.shutdown(cx))
+  }
+
   pub(crate) fn new(
     workspace: Entity<Workspace>,
     embedded: Embedded,
@@ -124,6 +133,16 @@ impl AppView {
     let accent = current.map(|config| config.accent_color).unwrap_or(ColorChoice::MODULE);
     let user = current.map(|config| config.user_message_color).unwrap_or(ColorChoice::OPERATOR);
     apply_appearance(appearance, &light, &dark, accent, user, window, cx);
+    let terminal_family =
+      cx.new(|cx| SelectState::new(SearchableVec::new(cx.text_system().all_font_names()), None, window, cx).searchable(true));
+    let terminal_size = input(
+      current
+        .and_then(|config| config.terminal_font_size)
+        .map(|size| size.to_string())
+        .unwrap_or_default(),
+      window,
+      cx,
+    );
     let mut settings_subscriptions = vec![
       cx.subscribe_in(
         &light_theme,
@@ -144,6 +163,20 @@ impl AppView {
         },
       ),
     ];
+    settings_subscriptions.push(cx.subscribe_in(
+      &terminal_family,
+      window,
+      |this, _, event: &SelectEvent<SearchableVec<String>>, window, cx| {
+        if let SelectEvent::Confirm(Some(name)) = event {
+          this.save_terminal_family(Some(name), window, cx);
+        }
+      },
+    ));
+    settings_subscriptions.push(cx.subscribe_in(&terminal_size, window, |this, _, event: &InputEvent, window, cx| {
+      if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
+        this.save_terminal_size(window, cx);
+      }
+    }));
     for (input, field) in [
       (&endpoint, GatewayField::Endpoint),
       (&omp, GatewayField::Omp),
@@ -159,13 +192,14 @@ impl AppView {
     let subscription = cx.observe_window_appearance(window, |this, window, cx| {
       if this.appearance == Appearance::System {
         this.apply_appearance(window, cx);
+        this.apply_terminal_settings(window, cx);
       }
     });
     workspace.update(cx, |workspace, cx| workspace.set_project_preferences(preferences.clone(), cx));
     let workspace_event_subscription = Self::subscribe_workspace_events(&workspace, cx);
     let workspace_subscription = cx.observe(&workspace, |_, _, cx| cx.notify());
     let connected_gateway = config.as_ref().map(|config| config.gateway.clone());
-    Self {
+    let mut view = Self {
       workspace,
       embedded,
       config,
@@ -180,14 +214,96 @@ impl AppView {
       appearance,
       light_theme,
       dark_theme,
+      terminal_family,
+      terminal_size,
+      terminal_error: None,
       _settings_subscriptions: settings_subscriptions,
       open: false,
       connecting: false,
+      shutting_down: false,
       error: None,
       _workspace_event_subscription: workspace_event_subscription,
       _workspace_subscription: workspace_subscription,
       _appearance_subscription: subscription,
+    };
+    view.apply_terminal_settings(window, cx);
+    view
+  }
+
+  fn apply_terminal_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    let Some(configuration) = &self.config else { return };
+    let dark = cx.theme().mode == ThemeMode::Dark;
+    let (mut settings, mut warning) = crate::terminal_font::load(configuration.home(), dark);
+    if let Some(size) = configuration.config.terminal_font_size {
+      settings.font_size = Some(size);
     }
+    if settings.font_size.is_some_and(|size| !size.is_finite() || size <= 0.0) {
+      self.terminal_error = Some("Terminal font size must be a finite positive number.".to_owned());
+      cx.notify();
+      return;
+    }
+    let installed = cx.text_system().all_font_names();
+    let previous = self.workspace.read(cx).terminal_settings();
+    let missing = crate::terminal_font::resolve_families(
+      &mut settings,
+      previous,
+      &installed,
+      configuration.config.terminal_font_family.as_deref(),
+    );
+    for family in missing {
+      let message = format!("Terminal font family {family:?} is not installed.");
+      warning = Some(match warning.take() {
+        Some(previous) => format!("{previous} {message}"),
+        None => message,
+      });
+    }
+    self.terminal_family.update(cx, |picker, cx| {
+      if let Some(family) = &settings.font_family {
+        picker.set_selected_value(family, window, cx);
+      } else {
+        picker.set_selected_index(None, window, cx);
+      }
+    });
+    self.terminal_error = warning;
+    self
+      .workspace
+      .update(cx, |workspace, cx| workspace.set_terminal_settings(settings, cx));
+    cx.notify();
+  }
+
+  fn save_terminal_family(&mut self, family: Option<&str>, window: &mut Window, cx: &mut Context<Self>) {
+    let Some(configuration) = &mut self.config else { return };
+    let mut next = configuration.config.clone();
+    next.terminal_font_family = family.map(str::to_owned);
+    match configuration.save(next) {
+      Ok(()) => cx.defer_in(window, |this, window, cx| this.apply_terminal_settings(window, cx)),
+      Err(error) => self.terminal_error = Some(format!("Couldn’t save terminal font: {error}")),
+    }
+    cx.notify();
+  }
+
+  fn save_terminal_size(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    let value = self.terminal_size.read(cx).value();
+    let size = if value.trim().is_empty() {
+      None
+    } else {
+      match value.trim().parse::<f32>() {
+        Ok(size) if size.is_finite() && size > 0.0 => Some(size),
+        _ => {
+          self.terminal_error = Some("Terminal font size must be a finite positive number.".to_owned());
+          cx.notify();
+          return;
+        }
+      }
+    };
+    let Some(configuration) = &mut self.config else { return };
+    let mut next = configuration.config.clone();
+    next.terminal_font_size = size;
+    match configuration.save(next) {
+      Ok(()) => self.apply_terminal_settings(window, cx),
+      Err(error) => self.terminal_error = Some(format!("Couldn’t save terminal font size: {error}")),
+    }
+    cx.notify();
   }
 
   fn subscribe_workspace_events(workspace: &Entity<Workspace>, cx: &mut Context<Self>) -> Subscription {
@@ -368,6 +484,7 @@ impl AppView {
     let picker = if light { &self.light_theme } else { &self.dark_theme };
     picker.update(cx, |picker, cx| picker.set_selected_value(effective, window, cx));
     self.apply_appearance(window, cx);
+    self.apply_terminal_settings(window, cx);
     cx.notify();
   }
 
@@ -434,19 +551,36 @@ impl AppView {
       self.connecting = true;
       cx.spawn_in(window, async move |this, cx| {
         let result = connect(&gateway).await;
+        if let Ok((_, embedded)) = &result {
+          let cleanup = this.update(cx, |this, cx| {
+            (!this.shutting_down).then(|| this.workspace.update(cx, |workspace, cx| workspace.shutdown(cx)))
+          });
+          match cleanup {
+            Ok(Some(cleanup)) => cleanup.await,
+            Ok(None) | Err(_) => {
+              embedded.shutdown().await;
+              return;
+            }
+          }
+          if !this.update(cx, |this, _| !this.shutting_down).unwrap_or(false) {
+            embedded.shutdown().await;
+            return;
+          }
+        }
         let old = this.update_in(cx, |this, window, cx| {
           this.connecting = false;
           match result {
             Ok((client, embedded)) => {
               let old = this.embedded.replace(&embedded);
-              let model = cx.new(|cx| Model::new(client, cx));
+              let model = cx.new(|cx| Model::new(client.clone(), cx));
               model.update(cx, |model, cx| model.refresh_projects(cx)).detach();
               let user_name = this.workspace.read(cx).user_name().to_owned();
-              this.workspace = cx.new(|cx| Workspace::new(model, window, cx));
+              this.workspace = cx.new(|cx| Workspace::new(model, client, window, cx));
               this.workspace.update(cx, |workspace, cx| workspace.set_user_name(user_name, cx));
               this
                 .workspace
                 .update(cx, |workspace, cx| workspace.set_project_preferences(this.preferences.clone(), cx));
+              this.apply_terminal_settings(window, cx);
               this._workspace_event_subscription = Self::subscribe_workspace_events(&this.workspace, cx);
               this._workspace_subscription = cx.observe(&this.workspace, |_, _, cx| cx.notify());
               this.connected_gateway = Some(gateway);
@@ -805,6 +939,7 @@ impl Render for AppView {
                   Ok(effective) => {
                     this.appearance = effective;
                     this.apply_appearance(window, cx);
+                    this.apply_terminal_settings(window, cx);
                     this.error = (effective != appearance)
                       .then(|| "Saved, but appearance is overridden by command-line, environment, or higher-priority config.".to_owned());
                   }
@@ -851,6 +986,33 @@ impl Render for AppView {
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
                 .child("Interface colors are derived from each Verdant theme’s editor and syntax colors."),
+            )
+            .child(div().text_lg().child("Terminal"))
+            .child(
+              v_flex().gap_1().child("Terminal font family").child(
+                Select::new(&self.terminal_family)
+                  .id("terminal-font-family")
+                  .accessibility_label("Terminal font family"),
+              ),
+            )
+            .when(
+              self
+                .config
+                .as_ref()
+                .is_some_and(|config| config.config.terminal_font_family.is_some()),
+              |view| {
+                view.child(
+                  Button::new("terminal-font-inherit")
+                    .label("Use inherited font")
+                    .on_click(cx.listener(|this, _, window, cx| this.save_terminal_family(None, window, cx))),
+                )
+              },
+            )
+            .child(field("Terminal font size (px)", &self.terminal_size, false))
+            .child(
+              div()
+                .text_sm()
+                .child("Press Enter to save font size. Leave it empty to use Ghostty or the default."),
             )
             .child(div().text_lg().child("Gateway"))
             .child(
@@ -904,6 +1066,12 @@ impl Render for AppView {
       .child(div().flex_1().min_h_0().child(content))
       .children(
         self
+          .terminal_error
+          .as_ref()
+          .map(|error| div().text_color(cx.theme().danger).child(SharedString::from(error.clone()))),
+      )
+      .children(
+        self
           .preferences_error
           .as_ref()
           .map(|error| div().text_color(cx.theme().danger).child(SharedString::from(error.clone()))),
@@ -954,8 +1122,8 @@ mod tests {
           },
           cx,
           |window, cx| {
-            let model = cx.new(|cx| Model::new(client, cx));
-            let workspace = cx.new(|cx| Workspace::new(model, window, cx));
+            let model = cx.new(|cx| Model::new(client.clone(), cx));
+            let workspace = cx.new(|cx| Workspace::new(model, client, window, cx));
             workspace.update(cx, |workspace, cx| workspace.set_user_name("Ada".to_owned(), cx));
             cx.new(|cx| {
               AppView::new(
@@ -1239,8 +1407,8 @@ mod tests {
         gpui_kit::init(cx);
         alvin_conversation_ui::init(cx);
         gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-          let model = cx.new(|cx| Model::new(client, cx));
-          let workspace = cx.new(|cx| Workspace::new(model, window, cx));
+          let model = cx.new(|cx| Model::new(client.clone(), cx));
+          let workspace = cx.new(|cx| Workspace::new(model, client, window, cx));
           cx.new(|cx| {
             AppView::new(
               workspace,

@@ -42,6 +42,7 @@ Method names `<area>/<camelCaseVerb>`. One trait per area, each `#[rpc(client)]`
 | `ModelApi` | `model/list`, `model/set`, `model/cycle`, `thinking/levels`, `thinking/set`, `thinking/cycle` | `get_available_models`, `set_model`, `cycle_model`, `get_available_thinking_levels`, `set_thinking_level`, `cycle_thinking_level` |
 | `DialogApi` | `dialog/respond` (answers an extension UI request) | extension UI responses |
 | `EventsApi` | subscription `events/subscribe` → `events/event`, params `{ live: LiveSessionId, after: Option<EventId> }` | all frames |
+| `TerminalApi` | `terminal/subscribe`, `terminal/input`, `terminal/resize`, `terminal/accepted`, `terminal/close` | independent gateway-owned PTY |
 
 omp's `cycle_thinking_level` can answer `auto`, a selector omp-rpc's generated `Effort` cannot decode, so that one step of the cycle fails with a gateway error. Setting a level and every other step work.
 
@@ -52,6 +53,8 @@ Reading a session's messages means opening it: `live/open` starts omp on that se
 ## Events
 
 `Event { id: EventId, live: LiveSessionId, at: jiff::Timestamp, body: EventBody }`. `EventBody` is a tagged enum over omp's frames (`RpcNotification` and `RpcAgentEvent` in omp's wire module): agent start/end, turn start/end, message start/update/end (text and thinking deltas), tool execution start/update/stream update/end, queue update, prompt result, session settled, manual and auto compaction start/end, auto retry start/end, model changed, thinking level changed, notice, available commands update, command output, session info update, config update, extension UI request, extension error, process exited, frame dropped. Replay: a subscription with `after` first sends every retained event with a greater id, then streams live events, with no gap.
+
+Terminal subscriptions distinguish opening a checkout target from resuming a gateway-minted `TerminalId` after an optional `EventId`. Events carry ordered raw output and process lifecycle. A newly opened shell remains provisional until the client acknowledges `Started` or a later event; disconnect before acceptance closes it, and input is rejected. After acceptance, the retained emulator advances its cursor once it accepts an event's bytes and acknowledges the event; the gateway releases acknowledged output and applies backpressure. If an acknowledgement committed but its response was lost, the same emulator resumes after that cursor. A stale cursor fails rather than initializing a fresh emulator from an arbitrary byte tail.
 
 ## Errors
 

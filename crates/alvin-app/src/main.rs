@@ -5,6 +5,7 @@ mod config;
 mod error;
 mod project_preferences;
 mod settings;
+mod terminal_font;
 #[cfg(test)]
 mod test_support;
 

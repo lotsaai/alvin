@@ -9,7 +9,8 @@ use alvin_protocol::{
   ModelApiServer, ModelCycleResult, ModelInfo, NavigateRequest, NavigateTreeResult, OpenRequest, ProjectSummary, ProjectsApiServer,
   PromoteQueuedMessageResult, PromoteQueuedRequest, PromptRequest, QueueApiServer, RemoveQueuedMessageResult, RemoveQueuedRequest,
   RenameRequest, RespondRequest, SessionPage, SessionState, SessionStats, SessionsApiServer, SetModelRequest, SetThinkingRequest,
-  SubscribeRequest, ThinkingLevel, ThinkingLevelCycleResult,
+  SubscribeRequest, TerminalAccepted, TerminalApiServer, TerminalEventBody, TerminalId, TerminalInput, TerminalResize,
+  TerminalSubscription, ThinkingLevel, ThinkingLevelCycleResult,
 };
 use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
 use jsonrpsee::server::{Methods, PendingSubscriptionSink, SubscriptionMessage};
@@ -226,6 +227,130 @@ impl EventsApiServer for Gateway {
   }
 }
 
+#[async_trait]
+impl TerminalApiServer for Gateway {
+  async fn terminal_events(&self, pending: PendingSubscriptionSink, request: TerminalSubscription) -> SubscriptionResult {
+    let (terminal, after, opened) = match request {
+      TerminalSubscription::Open { target, size } => {
+        let (cwd, _) = match self.resolve(&target).await {
+          Ok(resolved) => resolved,
+          Err(error) => {
+            pending.reject(ErrorObjectOwned::from(error)).await;
+            return Ok(());
+          }
+        };
+        let terminal = {
+          let _opening = self.terminals.open_lock.lock().await;
+          self.terminals.ensure_running().and_then(|()| {
+            let terminal = crate::terminal::Terminal::start(&cwd, size)?;
+            self.terminals.insert(terminal.clone());
+            Ok(terminal)
+          })
+        };
+        let terminal = match terminal {
+          Ok(terminal) => terminal,
+          Err(error) => {
+            pending.reject(ErrorObjectOwned::from(error)).await;
+            return Ok(());
+          }
+        };
+        (terminal, None, true)
+      }
+      TerminalSubscription::Resume { terminal, after } => match self.terminals.get(terminal) {
+        Ok(terminal) => (terminal, after, false),
+        Err(error) => {
+          pending.reject(ErrorObjectOwned::from(error)).await;
+          return Ok(());
+        }
+      },
+    };
+    let _opening = opened.then(|| crate::terminal::PendingOpen::new(self.terminals.clone(), terminal.id));
+    let (mut replay, mut receiver) = match terminal.subscribe(after) {
+      Ok(subscription) => subscription,
+      Err(error) => {
+        pending.reject(ErrorObjectOwned::from(error)).await;
+        return Ok(());
+      }
+    };
+    let sink = pending.accept().await?;
+    let mut replay_cursor = after;
+    loop {
+      for event in replay.drain(..) {
+        let last = event.id;
+        let finished = matches!(event.body, TerminalEventBody::Exited { .. } | TerminalEventBody::Failed { .. });
+        if sink
+          .send(SubscriptionMessage::new(
+            sink.method_name(),
+            sink.subscription_id(),
+            event.as_ref(),
+          )?)
+          .await
+          .is_err()
+        {
+          return Ok(());
+        }
+        if finished {
+          tokio::select! {
+            () = sink.closed() => {}
+            () = terminal.wait_for_acceptance() => {}
+          }
+          return Ok(());
+        }
+        // The cursor always names the last event actually sent.
+        replay_cursor = Some(last);
+      }
+      tokio::select! {
+        () = sink.closed() => return Ok(()),
+        event = receiver.recv() => match event {
+          Ok(event) => replay.push(event),
+          Err(RecvError::Lagged(_)) => {
+            let (events, next) = terminal.subscribe(replay_cursor)?;
+            replay = events;
+            receiver = next;
+          }
+          Err(RecvError::Closed) => return Ok(()),
+        },
+      }
+    }
+  }
+
+  async fn input(&self, request: TerminalInput) -> RpcResult<()> {
+    self
+      .traced("terminal/input", async {
+        let terminal = self.terminals.get(request.terminal)?;
+        tokio::task::spawn_blocking(move || terminal.input(request)).await?
+      })
+      .await
+  }
+
+  async fn resize(&self, request: TerminalResize) -> RpcResult<()> {
+    self
+      .traced("terminal/resize", async {
+        let terminal = self.terminals.get(request.terminal)?;
+        tokio::task::spawn_blocking(move || terminal.resize(request)).await?
+      })
+      .await
+  }
+
+  async fn accepted(&self, request: TerminalAccepted) -> RpcResult<()> {
+    self
+      .traced("terminal/accepted", async {
+        self.terminals.get(request.terminal)?.accepted(request.through)
+      })
+      .await
+  }
+
+  async fn close(&self, id: TerminalId) -> RpcResult<()> {
+    self
+      .traced("terminal/close", async {
+        self.terminals.get(id)?.close().await?;
+        self.terminals.remove(id)?;
+        Ok(())
+      })
+      .await
+  }
+}
+
 impl Gateway {
   /// Every method the gateway serves. Both transports serve exactly this table.
   pub(crate) fn methods(&self) -> Result<Methods> {
@@ -236,6 +361,7 @@ impl Gateway {
     methods.merge(ModelApiServer::into_rpc(self.clone()))?;
     methods.merge(DialogApiServer::into_rpc(self.clone()))?;
     methods.merge(EventsApiServer::into_rpc(self.clone()))?;
+    methods.merge(TerminalApiServer::into_rpc(self.clone()))?;
     Ok(methods)
   }
 
@@ -310,6 +436,12 @@ mod tests {
         "queue/remove",
         "queue/restore",
         "sessions/list",
+        "terminal/accepted",
+        "terminal/close",
+        "terminal/input",
+        "terminal/resize",
+        "terminal/subscribe",
+        "terminal/unsubscribe",
         "thinking/cycle",
         "thinking/levels",
         "thinking/set",

@@ -9,6 +9,8 @@ actions!(
     Abort,
     /// Shows or hides the project sidebar.
     ToggleSidebar,
+    /// Shows or hides the terminal.
+    ToggleTerminal,
   ]
 );
 
@@ -24,11 +26,18 @@ const TOGGLE_SIDEBAR_KEY: &str = "cmd-b";
 #[cfg(not(target_os = "macos"))]
 const TOGGLE_SIDEBAR_KEY: &str = "ctrl-b";
 
+#[cfg(target_os = "macos")]
+const TOGGLE_TERMINAL_KEY: &str = "cmd-j";
+#[cfg(not(target_os = "macos"))]
+const TOGGLE_TERMINAL_KEY: &str = "ctrl-j";
+
 /// Registers this crate's key bindings. Call after `gpui_kit::init`.
 pub fn init(cx: &mut App) {
   crate::markdown::refresh_markdown_theme(cx);
+  cx.bind_keys(crate::terminal::default_key_bindings());
   cx.bind_keys([
     KeyBinding::new("escape", Abort, Some(SESSION_CONTEXT)),
     KeyBinding::new(TOGGLE_SIDEBAR_KEY, ToggleSidebar, Some(WORKSPACE_CONTEXT)),
+    KeyBinding::new(TOGGLE_TERMINAL_KEY, ToggleTerminal, Some(WORKSPACE_CONTEXT)),
   ]);
 }

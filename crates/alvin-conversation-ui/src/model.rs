@@ -145,6 +145,7 @@ pub struct Model {
   stats: BTreeMap<LiveSessionId, SessionStats>,
   conversation: Conversation,
   session_ids: BTreeMap<LiveSessionId, SessionId>,
+  session_checkouts: BTreeMap<LiveSessionId, (ProjectId, CheckoutId)>,
   page_loads: PageLoads,
   navigation: Navigation,
   client: Client,
@@ -187,6 +188,7 @@ impl Model {
       stats: BTreeMap::new(),
       conversation: Conversation::default(),
       session_ids: BTreeMap::new(),
+      session_checkouts: BTreeMap::new(),
       page_loads: PageLoads::default(),
       navigation: Navigation::default(),
       client,
@@ -361,16 +363,23 @@ impl Model {
   }
 
   /// Opens a listed session in a live session, or the live session it is already in.
-  pub fn open_session(&mut self, session: SessionId, cx: &mut Context<Self>) -> Task<()> {
-    self.open(OpenTarget::Session { session }, cx)
+  pub fn open_session(&mut self, session: SessionId, project: ProjectId, checkout: CheckoutId, cx: &mut Context<Self>) -> Task<()> {
+    self.open(OpenTarget::Session { session }, (project, checkout), cx)
   }
 
   /// Opens a new session in a checkout of a project.
   pub fn new_session(&mut self, project: ProjectId, checkout: CheckoutId, cx: &mut Context<Self>) -> Task<()> {
-    self.open(OpenTarget::New { project, checkout }, cx)
+    self.open(
+      OpenTarget::New {
+        project: project.clone(),
+        checkout: checkout.clone(),
+      },
+      (project, checkout),
+      cx,
+    )
   }
 
-  fn open(&mut self, target: OpenTarget, cx: &mut Context<Self>) -> Task<()> {
+  fn open(&mut self, target: OpenTarget, checkout: (ProjectId, CheckoutId), cx: &mut Context<Self>) -> Task<()> {
     let session = match &target {
       OpenTarget::Session { session } => Some(session.clone()),
       OpenTarget::New { .. } => None,
@@ -383,7 +392,10 @@ impl Model {
         .map_err(Error::from);
       match opened {
         Ok(summary) => {
-          if this.update(cx, |model, cx| model.opened(summary, session, intent, cx)).is_err() {
+          if this
+            .update(cx, |model, cx| model.opened(summary, session, checkout, intent, cx))
+            .is_err()
+          {
             tracing::debug!("model released before the command finished");
           }
         }
@@ -392,8 +404,16 @@ impl Model {
     })
   }
 
-  fn opened(&mut self, summary: LiveSessionSummary, session: Option<SessionId>, intent: EventId, cx: &mut Context<Self>) {
+  fn opened(
+    &mut self,
+    summary: LiveSessionSummary,
+    session: Option<SessionId>,
+    checkout: (ProjectId, CheckoutId),
+    intent: EventId,
+    cx: &mut Context<Self>,
+  ) {
     let live = summary.live;
+    self.session_checkouts.insert(live, checkout);
     if let Some(session) = session {
       self.session_ids.insert(live, session);
     }
@@ -412,6 +432,10 @@ impl Model {
 
   pub(crate) fn session_id(&self, live: LiveSessionId) -> Option<&SessionId> {
     self.session_ids.get(&live)
+  }
+
+  pub(crate) fn session_checkout(&self, live: LiveSessionId) -> Option<&(ProjectId, CheckoutId)> {
+    self.session_checkouts.get(&live)
   }
 
   fn set_state(&mut self, live: LiveSessionId, state: &alvin_protocol::SessionState) {
@@ -1129,6 +1153,7 @@ impl Model {
               model.catalogs.remove(&live);
               model.tree_reads.remove(&live);
               model.session_ids.remove(&live);
+              model.session_checkouts.remove(&live);
               model.conversation.close(live);
               cx.emit(ModelEvent::Closed(live));
               cx.notify();

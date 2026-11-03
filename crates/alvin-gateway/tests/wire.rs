@@ -22,6 +22,9 @@ use alvin_protocol::{
   RenameRequest, RespondRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage, SessionStatus, SessionsApiClient, SetModelRequest,
   SetThinkingRequest, SubscribeRequest, ThinkingLevel,
 };
+use alvin_protocol::{
+  TerminalAccepted, TerminalApiClient, TerminalEventBody, TerminalInput, TerminalResize, TerminalSize, TerminalSubscription,
+};
 
 /// Session files written by real omp (the first two records of one run).
 fn fixture_sessions() -> PathBuf {
@@ -1697,4 +1700,311 @@ async fn session_operations_work_over_both_transports(project: &mut Project) {
   drop((stream, channel, ws));
   server.shutdown().await.unwrap();
   gateway.shutdown().await.unwrap();
+}
+
+#[test_context(Project)]
+#[tokio::test]
+async fn terminal_shell_output_and_resume_work_over_both_transports(project: &mut Project) {
+  use std::num::NonZeroU16;
+
+  project.sessions(1);
+  let gateway = project.gateway();
+  let (clients, server) = both_transports(&gateway).await;
+  let size = TerminalSize {
+    columns: NonZeroU16::new(80).unwrap(),
+    rows: NonZeroU16::new(24).unwrap(),
+    pixel_width: 800,
+    pixel_height: 480,
+  };
+  for client in &clients {
+    let (project_id, checkout) = only_project(client).await;
+    let mut stream = TerminalApiClient::terminal_events(
+      client,
+      TerminalSubscription::Open {
+        target: OpenTarget::New {
+          project: project_id,
+          checkout,
+        },
+        size,
+      },
+    )
+    .await
+    .unwrap();
+    let started = stream.next().await.unwrap().unwrap();
+    assert!(matches!(started.body, TerminalEventBody::Started));
+    let terminal = started.terminal;
+    TerminalApiClient::accepted(
+      client,
+      TerminalAccepted {
+        terminal,
+        through: started.id,
+      },
+    )
+    .await
+    .unwrap();
+    let stale = TerminalApiClient::terminal_events(client, TerminalSubscription::Resume { terminal, after: None })
+      .await
+      .unwrap_err();
+    assert!(matches!(
+      Error::from(stale),
+      Error::Gateway {
+        code: ErrorCode::StaleCursor,
+        ..
+      }
+    ));
+    let resized = TerminalSize {
+      columns: NonZeroU16::new(101).unwrap(),
+      rows: NonZeroU16::new(31).unwrap(),
+      ..size
+    };
+    TerminalApiClient::resize(client, TerminalResize { terminal, size: resized })
+      .await
+      .unwrap();
+    let command = if cfg!(windows) {
+      b"echo ALVIN_TERMINAL_OUTPUT\r\nexit\r\n".to_vec()
+    } else {
+      b"printf 'ALVIN_TERMINAL_OUTPUT\\n'; pwd; stty size; exit\n".to_vec()
+    };
+    TerminalApiClient::input(client, TerminalInput { terminal, bytes: command })
+      .await
+      .unwrap();
+    drop(stream);
+    let mut resumed = TerminalApiClient::terminal_events(
+      client,
+      TerminalSubscription::Resume {
+        terminal,
+        after: Some(started.id),
+      },
+    )
+    .await
+    .unwrap();
+    let mut output = Vec::new();
+    let mut last = started.id;
+    loop {
+      let event = resumed.next().await.unwrap().unwrap();
+      assert!(event.id > last);
+      last = event.id;
+      TerminalApiClient::accepted(
+        client,
+        TerminalAccepted {
+          terminal,
+          through: event.id,
+        },
+      )
+      .await
+      .unwrap();
+      match event.body {
+        TerminalEventBody::Output { bytes } => output.extend(bytes),
+        TerminalEventBody::Exited { code, signal } => {
+          assert_eq!(code, Some(0));
+          assert_eq!(signal, None);
+          break;
+        }
+        TerminalEventBody::Failed { code, message } => panic!("terminal failed {code}: {message}"),
+        TerminalEventBody::Started => panic!("started event repeated after cursor"),
+      }
+    }
+    assert!(String::from_utf8_lossy(&output).contains("ALVIN_TERMINAL_OUTPUT"));
+    if !cfg!(windows) {
+      assert!(String::from_utf8_lossy(&output).contains(project.root.to_str().unwrap()));
+      assert!(String::from_utf8_lossy(&output).contains("31 101"));
+    }
+    TerminalApiClient::close(client, terminal).await.unwrap();
+  }
+  drop(clients);
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+#[cfg(unix)]
+#[test_context(Project)]
+#[tokio::test]
+async fn terminal_backpressure_preserves_large_output_over_both_transports(project: &mut Project) {
+  use std::num::NonZeroU16;
+
+  project.sessions(1);
+  let gateway = project.gateway();
+  let (clients, server) = both_transports(&gateway).await;
+  let size = TerminalSize {
+    columns: NonZeroU16::new(80).unwrap(),
+    rows: NonZeroU16::new(24).unwrap(),
+    pixel_width: 800,
+    pixel_height: 480,
+  };
+  for client in &clients {
+    let (project_id, checkout) = only_project(client).await;
+    let mut stream = TerminalApiClient::terminal_events(
+      client,
+      TerminalSubscription::Open {
+        target: OpenTarget::New {
+          project: project_id,
+          checkout,
+        },
+        size,
+      },
+    )
+    .await
+    .unwrap();
+    let started = stream.next().await.unwrap().unwrap();
+    assert!(matches!(started.body, TerminalEventBody::Started));
+    let terminal = started.terminal;
+    TerminalApiClient::accepted(
+      client,
+      TerminalAccepted {
+        terminal,
+        through: started.id,
+      },
+    )
+    .await
+    .unwrap();
+    TerminalApiClient::input(
+      client,
+      TerminalInput {
+        terminal,
+        bytes: b"stty -echo; printf '\\001READY\\002'\n".to_vec(),
+      },
+    )
+    .await
+    .unwrap();
+    let mut ready = Vec::new();
+    while !ready.windows(7).any(|part| part == b"\x01READY\x02") {
+      let event = stream.next().await.unwrap().unwrap();
+      TerminalApiClient::accepted(
+        client,
+        TerminalAccepted {
+          terminal,
+          through: event.id,
+        },
+      )
+      .await
+      .unwrap();
+      match event.body {
+        TerminalEventBody::Output { bytes } => ready.extend(bytes),
+        other => panic!("unexpected terminal event: {other:?}"),
+      }
+    }
+    TerminalApiClient::input(
+      client,
+      TerminalInput {
+        terminal,
+        bytes: b"printf '\\001START\\002'; head -c 2097152 /dev/zero | tr '\\000' X; printf '\\001END\\002'; exit\n".to_vec(),
+      },
+    )
+    .await
+    .unwrap();
+    let mut output = Vec::new();
+    loop {
+      let event = stream.next().await.unwrap().unwrap();
+      TerminalApiClient::accepted(
+        client,
+        TerminalAccepted {
+          terminal,
+          through: event.id,
+        },
+      )
+      .await
+      .unwrap();
+      match event.body {
+        TerminalEventBody::Output { bytes } => output.extend(bytes),
+        TerminalEventBody::Exited { code, signal } => {
+          assert_eq!((code, signal), (Some(0), None));
+          break;
+        }
+        other => panic!("unexpected terminal event: {other:?}"),
+      }
+    }
+    let start = output.windows(7).position(|part| part == b"\x01START\x02").unwrap() + 7;
+    let end = output.windows(5).position(|part| part == b"\x01END\x02").unwrap();
+    let bytes = output.get(start..end).unwrap();
+    assert_eq!(bytes.len(), 2_097_152);
+    assert!(bytes.iter().all(|byte| *byte == b'X'));
+    TerminalApiClient::close(client, terminal).await.unwrap();
+  }
+  drop(clients);
+  server.shutdown().await.unwrap();
+  gateway.shutdown().await.unwrap();
+}
+
+#[test_context(Project)]
+#[tokio::test]
+async fn terminal_shutdown_closes_shells_and_rejects_new_opens(project: &mut Project) {
+  use std::num::NonZeroU16;
+
+  project.sessions(1);
+  let gateway = project.gateway();
+  let (clients, server) = both_transports(&gateway).await;
+  let size = TerminalSize {
+    columns: NonZeroU16::new(80).unwrap(),
+    rows: NonZeroU16::new(24).unwrap(),
+    pixel_width: 800,
+    pixel_height: 480,
+  };
+  let (project_id, checkout) = only_project(&clients[0]).await;
+  let target = OpenTarget::New {
+    project: project_id,
+    checkout,
+  };
+  let mut terminals = Vec::new();
+  let mut streams = Vec::new();
+  for client in &clients {
+    let mut stream = TerminalApiClient::terminal_events(
+      client,
+      TerminalSubscription::Open {
+        target: target.clone(),
+        size,
+      },
+    )
+    .await
+    .unwrap();
+    let started = stream.next().await.unwrap().unwrap();
+    assert!(matches!(started.body, TerminalEventBody::Started));
+    TerminalApiClient::accepted(
+      client,
+      TerminalAccepted {
+        terminal: started.terminal,
+        through: started.id,
+      },
+    )
+    .await
+    .unwrap();
+    terminals.push(started.terminal);
+    streams.push(stream);
+  }
+  gateway.shutdown().await.unwrap();
+  for (client, terminal) in clients.iter().zip(terminals) {
+    let closed = TerminalApiClient::input(
+      client,
+      TerminalInput {
+        terminal,
+        bytes: b"test".to_vec(),
+      },
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(
+      Error::from(closed),
+      Error::Gateway {
+        code: ErrorCode::UnknownTerminal,
+        ..
+      }
+    ));
+    let reopened = TerminalApiClient::terminal_events(
+      client,
+      TerminalSubscription::Open {
+        target: target.clone(),
+        size,
+      },
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(
+      Error::from(reopened),
+      Error::Gateway {
+        code: ErrorCode::CommandNotAllowed,
+        ..
+      }
+    ));
+  }
+  drop((streams, clients));
+  server.shutdown().await.unwrap();
 }

@@ -10,6 +10,8 @@ mod live;
 mod omp_dirs;
 mod rpc;
 mod telemetry;
+mod terminal;
+mod terminal_process;
 
 pub use alvin_omp_host::HostConfig;
 pub use config::GatewayConfig;

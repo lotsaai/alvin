@@ -103,6 +103,14 @@ pub struct AppConfig {
   #[config(default = "operator", env = "ALVIN_USER_MESSAGE_COLOR")]
   #[config(layer_attr(arg(long)))]
   pub user_message_color: ColorChoice,
+  /// Terminal font family; absent follows Ghostty or the app's monospace default.
+  #[config(env = "ALVIN_TERMINAL_FONT_FAMILY")]
+  #[config(layer_attr(arg(long)))]
+  pub terminal_font_family: Option<String>,
+  /// Terminal font size in logical pixels.
+  #[config(env = "ALVIN_TERMINAL_FONT_SIZE")]
+  #[config(layer_attr(arg(long)))]
+  pub terminal_font_size: Option<f32>,
   /// The embedded gateway's settings. They do not apply to a remote gateway, which is configured where it runs.
   #[config(nested)]
   #[config(layer_attr(command(flatten)))]
@@ -263,6 +271,10 @@ impl Configuration {
     self.path.with_file_name("projects.json")
   }
 
+  pub(crate) fn home(&self) -> &std::path::Path {
+    &self.home
+  }
+
   #[cfg(test)]
   pub(crate) fn for_test(path: PathBuf) -> eyre::Result<Self> {
     use confique::Layer as _;
@@ -322,6 +334,25 @@ impl Configuration {
         "user_message_color",
         Some(config.user_message_color.as_str()),
       );
+    }
+    if config.terminal_font_family != self.config.terminal_font_family {
+      set_table_value(
+        document.as_table_mut(),
+        "terminal_font_family",
+        config.terminal_font_family.as_deref(),
+      );
+    }
+    if config.terminal_font_size != self.config.terminal_font_size {
+      if let Some(size) = config.terminal_font_size {
+        let item = &mut document["terminal_font_size"];
+        let decor = item.as_value().map(|value| value.decor().clone());
+        *item = toml_edit::value(f64::from(size));
+        if let (Some(decor), Some(value)) = (decor, item.as_value_mut()) {
+          *value.decor_mut() = decor;
+        }
+      } else {
+        document.remove("terminal_font_size");
+      }
     }
     if config.gateway.omp != self.config.gateway.omp
       || config.gateway.model != self.config.gateway.model
@@ -518,6 +549,30 @@ mod tests {
     assert!(saved.contains("omp = '/opt/omp' # executable"));
     assert!(saved.contains("model = 'provider/model'"));
     assert_eq!(configuration.config.appearance, "dark");
+  }
+
+  #[test]
+  fn terminal_font_override_can_be_saved_and_cleared() {
+    let tmp = Scratch::new();
+    let path = tmp.file("config.toml", "# retained\n");
+    let mut configuration = Configuration::for_test(path.clone()).unwrap();
+    let mut next = configuration.config.clone();
+    next.terminal_font_family = Some("Selected Font".into());
+    configuration.save(next).unwrap();
+    assert_eq!(
+      Configuration::for_test(path.clone())
+        .unwrap()
+        .config
+        .terminal_font_family
+        .as_deref(),
+      Some("Selected Font")
+    );
+
+    let mut next = configuration.config.clone();
+    next.terminal_font_family = None;
+    configuration.save(next).unwrap();
+    assert_eq!(Configuration::for_test(path.clone()).unwrap().config.terminal_font_family, None);
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "# retained\n");
   }
 
   #[test]

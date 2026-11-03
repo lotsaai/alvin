@@ -11,6 +11,7 @@ Success:
 - `mise dev` opens a window on macOS, Windows, and Linux showing the projects from the machine's omp sessions directory.
 - `alvin-app --endpoint ws://127.0.0.1:<port>` shows the same UI against a running `alvind`, with no embedded gateway started.
 - Quitting leaves no omp process running and flushes telemetry; a flush or shutdown error is logged, not dropped.
+- The workspace can open a gateway-hosted interactive terminal in the selected checkout. Window or endpoint replacement releases its retained terminal and closes the shell; embedded gateway shutdown waits for terminal cleanup.
 
 ## Configuration
 
@@ -75,6 +76,24 @@ is pressed, then reconnects if the effective gateway changed. Unsubmitted edits 
 existing source precedence still applies, and save or connection errors appear in settings.
 The sidebar's settings control opens Settings; Back to sessions returns to the workspace and restores its focus.
 
+Terminal font family and logical-pixel size are independent settings: `terminal_font_family` and `terminal_font_size`
+in TOML, `ALVIN_TERMINAL_FONT_FAMILY` and `ALVIN_TERMINAL_FONT_SIZE`, or `--terminal-font-family` and
+`--terminal-font-size`. The family picker lists installed families; press Enter to save the size. An explicit family
+replaces Ghostty's entire font-family list without resolving or warning about it; other Ghostty appearance settings
+still apply. Use “Use inherited font” to clear the saved family override and restore inheritance, subject to source
+precedence. With no override, fonts inherit from local Ghostty configuration or the app's monospace defaults. Imported
+Ghostty colors, palette, cursor and fonts do not change application zoom or theme. A nonempty `XDG_CONFIG_HOME` takes
+precedence; otherwise the importer uses `dirs`' platform config directory on Linux and local config directory on
+Windows, or `~/.config` on macOS. On macOS it also reads the `com.mitchellh.ghostty` application-support directory.
+Legacy `config` precedes `config.ghostty`; relative includes follow all default files in recorded order. Named themes
+are searched in the Ghostty user themes directory, then `GHOSTTY_RESOURCES_DIR/themes`, or the installed Ghostty
+resources discovered from its executable on `PATH` using Ghostty's terminfo layout. A Finder launch whose `PATH`
+does not include Ghostty may require `GHOSTTY_RESOURCES_DIR`. Missing themes, required includes
+and font families are shown in the window without blocking valid explicit font overrides. For inherited families, the
+first installed family in the configured order becomes primary; remaining installed families retain their order.
+This is an appearance-field import, not the Ghostty app configuration loader; background opacity, minimum contrast
+and window effects are not reproduced.
+
 Project aliases, pins, and hidden projects, plus pinned and hidden sessions within each project, are local presentation
 preferences. They are stored in `projects.json` beside the writable `config.toml` (or beside the file passed with
 `--config-file`) and apply across gateway reconnects. Delete in the project menu hides a project; restoring it does not
@@ -130,7 +149,7 @@ Errors before the window opens are `eyre` reports at the edge, printed and exiti
 
 Quitting never relies on GPUI's quit hook alone: it runs for 200 ms (`SHUTDOWN_TIMEOUT`), and closing omp sessions takes longer, so the processes would outlive the app. The `Quit` action (bound to the platform's command key plus `q`) and the last window closing therefore shut the embedded gateway down in full, then call `cx.quit()`. The `on_app_quit` hook still starts a shutdown for quits that bypass both. A second request while one runs does nothing.
 
-On quit (`Context::on_app_quit`, gpui-pre 0.3.10, read on docs.rs; bounded by GPUI's `SHUTDOWN_TIMEOUT`): embedded mode shuts the gateway down, which closes every live session and its omp process tree (`SPEC-gateway.md`, `SPEC-omp-host.md`); then telemetry flushes and shuts down explicitly, logging any error. Remote mode closes the client only; the remote gateway's sessions stay live.
+On quit (`Context::on_app_quit`, gpui-pre 0.3.11, read on docs.rs; bounded by GPUI's `SHUTDOWN_TIMEOUT`): embedded mode shuts the gateway down, which closes every live session and its omp process tree (`SPEC-gateway.md`, `SPEC-omp-host.md`); then telemetry flushes and shuts down explicitly, logging any error. Remote mode closes the client only; the remote gateway's sessions stay live.
 
 ## Out of Scope (v1)
 

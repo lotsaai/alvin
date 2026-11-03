@@ -17,6 +17,7 @@ use tokio::sync::broadcast;
 
 use crate::live::{self, EventLog, Live, LiveSessions};
 use crate::telemetry::Metrics;
+use crate::terminal::Terminals;
 use crate::{Error, GatewayConfig, Result};
 
 /// The application boundary. Cheap to clone; every transport serves the same methods from one instance.
@@ -25,6 +26,7 @@ pub struct Gateway {
   config: Arc<GatewayConfig>,
   host: Host,
   live: Arc<LiveSessions>,
+  pub(crate) terminals: Arc<Terminals>,
   pub(crate) metrics: Metrics,
 }
 
@@ -35,6 +37,7 @@ impl Gateway {
       host: Host::new(config.omp.clone()),
       config: Arc::new(config),
       live: Arc::default(),
+      terminals: Arc::default(),
       metrics: Metrics::new(),
     }
   }
@@ -43,6 +46,16 @@ impl Gateway {
   /// fails; the first failure is returned.
   pub async fn shutdown(&self) -> Result<()> {
     let mut first = None;
+    let terminals = {
+      let _opening = self.terminals.open_lock.lock().await;
+      self.terminals.stop();
+      self.terminals.drain()
+    };
+    for terminal in terminals {
+      if let Err(error) = terminal.close().await {
+        first.get_or_insert(error);
+      }
+    }
     for live in self.live.drain() {
       self.metrics.live_sessions(-1);
       if let Err(error) = live::close(live).await {
@@ -123,7 +136,7 @@ impl Gateway {
   }
 
   /// The working directory and, for an existing session, the file to resume.
-  async fn resolve(&self, target: &OpenTarget) -> Result<(PathBuf, Option<PathBuf>)> {
+  pub(crate) async fn resolve(&self, target: &OpenTarget) -> Result<(PathBuf, Option<PathBuf>)> {
     let (cwd, resume) = match target {
       OpenTarget::Session { session } => {
         let config = Arc::clone(&self.config);

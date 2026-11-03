@@ -4,6 +4,7 @@
     "filesystem": {
       "deny": [
         "fnox.*",
+        "!~/.config/alvin"
       ],
       "writable": [
         "/dev/kvm",
@@ -15,7 +16,8 @@
         "~/.local/share/mise",
         "~/.local/state/hk",
         "~/.config/.wrangler",
-        "~/Library/Caches/.cargo-packager"
+        "~/Library/Caches/.cargo-packager",
+        "~/.config/alvin"
       ]
     }
   },
