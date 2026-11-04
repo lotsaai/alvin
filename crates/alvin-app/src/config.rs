@@ -148,6 +148,18 @@ pub struct AppConfig {
   #[config(env = "ALVIN_TERMINAL_FONT_SIZE")]
   #[config(layer_attr(arg(long)))]
   pub terminal_font_size: Option<f32>,
+  /// Expand potentially mutating tool calls by default.
+  #[config(default = true)]
+  #[config(layer_attr(arg(long, action = clap::ArgAction::Set)))]
+  pub expand_mutating_tools: bool,
+  /// Expand readonly tool calls by default.
+  #[config(default = false)]
+  #[config(layer_attr(arg(long, action = clap::ArgAction::Set)))]
+  pub expand_readonly_tools: bool,
+  /// Expand thinking blocks by default.
+  #[config(default = false)]
+  #[config(layer_attr(arg(long, action = clap::ArgAction::Set)))]
+  pub expand_thinking: bool,
 }
 
 /// alvin-app's command line.
@@ -321,6 +333,28 @@ impl Configuration {
         Some(&config.user_message_color.to_string()),
       );
     }
+    for (key, old, new) in [
+      (
+        "expand_mutating_tools",
+        self.config.expand_mutating_tools,
+        config.expand_mutating_tools,
+      ),
+      (
+        "expand_readonly_tools",
+        self.config.expand_readonly_tools,
+        config.expand_readonly_tools,
+      ),
+      ("expand_thinking", self.config.expand_thinking, config.expand_thinking),
+    ] {
+      if old != new {
+        let item = &mut document[key];
+        let decor = item.as_value().map(|value| value.decor().clone());
+        *item = toml_edit::value(new);
+        if let (Some(decor), Some(value)) = (decor, item.as_value_mut()) {
+          *value.decor_mut() = decor;
+        }
+      }
+    }
     if config.terminal_font_family != self.config.terminal_font_family {
       set_table_value(
         document.as_table_mut(),
@@ -454,6 +488,25 @@ mod tests {
 
   fn no_flags() -> <AppConfig as confique::Config>::Layer {
     <AppConfig as confique::Config>::Layer::empty()
+  }
+
+  #[test]
+  fn conversation_defaults_survive_save_and_reload() {
+    let tmp = Scratch::new();
+    let path = tmp.file("config.toml", "# retained\n");
+    let mut configuration = Configuration::for_test(path.clone()).unwrap();
+    assert!(configuration.config.expand_mutating_tools);
+    assert!(!configuration.config.expand_readonly_tools);
+    assert!(!configuration.config.expand_thinking);
+    let mut next = configuration.config.clone();
+    next.expand_mutating_tools = false;
+    next.expand_readonly_tools = true;
+    next.expand_thinking = true;
+    configuration.save(next).unwrap();
+    let reloaded = Configuration::for_test(path).unwrap();
+    assert!(!reloaded.config.expand_mutating_tools);
+    assert!(reloaded.config.expand_readonly_tools);
+    assert!(reloaded.config.expand_thinking);
   }
 
   #[test]

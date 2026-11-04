@@ -35,6 +35,7 @@ const TOGGLE_TERMINAL_KEY: &str = "ctrl-j";
 pub fn init(cx: &mut App) {
   crate::session::refresh_markdown_theme(cx);
   crate::session::init_timeline(cx);
+  crate::session::init_shortcuts(cx);
   cx.bind_keys(crate::terminal::default_key_bindings());
   cx.bind_keys([
     KeyBinding::new("escape", Abort, Some(SESSION_CONTEXT)),

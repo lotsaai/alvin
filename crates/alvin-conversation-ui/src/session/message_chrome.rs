@@ -3,14 +3,17 @@
 //! Footer controls use a named child identity instead of repeating the owning message row's id.
 
 use alvin_protocol::{AgentMessage, AssistantContent, AssistantMessage, MessageContent, UserContent};
+use gpui_kit::base::TestSupportExt as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::EditorState;
 use gpui_kit::component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::message::MessageFooter;
+use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{ActiveTheme as _, IconName, Sizable as _, h_flex};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-  AnyElement, App, ClipboardItem, ElementId, Entity, InteractiveElement as _, IntoElement as _, ParentElement as _, SharedString,
-  Styled as _, div,
+  Anchor, AnyElement, App, ClipboardItem, ElementId, Entity, InteractiveElement as _, IntoElement as _, ParentElement as _, ScrollHandle,
+  SharedString, StatefulInteractiveElement as _, Styled as _, div,
 };
 
 /// Copy the visible message text without changing session history or the composer draft.
@@ -25,9 +28,9 @@ pub(super) fn message_footer(
   let copy = text.clone();
   let composer = composer.filter(|_| !text.is_empty()).cloned();
   let collapsed = collapsed.map(|state| (state.clone(), *state.read(cx)));
-  let metadata = match message {
-    AgentMessage::Assistant(message) => metadata(message),
-    _ => String::new(),
+  let (summary, details) = match message {
+    AgentMessage::Assistant(message) => (metadata(message, false), metadata(message, true)),
+    _ => (String::new(), String::new()),
   };
   MessageFooter::new().content_inset(false).child(
     h_flex()
@@ -62,7 +65,59 @@ pub(super) fn message_footer(
             message_menu(menu, text.clone(), composer, collapsed.clone())
           })
       })
-      .child(SharedString::from(metadata))
+      .when(!details.is_empty(), |footer| {
+        let details = SharedString::from(details);
+        footer.child(
+          Popover::new("message-metadata")
+            .anchor(Anchor::BottomLeft)
+            .trigger(
+              Button::new("message-metadata-trigger")
+                .ghost()
+                .small()
+                .icon(IconName::Info)
+                .accessibility_label("Show message details"),
+            )
+            .content(move |_, window, cx| {
+              let scroll = window
+                .use_keyed_state("metadata-scroll", cx, |_, _| ScrollHandle::new())
+                .read(cx)
+                .clone();
+              let focus = window
+                .use_keyed_state("metadata-focus", cx, |_, cx| cx.focus_handle().tab_stop(true))
+                .read(cx)
+                .clone();
+              div()
+                .id("message-metadata-details")
+                .test_support()
+                .track_focus(&focus)
+                .track_scroll(&scroll)
+                .w((window.rem_size() * 16.).min((window.viewport_size().width - window.rem_size() * 3.).max(gpui_kit::px(0.))))
+                .max_h((window.rem_size() * 16.).min((window.viewport_size().height - window.rem_size() * 3.).max(gpui_kit::px(0.))))
+                .overflow_y_scroll()
+                .overflow_x_scroll()
+                .text_sm()
+                .text_color(cx.theme().popover_foreground)
+                .on_key_down(move |event, window, cx| {
+                  let mut offset = scroll.offset();
+                  let step = window.rem_size() * 3.;
+                  match event.keystroke.key.as_str() {
+                    "down" => offset.y = (offset.y - step).max(-scroll.max_offset().y),
+                    "up" => offset.y = (offset.y + step).min(gpui_kit::px(0.)),
+                    "right" => offset.x = (offset.x - step).max(-scroll.max_offset().x),
+                    "left" => offset.x = (offset.x + step).min(gpui_kit::px(0.)),
+                    "home" => offset.y = gpui_kit::px(0.),
+                    "end" => offset.y = -scroll.max_offset().y,
+                    _ => return,
+                  }
+                  scroll.set_offset(offset);
+                  window.refresh();
+                  cx.stop_propagation();
+                })
+                .child(details.clone())
+            }),
+        )
+      })
+      .child(div().flex_1().min_w_0().text_xs().truncate().child(SharedString::from(summary)))
       .context_menu(move |menu, _, cx| {
         let composer = composer.clone().filter(|composer| composer.read(cx).value().is_empty());
         message_menu(menu, text.clone(), composer, collapsed.clone())
@@ -162,7 +217,7 @@ fn copy_text(message: &AgentMessage) -> String {
   }
 }
 
-fn metadata(message: &AssistantMessage) -> String {
+fn metadata(message: &AssistantMessage, detailed: bool) -> String {
   let mut fields = Vec::new();
   if let Some(model) = message.model.as_deref().filter(|model| !model.is_empty()) {
     fields.push(match message.provider.as_deref().filter(|provider| !provider.is_empty()) {
@@ -173,14 +228,50 @@ fn metadata(message: &AssistantMessage) -> String {
     fields.push(provider.to_owned());
   }
   if let Some(usage) = &message.usage {
-    for (value, label) in [
-      (usage.input, "input"),
-      (usage.output, "output"),
-      (usage.cache_read, "cache read"),
-      (usage.cache_write, "cache write"),
-    ] {
-      if let Some(value) = value.filter(|value| *value >= 0) {
-        fields.push(format!("{value} {label} tokens"));
+    if detailed {
+      for (value, label) in [
+        (usage.input, "input"),
+        (usage.output, "output"),
+        (usage.cache_read, "cache read"),
+        (usage.cache_write, "cache write"),
+        (usage.context_tokens, "context"),
+        (usage.reasoning_tokens, "reasoning"),
+      ] {
+        if let Some(value) = value.filter(|value| *value >= 0) {
+          fields.push(format!("{value} {label} tokens"));
+        }
+      }
+      if let Some(cost) = &usage.cost {
+        for (value, label) in [
+          (cost.input, "input cost"),
+          (cost.output, "output cost"),
+          (cost.cache_read, "cache read cost"),
+          (cost.cache_write, "cache write cost"),
+          (cost.total, "total cost"),
+        ] {
+          if let Some(value) = value.filter(|value| value.is_finite() && *value >= 0.) {
+            fields.push(format!("{label}: ${value}"));
+          }
+        }
+        if !cost.extra.is_empty() {
+          fields.push(format!("other cost: {}", serde_json::Value::Object(cost.extra.clone())));
+        }
+      }
+      if let Some(value) = usage.premium_requests.filter(|value| value.is_finite() && *value >= 0.) {
+        fields.push(format!("{value} premium requests"));
+      }
+      for (value, label) in [
+        (&usage.orchestration, "orchestration"),
+        (&usage.cttl, "cttl"),
+        (&usage.server, "server"),
+        (&usage.credits, "credits"),
+      ] {
+        if let Some(value) = value {
+          fields.push(format!("{label}: {}", serde_json::Value::Object(value.clone())));
+        }
+      }
+      if !usage.extra.is_empty() {
+        fields.push(format!("other usage: {}", serde_json::Value::Object(usage.extra.clone())));
       }
     }
     if let Some(total) = usage.total_tokens.filter(|total| *total >= 0) {
@@ -195,7 +286,7 @@ fn metadata(message: &AssistantMessage) -> String {
       format!("{:.1} s", duration / 1_000.)
     });
   }
-  if let Some(ttft) = message.ttft.filter(|value| value.is_finite() && *value >= 0.) {
+  if detailed && let Some(ttft) = message.ttft.filter(|value| value.is_finite() && *value >= 0.) {
     fields.push(format!("{ttft:.0} ms to first token"));
   }
   fields.join(" · ")
@@ -217,45 +308,24 @@ mod tests {
   #[test]
   fn historical_metadata_uses_only_reported_values() {
     let mut message = AssistantMessage::default();
-    assert_eq!(metadata(&message), "");
-    message.model = Some("historical-model".into());
-    message.provider = Some("provider".into());
+    assert!(metadata(&message, true).is_empty());
     message.usage = Some(Usage {
-      total_tokens: Some(124),
-      ..Usage::default()
-    });
-    message.duration = Some(1_250.);
-    assert_eq!(metadata(&message), "provider/historical-model · 124 tokens · 1.2 s");
-    message.usage = Some(Usage {
-      input: Some(12),
+      input: Some(-1),
       output: Some(0),
+      cache_read: Some(4),
       ..Usage::default()
     });
-    assert_eq!(
-      metadata(&message),
-      "provider/historical-model · 12 input tokens · 0 output tokens · 1.2 s"
-    );
+    let details = metadata(&message, true);
+    assert!(!details.contains("input"));
+    assert!(details.contains("0 output"));
+    assert!(details.contains("4 cache read"));
+    assert!(!metadata(&message, false).contains("output"));
+    message.ttft = Some(-1.);
     message.usage = Some(Usage {
-      input: Some(4_883),
-      output: Some(29),
-      cache_read: Some(704),
-      cache_write: Some(0),
-      total_tokens: Some(5_616),
+      input: Some(-1),
       ..Usage::default()
     });
-    message.ttft = Some(1_000.);
-    assert_eq!(
-      metadata(&message),
-      "provider/historical-model · 4883 input tokens · 29 output tokens · 704 cache read tokens · 0 cache write tokens · 5616 tokens · 1.2 s · 1000 ms to first token"
-    );
-    message.ttft = None;
-    message.usage = Some(Usage {
-      total_tokens: Some(-1),
-      input: Some(-2),
-      ..Usage::default()
-    });
-    message.duration = None;
-    assert_eq!(metadata(&message), "provider/historical-model");
+    assert!(metadata(&message, true).is_empty());
   }
 
   #[test]
@@ -265,14 +335,14 @@ mod tests {
       completed_at: Some(1_700_000_099_000.),
       ..AssistantMessage::default()
     };
-    assert!(metadata(&message).is_empty());
+    assert!(metadata(&message, true).is_empty());
     for (duration, expected) in [(0., "0 ms"), (999., "999 ms"), (1_000., "1.0 s"), (60_000., "60.0 s")] {
       message.duration = Some(duration);
-      assert_eq!(metadata(&message), expected);
+      assert_eq!(metadata(&message, true), expected);
     }
     for duration in [-1., f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
       message.duration = Some(duration);
-      assert!(metadata(&message).is_empty());
+      assert!(metadata(&message, true).is_empty());
     }
   }
 
@@ -376,6 +446,94 @@ mod tests {
       assert_eq!(cx.read_from_clipboard().and_then(|item| item.text()), Some(text.to_owned()));
     })
     .expect("restore footer focus after menu copy");
+  }
+
+  #[gpui_kit::test]
+  fn details_open_and_restore_keyboard_focus(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    let (window, _) = cx.update(|cx| {
+      gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+        cx.new(|cx| FooterFixture {
+          input: cx.new(|cx| InputState::new(window, cx)),
+          message: AgentMessage::Assistant(Box::new(AssistantMessage {
+            model: Some("model".to_owned()),
+            usage: Some(Usage {
+              input: Some(0),
+              context_tokens: Some(123),
+              ..Usage::default()
+            }),
+            ..AssistantMessage::default()
+          })),
+        })
+      })
+      .expect("open footer window")
+    });
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      window.click("composer", cx);
+      window.press("tab", cx);
+      window.press("tab", cx);
+      window.press("tab", cx);
+      assert_eq!(window.find("message-metadata-trigger").focused(), Some(true));
+      window.press("enter", cx);
+    })
+    .expect("open message details");
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert_eq!(window.find("message-metadata-trigger").focused(), Some(false));
+      window.press("tab", cx);
+      window.press("down", cx);
+      window.press("escape", cx);
+    })
+    .expect("dismiss message details");
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert_eq!(window.find("message-metadata-trigger").focused(), Some(true));
+    })
+    .expect("restore details trigger focus");
+  }
+
+  #[gpui_kit::test]
+  fn details_open_with_pointer_and_close_with_keyboard(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    let (window, _) = cx.update(|cx| {
+      gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+        cx.new(|cx| FooterFixture {
+          input: cx.new(|cx| InputState::new(window, cx)),
+          message: AgentMessage::Assistant(Box::new(AssistantMessage {
+            usage: Some(Usage {
+              context_tokens: Some(123),
+              ..Usage::default()
+            }),
+            ..AssistantMessage::default()
+          })),
+        })
+      })
+      .expect("open footer window")
+    });
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert!(window.try_find("message-metadata-details").is_none());
+      window.click("message-metadata-trigger", cx);
+    })
+    .expect("click message details");
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert!(window.find("message-metadata-details").visible());
+      window.press("tab", cx);
+      assert_eq!(window.find("message-metadata-details").focused(), Some(true));
+      window.press("escape", cx);
+    })
+    .expect("navigate and dismiss message details");
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert!(window.try_find("message-metadata-details").is_none());
+    })
+    .expect("confirm message details dismissed");
   }
   struct ActionFixture {
     message: AgentMessage,

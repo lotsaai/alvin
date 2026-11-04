@@ -3,16 +3,34 @@
 //! What the user types goes to omp unchanged, except a leading `!`, which runs the rest as a shell command. omp expands `/`
 //! commands, skills, templates and `^model` itself; nothing here parses them. The text is edited as markdown.
 
+mod history;
+
 use std::rc::Rc;
 
 use alvin_protocol::{AvailableSlashCommand, LiveSessionId};
-use gpui_kit::component::ActiveTheme as _;
-use gpui_kit::component::input::{CompletionProvider, Editor, EditorState, InputEvent, Rope};
-use gpui_kit::{App, AppContext as _, Context, Entity, Pixels, Result, Task, Window, relative, rems};
+use gpui_kit::base::{StyledExt as _, TestSupportExt as _};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+#[cfg(target_os = "macos")]
+use gpui_kit::component::input::Paste;
+use gpui_kit::component::input::{
+  CompletionProvider, Delete, DeleteToBeginningOfLine, DeleteToEndOfLine, DeleteToPreviousWordStart, Editor, EditorState, Enter, Escape,
+  InputEvent, MoveDown, MoveUp, OutdentInline, Rope,
+};
+#[cfg(not(target_os = "macos"))]
+use gpui_kit::component::input::{MoveEnd, MoveHome, MoveToNextWord, MoveToPreviousWord};
+use gpui_kit::component::popover::Popover;
+use gpui_kit::component::progress::ProgressCircle;
+use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _, h_flex, v_flex};
+use gpui_kit::prelude::FluentBuilder as _;
+use gpui_kit::{
+  Anchor, AnyElement, App, AppContext as _, ClipboardItem, Context, ElementId, Entity, InteractiveElement as _, IntoElement, KeyBinding,
+  ParentElement as _, Pixels, Render, Result, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window,
+  actions, div, relative, rems,
+};
 use lsp_types::{CompletionContext, CompletionItem, CompletionResponse, CompletionTextEdit, Position, Range, TextEdit};
 
-use super::markdown;
-use crate::model::Model;
+use super::{markdown, pickers::Pickers};
+use crate::model::{Model, ModelChange, ModelEvent};
 
 /// How many rows the composer shows at least, and at most before its text scrolls.
 const MIN_ROWS: usize = 2;
@@ -20,6 +38,47 @@ const MAX_ROWS: usize = 8;
 
 /// An editor leads its rows at this multiple of its font size.
 const LINE_HEIGHT: f32 = 1.5;
+
+actions!(
+  composer,
+  [ClearPrompt, CopyLine, CopyPrompt, SearchHistory, CycleThinking, OpenModel]
+);
+
+pub(crate) fn init(cx: &mut App) {
+  let context = Some("Composer > Input");
+  cx.bind_keys([
+    KeyBinding::new("ctrl-w", DeleteToPreviousWordStart, context),
+    KeyBinding::new("ctrl-u", DeleteToBeginningOfLine, context),
+    KeyBinding::new("ctrl-k", DeleteToEndOfLine, context),
+    KeyBinding::new(
+      "alt-enter",
+      Enter {
+        secondary: false,
+        shift: true,
+      },
+      context,
+    ),
+    KeyBinding::new("ctrl-c", ClearPrompt, context),
+    KeyBinding::new("ctrl-d", Delete, context),
+    KeyBinding::new("alt-shift-l", CopyLine, context),
+    KeyBinding::new("alt-shift-c", CopyPrompt, context),
+    KeyBinding::new("ctrl-r", SearchHistory, context),
+    #[cfg(target_os = "macos")]
+    KeyBinding::new("ctrl-v", Paste, context),
+    KeyBinding::new("shift-tab", CycleThinking, context),
+    KeyBinding::new("alt-p", OpenModel, context),
+    #[cfg(not(target_os = "macos"))]
+    KeyBinding::new("alt-backspace", DeleteToPreviousWordStart, context),
+    #[cfg(not(target_os = "macos"))]
+    KeyBinding::new("alt-left", MoveToPreviousWord, context),
+    #[cfg(not(target_os = "macos"))]
+    KeyBinding::new("alt-right", MoveToNextWord, context),
+    #[cfg(not(target_os = "macos"))]
+    KeyBinding::new("ctrl-a", MoveHome, context),
+    #[cfg(not(target_os = "macos"))]
+    KeyBinding::new("ctrl-e", MoveEnd, context),
+  ]);
+}
 
 /// The editor's local layout. Changing it never replaces its editing state.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -144,6 +203,397 @@ pub(crate) fn view(state: &Entity<EditorState>, layout: Layout, window: &Window,
     editor.h(row * rows as f32 + padding)
   };
   editor.appearance(false).bordered(false).aria_label("Message")
+}
+
+pub(crate) struct Composer {
+  live: LiveSessionId,
+  model: Entity<Model>,
+  composer: Entity<EditorState>,
+  composer_layout: Layout,
+  pickers: Pickers,
+  history: Option<history::Browse>,
+  recalling_history: bool,
+  _subscriptions: Vec<Subscription>,
+}
+
+impl Composer {
+  pub(crate) fn new(model: Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    let composer = state(&model, live, window, cx);
+    let mut pickers = Pickers::new(&model, live, window, cx);
+    pickers.sync(&model, live, window, cx);
+    let subscriptions = vec![
+      cx.subscribe_in(&model, window, |this, model, change: &ModelChange, window, cx| {
+        if matches!(change, ModelChange::Session(id) if *id == this.live) {
+          this.pickers.sync(model, this.live, window, cx);
+          cx.notify();
+        }
+      }),
+      cx.subscribe_in(&model, window, |this, _, event: &ModelEvent, window, cx| {
+        if let ModelEvent::ComposerText { live, text } = event
+          && *live == this.live
+        {
+          this.composer.update(cx, |editor, cx| editor.set_value(text.clone(), window, cx));
+        }
+      }),
+      cx.subscribe_in(&composer, window, |this, state, event: &InputEvent, window, cx| {
+        if matches!(event, InputEvent::Change) {
+          cx.notify();
+          if !std::mem::take(&mut this.recalling_history) {
+            this.history = None;
+          }
+        }
+        if let Some(submission) = submitted(event, state, this.composer_layout, cx) {
+          this
+            .model
+            .update(cx, |model, cx| model.send(this.live, &submission.text, submission.follow_up, cx))
+            .detach();
+          state.update(cx, |state, cx| state.set_value("", window, cx));
+        }
+      }),
+    ];
+    Self {
+      live,
+      model,
+      composer,
+      composer_layout: Layout::Compact,
+      history: None,
+      recalling_history: false,
+      pickers,
+      _subscriptions: subscriptions,
+    }
+  }
+
+  fn recall_history(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+    if self.composer.read(cx).value().as_ref() != text {
+      self.recalling_history = true;
+      self.composer.update(cx, |editor, cx| {
+        let end = text.len();
+        editor.replace_all(text, window, cx);
+        editor.set_selected_range(end..end, cx);
+      });
+    }
+  }
+
+  pub(crate) fn editor(&self) -> &Entity<EditorState> {
+    &self.composer
+  }
+  pub(crate) fn expanded(&self) -> bool {
+    self.composer_layout == Layout::Expanded
+  }
+
+  fn id(&self, part: &str) -> ElementId {
+    ElementId::from(SharedString::from(format!("{part}-{}", self.live.as_uuid())))
+  }
+
+  pub(crate) fn toggle(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    self.composer_layout = if self.expanded() { Layout::Compact } else { Layout::Expanded };
+    self.composer.update(cx, |state, cx| {
+      state.set_submit_on_enter(self.composer_layout == Layout::Compact, cx);
+      state.focus(window, cx);
+    });
+    cx.notify();
+  }
+
+  fn interrupt_button(&self, cx: &App) -> Option<AnyElement> {
+    let live = self.live;
+    let running = self
+      .model
+      .read(cx)
+      .conversation()
+      .live(live)
+      .is_some_and(|view| view.run == alvin_conversation::Run::Running);
+    if !running || self.composer.read(cx).value().trim().is_empty() {
+      return None;
+    }
+    let (model, composer) = (self.model.clone(), self.composer.clone());
+    Some(
+      Button::new(self.id("session-interrupt"))
+        .small()
+        .ghost()
+        .label("Interrupt and send")
+        .on_click(move |_, window, cx| {
+          let text = composer.read(cx).value().trim().to_owned();
+          if text.is_empty() {
+            return;
+          }
+          composer.update(cx, |composer, cx| composer.set_value("", window, cx));
+          model.update(cx, |model, cx| model.interrupt_and_send(live, text, cx)).detach();
+        })
+        .into_any_element(),
+    )
+  }
+
+  fn send_button(&self, cx: &App) -> AnyElement {
+    let (model, composer, live) = (self.model.clone(), self.composer.clone(), self.live);
+    let running = model.read(cx).bash_running(live)
+      || model
+        .read(cx)
+        .conversation()
+        .live(live)
+        .is_some_and(|view| view.run == alvin_conversation::Run::Running);
+    let empty = composer.read(cx).value().trim().is_empty();
+    if running && empty {
+      let queued = !model.read(cx).bash_running(live)
+        && model
+          .read(cx)
+          .conversation()
+          .live(live)
+          .is_some_and(|view| !view.queue.steering.is_empty() || !view.queue.follow_up.is_empty());
+      return Button::new(self.id("session-stop"))
+        .small()
+        .label(if queued { "Restore queue" } else { "Stop" })
+        .on_click(move |_, _, cx| model.update(cx, |model, cx| model.abort(live, cx)).detach())
+        .into_any_element();
+    }
+    Button::new(self.id("session-send"))
+      .small()
+      .primary()
+      .icon(IconName::ArrowUp)
+      .accessibility_label("Send")
+      .disabled(empty)
+      .on_click(move |_, window, cx| {
+        let text = composer.read(cx).value().trim().to_owned();
+        if text.is_empty() {
+          return;
+        }
+        composer.update(cx, |composer, cx| composer.set_value("", window, cx));
+        model.update(cx, |model, cx| model.send(live, &text, false, cx)).detach();
+      })
+      .into_any_element()
+  }
+
+  fn context_panel(&self, cx: &App) -> impl IntoElement + use<> {
+    let model = self.model.read(cx);
+    let mut panel = v_flex()
+      .id(self.id("session-context"))
+      .test_support()
+      .w(rems(18.))
+      .max_h(rems(24.))
+      .overflow_y_scroll()
+      .min_w_0()
+      .gap_4()
+      .child(div().font_semibold().child("Session"));
+    if let Some(view) = model.conversation().live(self.live) {
+      panel = panel.child(
+        v_flex()
+          .gap_1()
+          .child(div().text_color(cx.theme().muted_foreground).child("Working directory"))
+          .child(div().child(SharedString::from(view.cwd.display().to_string()))),
+      );
+      if let Some(model) = &view.model {
+        panel = panel.child(
+          v_flex()
+            .gap_1()
+            .child(div().text_color(cx.theme().muted_foreground).child("Model"))
+            .child(div().child(SharedString::from(model.name.clone())))
+            .child(
+              div()
+                .text_color(cx.theme().muted_foreground)
+                .child(SharedString::from(model.provider.clone())),
+            ),
+        );
+      }
+      panel = panel.child(
+        v_flex()
+          .gap_1()
+          .child(div().text_color(cx.theme().muted_foreground).child("Messages"))
+          .child(div().child(SharedString::from(view.total_messages.to_string()))),
+      );
+    }
+    if let Some(usage) = model.stats(self.live).and_then(|stats| stats.context_usage.as_ref()) {
+      panel = panel.child(
+        v_flex()
+          .gap_1()
+          .child(div().text_color(cx.theme().muted_foreground).child("Last reported context"))
+          .child(div().child(SharedString::from(format!(
+            "{} of {} tokens · {:.1}%",
+            usage.tokens, usage.context_window, usage.percent
+          )))),
+      );
+    } else {
+      panel = panel.child(
+        v_flex()
+          .gap_1()
+          .child(div().text_color(cx.theme().muted_foreground).child("Last reported context"))
+          .child(div().child("Unavailable")),
+      );
+    }
+    if let Some(stats) = model.stats(self.live) {
+      panel = panel.child(
+        v_flex()
+          .gap_1()
+          .child(div().text_color(cx.theme().muted_foreground).child("Usage"))
+          .child(div().child(SharedString::from(format!("{} tool calls", stats.tool_calls))))
+          .child(div().child(SharedString::from(format!("{} tokens", stats.tokens.total)))),
+      );
+    }
+    panel
+  }
+}
+
+impl Render for Composer {
+  fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    let expanded = self.expanded();
+    let usage = self.model.read(cx).stats(self.live).and_then(|stats| stats.context_usage.as_ref());
+    let label: SharedString = usage.map_or_else(
+      || "Context usage unavailable".into(),
+      |usage| format!("Context usage {:.1}%", usage.percent).into(),
+    );
+    let indicator = usage.map(|usage| usage.percent as f32);
+    let model = self.model.clone();
+    let live = self.live;
+    let owner = cx.entity();
+    let context = Popover::new(self.id("context-popover"))
+      .anchor(Anchor::BottomLeft)
+      .trigger(
+        Button::new(self.id("context-toggle"))
+          .xsmall()
+          .ghost()
+          .accessibility_label(label.clone())
+          .tooltip(label.clone())
+          .child(match indicator {
+            Some(percent) => ProgressCircle::new(self.id("context-progress"))
+              .xsmall()
+              .value(percent)
+              .accessibility_label(label)
+              .into_any_element(),
+            None => Icon::new(IconName::Info).into_any_element(),
+          }),
+      )
+      .on_open_change(move |open, _, cx| {
+        if *open {
+          model.update(cx, |model, cx| model.refresh_stats(live, cx)).detach();
+        }
+      })
+      .content(move |_, _, cx| owner.read(cx).context_panel(cx).into_any_element());
+    v_flex()
+      .mt_2()
+      .mb_3()
+      .min_w_0()
+      .min_h_0()
+      .gap_2()
+      .when(!expanded, |editor| editor.flex_shrink_0())
+      .when(expanded, |editor| editor.flex_1())
+      .rounded(cx.theme().radius_lg)
+      .border_1()
+      .border_color(cx.theme().border)
+      .bg(cx.theme().muted)
+      .shadow(cx.theme().shadow_tokens().md)
+      .child(
+        div()
+          .when(!expanded, |editor| editor.flex_shrink_0())
+          .min_h_0()
+          .when(expanded, |editor| editor.flex_1())
+          .key_context("Composer")
+          .capture_action(cx.listener(|this, _: &MoveUp, window, cx| {
+            let editor = this.composer.read(cx);
+            if editor.completion_menu_state().open || (editor.value().contains('\n') && editor.cursor() > 0) {
+              return;
+            }
+            if this.history.is_none() && editor.value().is_empty() {
+              this.history = history::Browse::new(history::prompts(this.model.read(cx), this.live), editor.value().to_string());
+            }
+            if let Some(text) = this.history.as_mut().and_then(history::Browse::previous) {
+              this.recall_history(text, window, cx);
+              cx.stop_propagation();
+            }
+          }))
+          .capture_action(cx.listener(|this, _: &MoveDown, window, cx| {
+            let editor = this.composer.read(cx);
+            if editor.completion_menu_state().open || (editor.value().contains('\n') && editor.cursor() < editor.value().len()) {
+              return;
+            }
+            if let Some(text) = this.history.as_mut().and_then(history::Browse::next) {
+              this.recall_history(text, window, cx);
+              cx.stop_propagation();
+            }
+          }))
+          .on_action(cx.listener(|this, _: &ClearPrompt, window, cx| {
+            if this.composer.read(cx).value().is_empty() {
+              cx.propagate();
+            } else {
+              this.history = None;
+              this.composer.update(cx, |editor, cx| editor.replace_all("", window, cx));
+            }
+          }))
+          .on_action(cx.listener(|this, _: &CopyPrompt, _, cx| {
+            let text = this.composer.read(cx).value().to_string();
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
+          }))
+          .on_action(cx.listener(|this, _: &CopyLine, _, cx| {
+            let editor = this.composer.read(cx);
+            let text = editor.value();
+            let cursor = editor.cursor();
+            if let (Some(before), Some(after)) = (text.get(..cursor), text.get(cursor..)) {
+              let start = before.rfind('\n').map_or(0, |offset| offset + 1);
+              let end = cursor + after.find('\n').unwrap_or(after.len());
+              if let Some(line) = text.get(start..end) {
+                cx.write_to_clipboard(ClipboardItem::new_string(line.to_owned()));
+              }
+            }
+          }))
+          .on_action(cx.listener(|this, _: &SearchHistory, window, cx| {
+            history::open(history::prompts(this.model.read(cx), this.live), this.composer.clone(), window, cx);
+          }))
+          .on_action(cx.listener(|this, _: &CycleThinking, window, cx| {
+            if this.composer.read(cx).completion_menu_state().open {
+              window.dispatch_action(Box::new(OutdentInline), cx);
+            } else {
+              this.model.update(cx, |model, cx| model.cycle_thinking(this.live, cx)).detach();
+            }
+          }))
+          .on_action(cx.listener(|this, _: &OpenModel, window, cx| {
+            this.pickers.open_model(window, cx);
+          }))
+          .capture_action(cx.listener(|this, enter: &Enter, _, cx| {
+            this.composer.update(cx, |state, cx| {
+              state.set_submit_on_enter(this.composer_layout == Layout::Compact || enter.secondary, cx);
+            });
+            cx.propagate();
+          }))
+          .on_action(cx.listener(|this, _: &Escape, window, cx| {
+            if this.expanded() {
+              this.toggle(window, cx);
+            } else {
+              cx.propagate();
+            }
+          }))
+          .child(view(&self.composer, self.composer_layout, window, cx)),
+      )
+      .child(
+        h_flex()
+          .flex_wrap()
+          .px_2()
+          .pb_2()
+          .gap_2()
+          .flex_shrink_0()
+          .min_w_0()
+          .child(self.pickers.view())
+          .children(self.interrupt_button(cx))
+          .when(expanded, |toolbar| {
+            toolbar.child(
+              div()
+                .text_xs()
+                .text_color(cx.theme().muted_foreground)
+                .child(if cfg!(target_os = "macos") {
+                  "⌘Enter to send"
+                } else {
+                  "Ctrl+Enter to send"
+                }),
+            )
+          })
+          .child(context)
+          .child(
+            Button::new(self.id("composer-expand"))
+              .small()
+              .ghost()
+              .icon(if expanded { IconName::Minimize } else { IconName::Maximize })
+              .accessibility_label(if expanded { "Collapse editor" } else { "Expand editor" })
+              .on_click(cx.listener(|this, _, window, cx| this.toggle(window, cx))),
+          )
+          .child(self.send_button(cx)),
+      )
+  }
 }
 
 #[cfg(test)]

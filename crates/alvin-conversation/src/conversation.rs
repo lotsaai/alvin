@@ -3,7 +3,8 @@
 use std::collections::BTreeMap;
 
 use alvin_protocol::{
-  EntryId, Event, HistoryEntries, LiveSessionId, LiveSessionSummary, MessagesPage, ProjectSummary, SessionCursor, SessionPage, SessionState,
+  EntryId, Event, EventId, HistoryEntries, LiveSessionId, LiveSessionSummary, MessagesPage, ProjectSummary, SessionCursor, SessionPage,
+  SessionState,
 };
 
 use crate::live::LiveView;
@@ -101,10 +102,10 @@ impl Conversation {
     }
   }
 
-  /// Takes a session's `live/state`.
-  pub fn set_state(&mut self, live: LiveSessionId, state: &SessionState) {
+  /// Takes a session's `live/state` using the token captured before the request.
+  pub fn set_state(&mut self, live: LiveSessionId, state: &SessionState, request: EventId) {
     if let Some(view) = self.live.get_mut(&live) {
-      view.set_state(state);
+      view.set_state(state, request);
     }
   }
 

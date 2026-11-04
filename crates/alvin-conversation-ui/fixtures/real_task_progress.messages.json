@@ -1,0 +1,355 @@
+{
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Start one background task named native-task-proof using the configured task model (no model/agent override). Brief it: read skill://write-rust fully; no coding or file changes; reply TASK_NATIVE_OK. Then use wait for that exact reported job and summarize its real result. Do not send IRC or request edits. No other tasks.",
+          "type": "text"
+        }
+      ],
+      "timestamp": 1793953068945,
+      "attribution": "user",
+      "role": "user"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "thinking": "The user wants me to:\n1. Start a background task named \"native-task-proof\" using the configured task model (no model/agent override)\n2. Brief it: read skill://write-rust fully; no coding or file changes; reply TASK_NATIVE_OK\n3. Use wait for that exact reported job\n4. Summarize its real result\n5. Do not send IRC or request edits\n6. No other tasks\n\nLet me do this step by step. First, I need to start the task, then wait for it.",
+          "thinkingSignature": "{\"id\":\"rs_tmp_1wqtfeadisx\",\"type\":\"reasoning\",\"status\":\"completed\",\"content\":[{\"type\":\"reasoning_text\",\"text\":\"The user wants me to:\\n1. Start a background task named \\\"native-task-proof\\\" using the configured task model (no model/agent override)\\n2. Brief it: read skill://write-rust fully; no coding or file changes; reply TASK_NATIVE_OK\\n3. Use wait for that exact reported job\\n4. Summarize its real result\\n5. Do not send IRC or request edits\\n6. No other tasks\\n\\nLet me do this step by step. First, I need to start the task, then wait for it.\"}],\"summary\":[],\"format\":\"unknown\"}",
+          "summary": false,
+          "type": "thinking"
+        },
+        {
+          "type": "toolCall",
+          "id": "call_836c28fb91e2444b93df9abf|fc_tmp_hzn266jfwj9",
+          "name": "task",
+          "arguments": {
+            "i": "Start background task native-task-proof",
+            "name": "native-task-proof",
+            "task": "Read skill://write-rust fully. No coding or file changes. Reply TASK_NATIVE_OK."
+          },
+          "intent": "Start background task native-task-proof"
+        }
+      ],
+      "api": "openrouter",
+      "provider": "openrouter",
+      "model": "inclusionai/ling-3.0-flash",
+      "usage": {
+        "input": 26511,
+        "output": 166,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 26677,
+        "cost": {
+          "input": 0.000556731,
+          "output": 0.000010458,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.000567189
+        },
+        "reasoningTokens": 109
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793953070297,
+      "responseId": "gen-1793953070-ssZP2OFOZk3rg94FW5C9",
+      "providerPayload": {
+        "type": "openaiResponsesHistory",
+        "provider": "openrouter",
+        "dt": true,
+        "items": [
+          {
+            "id": "rs_tmp_1wqtfeadisx",
+            "type": "reasoning",
+            "status": "completed",
+            "content": [
+              {
+                "type": "reasoning_text",
+                "text": "The user wants me to:\n1. Start a background task named \"native-task-proof\" using the configured task model (no model/agent override)\n2. Brief it: read skill://write-rust fully; no coding or file changes; reply TASK_NATIVE_OK\n3. Use wait for that exact reported job\n4. Summarize its real result\n5. Do not send IRC or request edits\n6. No other tasks\n\nLet me do this step by step. First, I need to start the task, then wait for it."
+              }
+            ],
+            "summary": [],
+            "format": "unknown"
+          },
+          {
+            "id": "fc_tmp_hzn266jfwj9",
+            "type": "function_call",
+            "status": "completed",
+            "call_id": "call_836c28fb91e2444b93df9abf",
+            "name": "task",
+            "arguments": "{\"i\": \"Start background task native-task-proof\", \"name\": \"native-task-proof\", \"task\": \"Read skill://write-rust fully. No coding or file changes. Reply TASK_NATIVE_OK.\"}"
+          }
+        ]
+      },
+      "duration": 2404.182999999728,
+      "ttft": 1890.6529579996131,
+      "completedAt": 1793953072702,
+      "credentialId": 9,
+      "contextSnapshot": {
+        "promptTokens": 26511,
+        "nonMessageTokens": 20785,
+        "toolSchemaTokens": 10454,
+        "compactionEpoch": 0
+      }
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_836c28fb91e2444b93df9abf|fc_tmp_hzn266jfwj9",
+      "toolName": "task",
+      "content": [
+        {
+          "text": "Spawned agent `native-task-proof` (job `native-task-proof`).",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "timestamp": 1793953072709,
+      "details": {
+        "projectAgentsDir": null,
+        "results": [],
+        "totalDurationMs": 0,
+        "progress": [
+          {
+            "index": 0,
+            "id": "native-task-proof",
+            "agent": "task",
+            "agentSource": "bundled",
+            "modelRole": "task",
+            "status": "pending",
+            "task": "Complete assignment thoroughly:\n\nRead skill://write-rust fully. No coding or file changes. Reply TASK_NATIVE_OK.",
+            "assignment": "Read skill://write-rust fully. No coding or file changes. Reply TASK_NATIVE_OK.",
+            "recentTools": [],
+            "recentOutput": [],
+            "toolCount": 0,
+            "requests": 0,
+            "tokens": 0,
+            "cost": 0,
+            "durationMs": 0
+          }
+        ],
+        "async": {
+          "state": "running",
+          "jobId": "native-task-proof",
+          "type": "task"
+        }
+      }
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "thinking": "The task was spawned. Now I need to wait for it to complete, then summarize the result.",
+          "thinkingSignature": "{\"id\":\"rs_tmp_mw4oxc2s0yn\",\"type\":\"reasoning\",\"status\":\"completed\",\"content\":[{\"type\":\"reasoning_text\",\"text\":\"The task was spawned. Now I need to wait for it to complete, then summarize the result.\"}],\"summary\":[],\"format\":\"unknown\"}",
+          "summary": false,
+          "type": "thinking"
+        },
+        {
+          "type": "toolCall",
+          "id": "call_ab8ccb1625174c42b562c54b|fc_tmp_67wsjdkjzlq",
+          "name": "wait",
+          "arguments": {
+            "i": "Wait for native-task-proof to complete"
+          },
+          "intent": "Wait for native-task-proof to complete"
+        }
+      ],
+      "api": "openrouter",
+      "provider": "openrouter",
+      "model": "inclusionai/ling-3.0-flash",
+      "usage": {
+        "input": 88,
+        "output": 40,
+        "cacheRead": 26624,
+        "cacheWrite": 0,
+        "totalTokens": 26752,
+        "cost": {
+          "input": 0.0000018479999999999995,
+          "output": 0.000002519999999999999,
+          "cacheRead": 0.0001118208,
+          "cacheWrite": 0,
+          "total": 0.0001161888
+        },
+        "reasoningTokens": 22
+      },
+      "stopReason": "toolUse",
+      "timestamp": 1793953072717,
+      "responseId": "gen-1793953072-0OHrwPWd5iyv9X47q4PJ",
+      "providerPayload": {
+        "type": "openaiResponsesHistory",
+        "provider": "openrouter",
+        "dt": true,
+        "items": [
+          {
+            "id": "rs_tmp_mw4oxc2s0yn",
+            "type": "reasoning",
+            "status": "completed",
+            "content": [
+              {
+                "type": "reasoning_text",
+                "text": "The task was spawned. Now I need to wait for it to complete, then summarize the result."
+              }
+            ],
+            "summary": [],
+            "format": "unknown"
+          },
+          {
+            "id": "fc_tmp_67wsjdkjzlq",
+            "type": "function_call",
+            "status": "completed",
+            "call_id": "call_ab8ccb1625174c42b562c54b",
+            "name": "wait",
+            "arguments": "{\"i\": \"Wait for native-task-proof to complete\"}"
+          }
+        ]
+      },
+      "duration": 1384.9128749999218,
+      "ttft": 1266.8133749999106,
+      "completedAt": 1793953074102,
+      "credentialId": 9,
+      "contextSnapshot": {
+        "promptTokens": 26712,
+        "nonMessageTokens": 20785,
+        "toolSchemaTokens": 10454,
+        "compactionEpoch": 0
+      }
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_ab8ccb1625174c42b562c54b|fc_tmp_67wsjdkjzlq",
+      "toolName": "wait",
+      "content": [
+        {
+          "text": "## Completed (1)\n\n### native-task-proof [task] — completed\nLabel: native-task-proof\nDelivery: delivered directly to wait.\n```\n<task-result id=\"native-task-proof\" agent=\"task\" status=\"completed\" duration=\"4.7s\">\n\n<output>\n{\n  \"result\": \"TASK_NATIVE_OK\"\n}\n</output>\n</task-result>\n\nnative-task-proof is now idle — message it via `write agent://native-task-proof` to follow up; transcript at history://native-task-proof\n```",
+          "type": "text"
+        }
+      ],
+      "isError": false,
+      "timestamp": 1793953077361,
+      "details": {
+        "op": "wait",
+        "meta": {
+          "source": {
+            "type": "report",
+            "value": "background jobs snapshot"
+          }
+        },
+        "jobs": [
+          {
+            "id": "native-task-proof",
+            "type": "task",
+            "status": "completed",
+            "label": "native-task-proof",
+            "durationMs": 4653,
+            "resolvedModel": "openai-codex/gpt-6.1-terra:low",
+            "resolvedModelIdentity": "openai-codex/gpt-6.1-terra",
+            "resolvedThinkingLevel": "low",
+            "widget": {
+              "title": "native-task-proof",
+              "blocks": [
+                {
+                  "kind": "stat",
+                  "items": [
+                    {
+                      "label": "lines",
+                      "text": "131"
+                    },
+                    {
+                      "label": "lines/s",
+                      "text": "28.2"
+                    }
+                  ]
+                }
+              ],
+              "state": "fallback",
+              "updatedAt": 1793953077361
+            },
+            "resultText": "<task-result id=\"native-task-proof\" agent=\"task\" status=\"completed\" duration=\"4.7s\">\n\n<output>\n{\n  \"result\": \"TASK_NATIVE_OK\"\n}\n</output>\n</task-result>\n\nnative-task-proof is now idle — message it via `write agent://native-task-proof` to follow up; transcript at history://native-task-proof",
+            "agentUrlId": "native-task-proof"
+          }
+        ]
+      }
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "thinking": "The task completed successfully. It returned TASK_NATIVE_OK. I need to summarize the real result.",
+          "thinkingSignature": "{\"id\":\"rs_tmp_72tnlm1j5ra\",\"type\":\"reasoning\",\"status\":\"completed\",\"content\":[{\"type\":\"reasoning_text\",\"text\":\"The task completed successfully. It returned TASK_NATIVE_OK. I need to summarize the real result.\"}],\"summary\":[],\"format\":\"unknown\"}",
+          "summary": false,
+          "type": "thinking"
+        },
+        {
+          "text": "Task native-task-proof completed. Result: `TASK_NATIVE_OK`. The agent read the write-rust skill and confirmed no changes needed.",
+          "textSignature": "{\"v\":1,\"id\":\"msg_tmp_fdenbvgj39d\"}",
+          "type": "text"
+        }
+      ],
+      "api": "openrouter",
+      "provider": "openrouter",
+      "model": "inclusionai/ling-3.0-flash",
+      "usage": {
+        "input": 204,
+        "output": 49,
+        "cacheRead": 26688,
+        "cacheWrite": 0,
+        "totalTokens": 26941,
+        "cost": {
+          "input": 0.000004284,
+          "output": 0.000003087,
+          "cacheRead": 0.0001120896,
+          "cacheWrite": 0,
+          "total": 0.0001194606
+        },
+        "reasoningTokens": 25
+      },
+      "stopReason": "stop",
+      "timestamp": 1793953077364,
+      "responseId": "gen-1793953077-oUxS5CR8jZLk9oh14jDq",
+      "errorId": 0,
+      "providerPayload": {
+        "type": "openaiResponsesHistory",
+        "provider": "openrouter",
+        "dt": true,
+        "items": [
+          {
+            "id": "rs_tmp_72tnlm1j5ra",
+            "type": "reasoning",
+            "status": "completed",
+            "content": [
+              {
+                "type": "reasoning_text",
+                "text": "The task completed successfully. It returned TASK_NATIVE_OK. I need to summarize the real result."
+              }
+            ],
+            "summary": [],
+            "format": "unknown"
+          },
+          {
+            "id": "msg_tmp_fdenbvgj39d",
+            "type": "message",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "Task native-task-proof completed. Result: `TASK_NATIVE_OK`. The agent read the write-rust skill and confirmed no changes needed.",
+                "annotations": [],
+                "logprobs": []
+              }
+            ]
+          }
+        ]
+      },
+      "duration": 1357.6387080000711,
+      "ttft": 1215.9963750001043,
+      "completedAt": 1793953078722,
+      "contextSnapshot": {
+        "promptTokens": 26892,
+        "nonMessageTokens": 20785,
+        "toolSchemaTokens": 10454,
+        "compactionEpoch": 0
+      },
+      "credentialId": 9
+    }
+  ]
+}

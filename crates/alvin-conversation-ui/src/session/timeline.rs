@@ -1,6 +1,6 @@
 //! User-message navigation over the transcript's cached presentation rows.
 //!
-//! The session header owns the narrow query menu; only the wide rail overlays the transcript.
+//! The session header owns the narrow query menu; the wide rail occupies the reserved gutter.
 
 use std::rc::Rc;
 
@@ -54,7 +54,11 @@ impl TimelineAnchor {
   fn user_rows<'a>(view: &'a LiveView, rows: &'a [Row]) -> impl Iterator<Item = (usize, usize, &'a UserMessage)> {
     rows.iter().enumerate().filter_map(|(row_ix, row)| {
       let Row::Message(source_ix) = row else { return None };
-      let AgentMessage::User(user) = view.transcript.get(*source_ix)? else {
+      let message = view.transcript.get(*source_ix)?;
+      if super::transcript::synthetic_directive(message) {
+        return None;
+      }
+      let AgentMessage::User(user) = message else {
         return None;
       };
       Some((*source_ix, row_ix, user))
@@ -421,6 +425,24 @@ mod tests {
     ]))
     .unwrap();
     (session.live, view)
+  }
+  #[test]
+  fn constructed_synthetic_user_directive_is_not_a_query_anchor() {
+    let (live, mut view) = conversation();
+    view.transcript.insert(
+      0,
+      serde_json::from_value(serde_json::json!({
+        "role": "user", "content": "<system-interrupt>redirect</system-interrupt>",
+        "synthetic": true, "attribution": "agent"
+      }))
+      .unwrap(),
+    );
+    let presentation = rows(&view);
+    let anchors = TimelineAnchor::project(live, &view, &presentation, &Rc::new(Vec::new()));
+    assert_eq!(
+      anchors.iter().map(|anchor| anchor.preview.as_ref()).collect::<Vec<_>>(),
+      vec!["Inspect the parser", "Fix the parser"]
+    );
   }
 
   #[test]

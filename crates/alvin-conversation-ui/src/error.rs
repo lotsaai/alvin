@@ -14,6 +14,20 @@ pub enum Error {
   TerminalInput(Box<dyn StdError + Send + Sync>),
   /// The terminal engine thread panicked during shutdown.
   TerminalThread,
+  /// Base64-encoded image data could not be decoded.
+  ImageData {
+    /// Underlying base64 decoding error.
+    source: base64::DecodeError,
+  },
+  /// Inline image data had no MIME type.
+  ImageMimeMissing,
+  /// Inline image data used an unsupported MIME type.
+  ImageMimeUnsupported {
+    /// MIME type supplied by the image.
+    mime: String,
+  },
+  /// An image contained neither inline data nor a URL.
+  ImageSourceMissing,
 }
 
 impl fmt::Display for Error {
@@ -23,6 +37,10 @@ impl fmt::Display for Error {
       Self::TerminalEngine(source) => write!(f, "terminal engine: {source}"),
       Self::TerminalInput(source) => write!(f, "terminal input: {source}"),
       Self::TerminalThread => f.write_str("terminal engine thread panicked"),
+      Self::ImageData { source } => write!(f, "Invalid image data: {source}"),
+      Self::ImageMimeMissing => f.write_str("Image data is missing a MIME type"),
+      Self::ImageMimeUnsupported { mime } => write!(f, "Unsupported image format: {mime}"),
+      Self::ImageSourceMissing => f.write_str("Image has no data or URL"),
     }
   }
 }
@@ -33,6 +51,8 @@ impl StdError for Error {
       Self::Gateway(source) => Some(source),
       Self::TerminalEngine(source) => Some(source),
       Self::TerminalInput(source) => Some(source.as_ref()),
+      Self::ImageData { source } => Some(source),
+      Self::ImageMimeMissing | Self::ImageMimeUnsupported { .. } | Self::ImageSourceMissing => None,
       Self::TerminalThread => None,
     }
   }

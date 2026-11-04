@@ -1,0 +1,30 @@
+{
+  "messages": [
+    {
+      "role": "custom",
+      "customType": "transcript-verification-unknown",
+      "content": "Unknown extension activity\n\nOriginal body remains available in full.",
+      "display": true,
+      "timestamp": 1793941983097,
+      "details": {
+        "producer": "transcript-verification",
+        "retained": {
+          "value": 42
+        }
+      },
+      "attribution": "agent"
+    },
+    {
+      "role": "custom",
+      "customType": "transcript-verification-hidden",
+      "content": "Hidden verification payload must not appear in the transcript.",
+      "display": false,
+      "timestamp": 1793941983097,
+      "details": {
+        "producer": "transcript-verification"
+      },
+      "attribution": "agent"
+    }
+  ],
+  "totalMessages": 2
+}

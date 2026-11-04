@@ -22,9 +22,11 @@ pub(in crate::session::transcript) fn input(message: &BashExecutionMessage) -> T
   }
   ToolInput {
     name: "bash".into(),
+    task_progress: None,
     intent: None,
     args: message.command.as_ref().map(|command| json!({"command": command})),
     result: (!content.is_empty()).then(|| json!({"content":content})),
+    delivery: None,
     stream: Vec::new(),
     running: false,
     failed: message.exit_code.is_some_and(|code| code != 0),

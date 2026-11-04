@@ -2,13 +2,14 @@
 
 use std::sync::Arc;
 
-use alvin_conversation_ui::{Model, ProjectPreferences, UserMessageColors, Workspace, WorkspaceEvent};
+use alvin_conversation_ui::{ConversationPreferences, Model, ProjectPreferences, UserMessageColors, Workspace, WorkspaceEvent};
 use gpui_kit::base::{StyledExt as _, TestSupportExt as _};
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::color_picker::{ColorPickerEvent, ColorPickerState, ColorSelect};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::searchable_list::SearchableVec;
 use gpui_kit::component::select::{Select, SelectEvent, SelectState};
+use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{ActiveTheme as _, Icon, Selectable as _, Theme, ThemeMode, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -109,6 +110,9 @@ impl AppView {
       })
     };
     let current = config.as_ref().map(|config| &config.config);
+    cx.set_global(current.map_or_else(ConversationPreferences::default, |config| {
+      ConversationPreferences::new(config.expand_mutating_tools, config.expand_readonly_tools, config.expand_thinking)
+    }));
     let endpoint = input(current.map(|config| config.endpoint.to_string()).unwrap_or_default(), window, cx);
     let appearance = match current.map(|config| config.appearance.as_str()) {
       Some("light") => Appearance::Light,
@@ -308,6 +312,35 @@ impl AppView {
     match configuration.save(next) {
       Ok(()) => self.apply_terminal_settings(window, cx),
       Err(error) => self.terminal_error = Some(format!("Couldn’t save terminal font size: {error}")),
+    }
+    cx.notify();
+  }
+
+  fn save_conversation_preference(&mut self, field: usize, checked: bool, cx: &mut Context<Self>) {
+    let Some(configuration) = &mut self.config else { return };
+    let mut next = configuration.config.clone();
+    match field {
+      0 => next.expand_mutating_tools = checked,
+      1 => next.expand_readonly_tools = checked,
+      _ => next.expand_thinking = checked,
+    }
+    match configuration.save(next) {
+      Ok(()) => {
+        let config = &configuration.config;
+        cx.set_global(ConversationPreferences::new(
+          config.expand_mutating_tools,
+          config.expand_readonly_tools,
+          config.expand_thinking,
+        ));
+        let effective = match field {
+          0 => config.expand_mutating_tools,
+          1 => config.expand_readonly_tools,
+          _ => config.expand_thinking,
+        };
+        self.error =
+          (effective != checked).then(|| "Saved, but conversation preference is overridden by higher-priority configuration.".to_owned());
+      }
+      Err(error) => self.error = Some(format!("Couldn’t save conversation preference: {error}")),
     }
     cx.notify();
   }
@@ -900,10 +933,33 @@ impl Render for AppView {
           }
         }));
       let form = match self.topic {
-        SettingsTopic::General => v_flex()
-          .gap_4()
-          .child("Configure omp and the default model on the gateway server.")
-          .into_any_element(),
+        SettingsTopic::General => {
+          let preferences = *cx.global::<ConversationPreferences>();
+          v_flex()
+            .gap_4()
+            .child("Configure omp and the default model on the gateway server.")
+            .child("Conversation")
+            .children(
+              [
+                (
+                  "expand-mutating-tools",
+                  "Expand potentially mutating tools",
+                  preferences.expand_mutating_tools,
+                ),
+                ("expand-readonly-tools", "Expand readonly tools", preferences.expand_readonly_tools),
+                ("expand-thinking", "Expand thinking", preferences.expand_thinking),
+              ]
+              .into_iter()
+              .enumerate()
+              .map(|(field, (id, label, checked))| {
+                Switch::new(id)
+                  .label(label)
+                  .checked(checked)
+                  .on_change(cx.listener(move |this, checked, _, cx| this.save_conversation_preference(field, *checked, cx)))
+              }),
+            )
+            .into_any_element()
+        }
         SettingsTopic::Appearance => v_flex()
           .gap_4()
           .child(v_flex().gap_1().child("Mode").child(selector))
@@ -1198,6 +1254,12 @@ mod tests {
         let left_gap = content.left() - scroll.left();
         let right_gap = scroll.right() - content.right();
         assert!(left_gap <= right_gap + px(2.) && right_gap <= left_gap + px(2.));
+        assert_eq!(window.find("expand-mutating-tools").checked(), Some(true));
+        assert_eq!(window.find("expand-readonly-tools").checked(), Some(false));
+        assert_eq!(window.find("expand-thinking").checked(), Some(false));
+        window.click("expand-mutating-tools", cx);
+        window.click("expand-readonly-tools", cx);
+        window.click("expand-thinking", cx);
         window.click("settings-hosts", cx);
         window.click("Gateway URL", cx);
         window.press("secondary-a", cx);
@@ -1210,6 +1272,10 @@ mod tests {
       let saved = std::fs::read_to_string(&path).unwrap();
       assert!(saved.contains("dark"));
       assert!(!saved.contains("unfinished/model"));
+      let reloaded = Configuration::for_test(path.clone()).unwrap();
+      assert!(!reloaded.config.expand_mutating_tools);
+      assert!(reloaded.config.expand_readonly_tools);
+      assert!(reloaded.config.expand_thinking);
       cx.update_window(handle, |_, window, cx| {
         window.within("dark-theme").click("input", cx);
       })

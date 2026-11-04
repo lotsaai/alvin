@@ -1,8 +1,7 @@
 //! Retained assistant content and its independently interactive parts.
 
-mod error;
 mod fallback;
-mod image;
+pub(super) mod image;
 mod reasoning;
 mod redacted;
 mod server_tool;
@@ -19,16 +18,14 @@ use gpui_kit::{
 use super::tool::{ToolBlock, ToolInput};
 use reasoning::Reasoning;
 
-pub(super) use error::view as error_view;
-pub(super) use image::attachment as image_attachment;
-
 pub(super) struct ContentBlocks {
   id: SharedString,
   parts: Vec<Part>,
 }
 
-struct Part {
+pub(super) struct Part {
   _subscription: Option<Subscription>,
+  id: SharedString,
   identity: Identity,
   body: Body,
 }
@@ -41,22 +38,11 @@ enum Identity {
 }
 
 enum Body {
-  Text {
-    id: SharedString,
-    text: String,
-    streaming: bool,
-  },
+  Text { id: SharedString, text: String, streaming: bool },
   Reasoning(Entity<Reasoning>),
   Redacted(Option<usize>),
-  Image {
-    mime: Option<String>,
-    size: Option<usize>,
-    url: Option<String>,
-  },
-  Fallback {
-    from: String,
-    to: String,
-  },
+  Image { id: SharedString, image: image::PreparedImage },
+  Fallback { from: String, to: String },
   ServerTool(String),
   Tool(Entity<ToolBlock>),
 }
@@ -89,17 +75,64 @@ impl ContentBlocks {
     }
   }
 
+  pub(super) fn parts(&self) -> &[Part] {
+    &self.parts
+  }
+
   pub(super) fn view(&self, cx: &App) -> AnyElement {
-    v_flex()
-      .w_full()
-      .min_w_0()
-      .gap_2()
-      .children(self.parts.iter().map(|part| part.view(cx)))
-      .into_any_element()
+    let mut body = v_flex().w_full().min_w_0().gap_2();
+    let mut parts = self.parts.iter().peekable();
+    while let Some(part) = parts.next() {
+      if matches!(&part.identity, Identity::Tool { name: Some(name), .. } if name == "read") {
+        let mut group = v_flex().w_full().min_w_0().gap_1().child(part.view(cx));
+        while parts
+          .peek()
+          .is_some_and(|next| matches!(&next.identity, Identity::Tool { name: Some(name), .. } if name == "read"))
+        {
+          if let Some(next) = parts.next() {
+            group = group.child(next.view(cx));
+          }
+        }
+        body = body.child(group);
+      } else if matches!(&part.body, Body::Tool(_)) {
+        body = body.child(part.view(cx));
+      } else {
+        let icon = match &part.body {
+          Body::Reasoning(_) | Body::Redacted(_) => gpui_kit::component::IconName::Info,
+          _ => gpui_kit::component::IconName::Bot,
+        };
+        body = body.child(super::lane::item(part.id.clone(), icon, part.view(cx), cx));
+      }
+    }
+    body.into_any_element()
   }
 }
 
 impl Part {
+  pub(super) fn id(&self) -> &SharedString {
+    &self.id
+  }
+
+  pub(super) fn is_read(&self) -> bool {
+    matches!(&self.identity, Identity::Tool { name: Some(name), .. } if name == "read")
+  }
+
+  pub(super) fn is_text(&self) -> bool {
+    matches!(&self.identity, Identity::Text)
+  }
+
+  pub(super) fn projected_view(&self, cx: &App) -> AnyElement {
+    if matches!(&self.body, Body::Tool(_)) {
+      self.view(cx)
+    } else {
+      let icon = match &self.body {
+        Body::Reasoning(_) | Body::Redacted(_) => gpui_kit::component::IconName::Info,
+        _ => gpui_kit::component::IconName::Bot,
+      };
+      super::lane::item(self.id.clone(), icon, self.view(cx), cx).into_any_element()
+    }
+  }
+
   fn new<T: 'static>(
     id: &SharedString,
     position: usize,
@@ -112,25 +145,24 @@ impl Part {
     let id = SharedString::from(format!("{id}-part-{position}"));
     let body = match source {
       AssistantContent::Text(value) => Body::Text {
-        id,
+        id: id.clone(),
         text: value.text.clone().unwrap_or_default(),
         streaming,
       },
       AssistantContent::Thinking(value) if value.narration == Some(true) => Body::Text {
-        id,
+        id: id.clone(),
         text: value.thinking.clone().unwrap_or_default(),
         streaming,
       },
       AssistantContent::Thinking(value) => {
-        let entity = cx.new(|_| Reasoning::new(id, value.thinking.as_deref().unwrap_or_default()));
+        let entity = cx.new(|cx| Reasoning::new(id.clone(), value.thinking.as_deref().unwrap_or_default(), cx));
         subscription = Some(cx.observe(&entity, |_, _, cx| cx.notify()));
         Body::Reasoning(entity)
       }
       AssistantContent::RedactedThinking(value) => Body::Redacted(value.data.as_ref().map(String::len)),
       AssistantContent::Image(value) => Body::Image {
-        mime: value.mime_type.clone(),
-        size: value.data.as_ref().map(String::len),
-        url: value.url.clone(),
+        id: id.clone(),
+        image: image::PreparedImage::new(value),
       },
       AssistantContent::Fallback(value) => Body::Fallback {
         from: fallback::model(&value.from).to_owned(),
@@ -146,7 +178,7 @@ impl Part {
             &fallback
           }
         };
-        let entity = cx.new(|cx| ToolBlock::new(id, input.clone(), cx));
+        let entity = cx.new(|cx| ToolBlock::new(id.clone(), input.clone(), cx));
         subscription = Some(cx.observe(&entity, |_, _, cx| cx.notify()));
         Body::Tool(entity)
       }
@@ -164,6 +196,7 @@ impl Part {
       _ => Identity::Other,
     };
     Self {
+      id,
       identity,
       body,
       _subscription: subscription,
@@ -215,11 +248,7 @@ impl Part {
         reasoning.sync(value.thinking.as_deref().unwrap_or_default(), cx)
       }),
       (Body::Redacted(size), AssistantContent::RedactedThinking(value)) => *size = value.data.as_ref().map(String::len),
-      (Body::Image { mime, size, url }, AssistantContent::Image(value)) => {
-        mime.clone_from(&value.mime_type);
-        *size = value.data.as_ref().map(String::len);
-        url.clone_from(&value.url);
-      }
+      (Body::Image { image, .. }, AssistantContent::Image(value)) => image.sync(value),
       (Body::Fallback { from, to }, AssistantContent::Fallback(value)) => {
         let next_from = fallback::model(&value.from);
         let next_to = fallback::model(&value.to);
@@ -272,7 +301,7 @@ impl Part {
       Body::Text { id, text, streaming } => text::view(id, text, *streaming),
       Body::Reasoning(entity) => entity.clone().into_any_element(),
       Body::Redacted(size) => redacted::view(*size, cx),
-      Body::Image { mime, size, url } => image::attachment_parts(mime.as_deref(), *size, url.as_deref()),
+      Body::Image { id, image } => image.view(id.clone()),
       Body::Fallback { from, to } => fallback::view(from, to, cx),
       Body::ServerTool(name) => server_tool::view(name, cx),
       Body::Tool(entity) => entity.clone().into_any_element(),
@@ -283,9 +312,11 @@ impl Part {
 fn call_input(call: &alvin_protocol::ToolCall) -> ToolInput {
   ToolInput {
     name: call.name.clone().unwrap_or_else(|| "tool".into()),
+    task_progress: None,
     intent: call.intent.clone(),
     args: call.arguments.clone().map(serde_json::Value::Object),
     result: None,
+    delivery: None,
     stream: Vec::new(),
     running: false,
     failed: false,
@@ -332,6 +363,47 @@ mod tests {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
       self.blocks.view(cx)
     }
+  }
+
+  #[gpui_kit::test]
+  fn appending_adjacent_read_keeps_first_disclosure(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+      gpui_kit::init(cx);
+      cx.set_reduce_motion(true);
+      cx.set_global(crate::ConversationPreferences::new(true, true, false));
+    });
+    let call = |id: &str| {
+      AssistantContent::ToolCall(ToolCall {
+        id: Some(id.to_owned()),
+        name: Some("read".into()),
+        arguments: Some(serde_json::json!({"path":id}).as_object().unwrap().clone()),
+        ..ToolCall::default()
+      })
+    };
+    let (window, fixture) = cx.update(|cx| {
+      gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+        cx.new(|cx| {
+          let mut fixture = Fixture {
+            blocks: ContentBlocks::new("reads".into()),
+          };
+          fixture.sync_parts(&[call("first")], true, window, cx);
+          fixture
+        })
+      })
+      .unwrap()
+    });
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      window.click("reads-part-0-toggle", cx);
+      assert!(window.try_find("reads-part-0-details").is_none());
+      fixture.update(cx, |fixture, cx| {
+        fixture.sync_parts(&[call("first"), call("second")], true, window, cx)
+      });
+      window.render_frame(cx);
+      assert!(window.try_find("reads-part-0-details").is_none());
+      assert!(window.find("reads-part-1-details").visible());
+    })
+    .unwrap();
   }
 
   #[gpui_kit::test]
@@ -395,8 +467,6 @@ mod tests {
     });
     cx.update_window(window, |_, window, cx| {
       window.render_frame(cx);
-      window.click("tools-part-0-copy", cx);
-      assert_eq!(cx.read_from_clipboard().unwrap().text(), Some(format!("$ {first_command}")));
       window.click("tools-part-0-toggle", cx);
       assert!(window.try_find("tools-part-0-details").is_none());
       assert!(window.find("tools-part-1-details").visible());

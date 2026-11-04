@@ -26,7 +26,17 @@ async function generate(dest: string): Promise<void> {
     const { buildRpcWireBundle } = await import(path.join(pkgDir, "src/modes/rpc/wire"));
     const { buildWireModel } = await import(path.join(genDir, "model"));
     const { emitRust } = await import(copy);
-    await Bun.write(dest, emitRust(buildWireModel(buildRpcWireBundle())));
+    const model = buildWireModel(buildRpcWireBundle());
+    const cycle = model.defs.get("ThinkingLevelCycleResult");
+    const fields = cycle?.kind === "object" ? cycle.fields.filter(field => field.key === "level") : [];
+    const level = fields[0];
+    if (fields.length !== 1 || !level?.required || level.type.kind !== "ref" || level.type.name !== "Effort" ||
+        !model.defs.has("ConfiguredThinkingLevel")) {
+      throw new Error("unexpected ThinkingLevelCycleResult.level schema; review the upstream thinking cycle contract");
+    }
+    // omp returns the configured selector, including "off" and "auto", not only an effort.
+    level.type = { kind: "ref", name: "ConfiguredThinkingLevel" };
+    await Bun.write(dest, emitRust(model));
   } finally {
     await rm(copy, { force: true });
     await rm(`${copy}.rej`, { force: true });

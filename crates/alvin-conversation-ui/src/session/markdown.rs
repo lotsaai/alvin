@@ -35,9 +35,7 @@ pub fn refresh_markdown_theme(cx: &mut App) {
   let theme = cx.theme().highlight_theme.clone();
   TextViewDefaults::global(cx)
     .with_code_block_highlighter(move |block| {
-      let Some(language) = block.lang() else {
-        return Vec::new();
-      };
+      let language = block.lang().unwrap_or_default();
       let code = block.code();
       match highlight_language(&code, &language) {
         Ok(highlights) => highlights
@@ -66,6 +64,14 @@ fn highlight(text: &str) -> verdant::Result<Highlights> {
   highlight_language(text, LANGUAGE)
 }
 
+pub(super) fn detected_language(text: &str) -> Option<String> {
+  let trimmed = text.trim_start();
+  if (trimmed.starts_with('{') || trimmed.starts_with('[')) && serde_json::from_str::<serde_json::Value>(text).is_ok() {
+    return Some("json".to_owned());
+  }
+  palate::try_detect("file.", text).map(|language| language.to_string().to_ascii_lowercase())
+}
+
 fn highlight_language(text: &str, language: &str) -> verdant::Result<Highlights> {
   thread_local! {
     // Compiled queries are cached per set, so one set per thread keeps every later parse cheap.
@@ -73,13 +79,24 @@ fn highlight_language(text: &str, language: &str) -> verdant::Result<Highlights>
   }
   SET.with(|set| {
     let raw = language.split_whitespace().next().unwrap_or_default();
-    if raw.is_empty() {
-      return Err(verdant::Error::UnsupportedLanguage(String::new()));
+    if raw.eq_ignore_ascii_case("text") {
+      return Err(verdant::Error::UnsupportedLanguage(raw.to_owned()));
     }
-    let name = palate::try_detect(format!("file.{raw}"), text)
-      .map(|file_type| file_type.to_string())
-      .unwrap_or_else(|| raw.to_owned())
-      .to_ascii_lowercase();
+    let raw = if ["sh", "shell", "bash", "zsh"].iter().any(|alias| raw.eq_ignore_ascii_case(alias)) {
+      "bash"
+    } else {
+      raw
+    };
+    let name = if raw.is_empty() {
+      detected_language(text).unwrap_or_default()
+    } else if raw == "bash" {
+      raw.to_owned()
+    } else {
+      palate::try_detect(format!("file.{raw}"), text)
+        .map(|file_type| file_type.to_string())
+        .unwrap_or_else(|| raw.to_owned())
+        .to_ascii_lowercase()
+    };
     let language = match Lang::for_name(&name, set) {
       Ok(language) => language,
       Err(verdant::Error::UnsupportedLanguage(_)) => {
@@ -197,6 +214,32 @@ mod tests {
     assert!(key_of(detected, &highlights, "42").is_some());
     assert!(matches!(
       highlight_language("A quiet afternoon.\n", "not-a-language"),
+      Err(verdant::Error::UnsupportedLanguage(_))
+    ));
+  }
+
+  #[test]
+  fn detects_unlabelled_code_and_keeps_prose_plain() {
+    let json = "{\n  \"message\": \"héllo\",\n  \"count\": 42\n}\n";
+    let json_highlights = highlight_language(json, "").unwrap();
+    assert!(key_of(json, &json_highlights, "\"héllo\"").is_some());
+    assert!(key_of(json, &json_highlights, "42").is_some());
+
+    let rust = "fn main() { let greeting = \"héllo\"; println!(\"{}\", greeting); }\n";
+    let rust_highlights = highlight_language(rust, "").unwrap();
+    assert!(key_of(rust, &rust_highlights, "fn").is_some());
+    assert!(key_of(rust, &rust_highlights, "\"héllo\"").is_some());
+    for (text, highlights) in [(json, &json_highlights), (rust, &rust_highlights)] {
+      assert!(highlights.iter().all(|(range, _)| text.get(range.clone()).is_some()));
+    }
+
+    let shell = "printf '%s\\n' \"$HOME\" | grep foo\n";
+    let highlights = highlight_language(shell, "shell").unwrap();
+    assert!(key_of(shell, &highlights, "\"$HOME\"").is_some());
+    assert!(key_of(shell, &highlights, "|").is_some());
+    assert_eq!(highlight_language(shell, "bash").unwrap(), highlights);
+    assert!(matches!(
+      highlight_language("A quiet afternoon.\n", ""),
       Err(verdant::Error::UnsupportedLanguage(_))
     ));
   }

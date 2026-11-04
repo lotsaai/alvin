@@ -21,6 +21,24 @@ use crate::translate::convert;
 use crate::transport::{Client, Error as RpcError};
 use crate::{Error, Result};
 
+// omp-rpc narrows this response to Effort, but omp can return "off".
+#[derive(Default, serde::Serialize)]
+#[serde(transparent)]
+struct CycleThinkingCommand(CycleThinkingLevelCommand);
+
+impl Command for CycleThinkingCommand {
+  const NAME: &'static str = CycleThinkingLevelCommand::NAME;
+  const TIMEOUT_MS: Option<u64> = CycleThinkingLevelCommand::TIMEOUT_MS;
+  type Output = Option<ThinkingLevelCycleResult>;
+
+  fn decode(data: Option<serde_json::Value>) -> std::result::Result<Self::Output, serde_json::Error> {
+    match data {
+      None | Some(serde_json::Value::Null) => Ok(None),
+      Some(value) => serde_json::from_value(value).map(Some),
+    }
+  }
+}
+
 /// A running `omp --mode rpc-ui` process and its working directory. Dropping the handle tears the
 /// process and its children down.
 pub struct Session {
@@ -256,8 +274,7 @@ impl Session {
 
   /// Switches to the next thinking level, or `None` when the model has none to cycle through.
   pub async fn cycle_thinking(&self) -> Result<Option<ThinkingLevelCycleResult>> {
-    let result = self.call(CycleThinkingLevelCommand::default()).await?;
-    convert("thinking cycle", &result)
+    self.call(CycleThinkingCommand::default()).await
   }
 
   /// Aborts the running turn.
@@ -358,6 +375,24 @@ mod tests {
 
   use crate::Error;
   use crate::test_support::{Child, Fixture, alive, make_fifo, next, prompt_status, sleeper, streamed_text, until_prompt_result};
+
+  #[test]
+  fn thinking_cycle_decodes_configured_levels_and_rejects_unknown_levels() {
+    use omp_rpc::Command;
+
+    for level in ["off", "auto"] {
+      let data = serde_json::json!({ "level": level });
+      let result = super::CycleThinkingCommand::decode(Some(data.clone())).unwrap();
+      assert_eq!(serde_json::to_value(result).unwrap(), data);
+    }
+    assert!(super::CycleThinkingCommand::decode(None).unwrap().is_none());
+    assert!(
+      super::CycleThinkingCommand::decode(Some(serde_json::Value::Null))
+        .unwrap()
+        .is_none()
+    );
+    assert!(super::CycleThinkingCommand::decode(Some(serde_json::json!({ "level": "unknown" }))).is_err());
+  }
 
   #[tokio::test]
   async fn a_prompt_streams_text_deltas_in_order_and_ends_with_its_result() {

@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use alvin_client::Client;
-use alvin_conversation::{Connection, Level};
+use alvin_conversation::Connection;
 use alvin_protocol::{CheckoutId, ErrorCode, LiveSessionId, OpenTarget, ProjectId};
 use gpui_kit::base::TestSupportExt as _;
 use gpui_kit::base::{Transition, transition};
@@ -385,13 +385,9 @@ impl Workspace {
         window.push_notification(Notification::success(SharedString::from(format!("Exported to {path}"))), cx);
       }
       ModelEvent::Notice { notice, .. } => {
-        let message = SharedString::from(notice.text.clone());
-        let notification = match notice.level {
-          Level::Info => Notification::info(message),
-          Level::Warning => Notification::warning(message),
-          Level::Error => Notification::error(message),
-        };
-        window.push_notification(notification, cx);
+        if let Some(notification) = crate::session::system_activity_notification(notice) {
+          window.push_notification(notification, cx);
+        }
       }
     }
   }
@@ -842,6 +838,209 @@ mod tests {
   use crate::workspace::{NavigationHistory, ProjectPreference, ProjectPreferences};
 
   const BUDGET: Duration = Duration::from_secs(1);
+  struct TestDirectory(Option<std::path::PathBuf>);
+
+  impl Drop for TestDirectory {
+    fn drop(&mut self) {
+      if let Some(path) = self.0.take()
+        && let Err(error) = std::fs::remove_dir_all(&path)
+      {
+        tracing::error!(path = %path.display(), %error, "could not remove workspace test directory");
+      }
+    }
+  }
+
+  struct RealWorkspaceFixture {
+    directory: TestDirectory,
+    repo: std::path::PathBuf,
+    gateway: alvin_gateway::Gateway,
+    client: alvin_client::Client,
+    projects: Vec<alvin_protocol::ProjectSummary>,
+    key: alvin_conversation::SessionsKey,
+    page: alvin_protocol::SessionPage,
+    opened: tokio::sync::mpsc::UnboundedReceiver<()>,
+    pending: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+    completed: std::sync::Arc<tokio::sync::Notify>,
+    stop_requests: tokio::sync::oneshot::Sender<()>,
+    requests: tokio::task::JoinHandle<()>,
+    responses: tokio::task::JoinHandle<()>,
+  }
+
+  impl test_context::AsyncTestContext for RealWorkspaceFixture {
+    async fn setup() -> Self {
+      use alvin_client::{ChannelPair, Client, Endpoint};
+      use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
+      use alvin_omp_host::{Host, StartRequest};
+      use alvin_protocol::{ListSessions, ProjectsApiClient, SessionsApiClient};
+      use std::collections::HashSet;
+      use std::sync::{Arc, Mutex};
+
+      let base = std::env::temp_dir().join(format!("alvin-sidebar-{}", alvin_protocol::EventId::new().as_uuid()));
+      let directory = TestDirectory(Some(base.clone()));
+      let repo = base.join("repo");
+      let session_dir = base.join("sessions").join("-repo");
+      std::fs::create_dir_all(&repo).unwrap();
+      std::fs::create_dir_all(&session_dir).unwrap();
+      assert!(
+        std::process::Command::new("git")
+          .args(["init", "--quiet"])
+          .current_dir(&repo)
+          .status()
+          .unwrap()
+          .success()
+      );
+      let repo = repo.canonicalize().unwrap();
+      let omp = HostConfig::builder()
+        .omp(std::path::PathBuf::from("omp"))
+        .extra_args(vec!["--session-dir".into(), session_dir.clone().into_os_string()])
+        .build();
+      let host = Host::new(omp.clone());
+      let (seed, _events) = host
+        .start(
+          StartRequest::builder()
+            .cwd(repo.clone())
+            .model(Some("openrouter/inclusionai/ling-3.0-flash".to_owned()))
+            .build(),
+        )
+        .await
+        .unwrap();
+      seed.rename("Workspace fixture".to_owned()).await.unwrap();
+      seed.close().await.unwrap();
+
+      let gateway = Gateway::new(
+        GatewayConfig::builder()
+          .sessions_dir(base.join("sessions"))
+          .omp(omp)
+          .default_model(Some("openrouter/inclusionai/ling-3.0-flash".to_owned()))
+          .build(),
+      );
+      let (gateway_tx, mut gateway_rx) = gateway.connect_channel(64).unwrap();
+      // Observe real gateway responses so slow omp startup is awaited outside GPUI's parking deadline.
+      let (client_tx, mut request_rx) = tokio::sync::mpsc::channel::<String>(64);
+      let (response_tx, client_rx) = tokio::sync::mpsc::channel(64);
+      let (opened_tx, opened) = tokio::sync::mpsc::unbounded_channel();
+      let pending = Arc::new(Mutex::new(HashSet::new()));
+      let completed = Arc::new(tokio::sync::Notify::new());
+      let response_ids = Arc::clone(&pending);
+      let response_completed = Arc::clone(&completed);
+      let (stop_requests, mut stop_rx) = tokio::sync::oneshot::channel();
+      let request_ids = Arc::clone(&pending);
+      let requests = tokio::spawn(async move {
+        loop {
+          let frame = tokio::select! {
+            frame = request_rx.recv() => match frame {
+              Some(frame) => frame,
+              None => break,
+            },
+            _ = &mut stop_rx => break,
+          };
+          let request: serde_json::Value = serde_json::from_str(&frame).unwrap();
+          if request["method"] == "live/open" {
+            request_ids.lock().unwrap().insert(request["id"].to_string());
+          }
+          if let Err(error) = gateway_tx.send(frame).await {
+            let request: serde_json::Value = serde_json::from_str(&error.0).unwrap();
+            request_ids.lock().unwrap().remove(&request["id"].to_string());
+            panic!("gateway request channel closed");
+          }
+        }
+      });
+      let responses = tokio::spawn(async move {
+        while let Some(frame) = gateway_rx.recv().await {
+          let response: serde_json::Value = serde_json::from_str(&frame).unwrap();
+          let completed = response_ids.lock().unwrap().remove(&response["id"].to_string());
+          if completed {
+            response_completed.notify_waiters();
+          }
+          if response_tx.send(frame).await.is_err() {
+            break;
+          }
+          if completed && opened_tx.send(()).is_err() {
+            break;
+          }
+        }
+      });
+      let client = Client::connect(Endpoint::Channel(ChannelPair::from((client_tx, client_rx))))
+        .await
+        .unwrap();
+      let projects = ProjectsApiClient::list(&client).await.unwrap();
+      let project = projects.first().unwrap();
+      let key = alvin_conversation::SessionsKey {
+        project: project.id.clone(),
+        checkout: Some(project.checkouts.first().unwrap().id.clone()),
+      };
+      let page = SessionsApiClient::list(
+        &client,
+        ListSessions {
+          project: key.project.clone(),
+          checkout: key.checkout.clone(),
+          after: None,
+          limit: 50,
+        },
+      )
+      .await
+      .unwrap();
+      assert!(
+        page
+          .sessions
+          .iter()
+          .any(|session| session.title.as_deref() == Some("Workspace fixture"))
+      );
+      Self {
+        directory,
+        repo,
+        gateway,
+        client,
+        projects,
+        key,
+        page,
+        opened,
+        pending,
+        completed,
+        stop_requests,
+        requests,
+        responses,
+      }
+    }
+
+    async fn teardown(mut self) {
+      let stopped = self.stop_requests.send(());
+      let requests = self.requests.await;
+      let mut response_result = None;
+      loop {
+        let notified = self.completed.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+        if self.pending.lock().unwrap().is_empty() {
+          break;
+        }
+        tokio::select! {
+          _ = &mut notified => {}
+          result = &mut self.responses => {
+            response_result = Some(result);
+            break;
+          }
+        }
+      }
+      let drained = self.pending.lock().unwrap().is_empty();
+      let shutdown = self.gateway.shutdown().await;
+      let responses = match response_result {
+        Some(result) => result,
+        None => {
+          self.responses.abort();
+          self.responses.await
+        }
+      };
+      std::fs::remove_dir_all(self.directory.0.take().unwrap()).unwrap();
+      stopped.unwrap();
+      requests.unwrap();
+      shutdown.unwrap();
+      if let Err(error) = responses {
+        assert!(error.is_cancelled(), "gateway response relay failed: {error}");
+      }
+      assert!(drained, "gateway response relay stopped with live opens in flight");
+    }
+  }
   #[test]
   fn navigation_history_traverses_branches_and_prunes_closed_sessions() {
     let (a, b, c) = (
@@ -904,16 +1103,13 @@ mod tests {
     assert_eq!(history.traverse(true), Some(d));
   }
 
+  #[test_context::test_context(RealWorkspaceFixture)]
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
-  async fn sidebar_controls_navigate_real_sessions_and_request_settings(cx: &mut TestAppContext) {
+  async fn sidebar_controls_navigate_real_sessions_and_request_settings(fixture: &mut RealWorkspaceFixture, cx: &mut TestAppContext) {
     use crate::model::{Model, ModelEvent};
     use crate::workspace::{Workspace, WorkspaceEvent};
-    use alvin_client::{ChannelPair, Client, Endpoint};
-    use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
-    use alvin_protocol::{ListSessions, ProjectsApiClient, SessionsApiClient};
     use gpui_kit::{Bounds, Context, Entity, Subscription, WindowBounds, WindowOptions, px, size};
-    use std::path::PathBuf;
 
     struct Events {
       _subscriptions: Vec<Subscription>,
@@ -928,10 +1124,10 @@ mod tests {
         let opened = tx.clone();
         Self {
           _subscriptions: vec![
-            cx.subscribe(model, move |_, _, event: &ModelEvent, _| {
-              if matches!(event, ModelEvent::Opened { .. }) {
-                opened.send(false).unwrap();
-              }
+            cx.subscribe(model, move |_, _, event: &ModelEvent, _| match event {
+              ModelEvent::Opened { .. } => opened.send(false).unwrap(),
+              ModelEvent::Failed { code, message } => panic!("opening workspace session failed ({code:?}): {message}"),
+              _ => {}
             }),
             cx.subscribe(workspace, move |_, _, event: &WorkspaceEvent, _| {
               if matches!(event, WorkspaceEvent::SettingsRequested) {
@@ -991,110 +1187,74 @@ mod tests {
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.executor().allow_parking();
     let executor = cx.foreground_executor().clone();
-    // The nested GPUI scheduler cannot return to Tokio to replenish its cooperative budget.
+    let client = fixture.client.clone();
+    let projects = fixture.projects.clone();
+    let key = fixture.key.clone();
+    let page = fixture.page.clone();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (handle, workspace, _events) = cx.update(|cx| {
+      gpui_kit::init(cx);
+      crate::init(cx);
+      let model = cx.new(|cx| {
+        let mut model = Model::new(client.clone(), cx);
+        model.seed_workspace(projects, vec![(key, page)], cx);
+        model
+      });
+      let (handle, workspace) = gpui_kit::open_window(
+        WindowOptions {
+          window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1100.), px(700.))))),
+          ..Default::default()
+        },
+        cx,
+        |window, cx| cx.new(|cx| Workspace::new(model.clone(), client, window, cx)),
+      )
+      .unwrap();
+      let events = cx.new(|cx| Events::new(&model, &workspace, tx, cx));
+      (handle, workspace, events)
+    });
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      assert_eq!(window.find("navigation-back").disabled(), Some(true));
+      window.click("titlebar-toggle-sidebar", cx);
+      assert!(!workspace.read(cx).sidebar_visible());
+      window.click("titlebar-toggle-sidebar", cx);
+      assert!(workspace.read(cx).sidebar_visible());
+      window.click("user-menu", cx);
+      window.render_frame(cx);
+      let settings = window.find_by_label("Settings…").bounds().center();
+      window.pointer_down(settings, MouseButton::Left, cx);
+      window.pointer_up(settings, MouseButton::Left, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(rx.recv().await, Some(true));
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      window.click("sidebar-settings", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(rx.recv().await, Some(true));
+    for _ in 0..2 {
+      cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("new-session", cx);
+        window.render_frame(cx);
+        let scope = window.find_by_label(fixture.repo.to_str().unwrap()).bounds().center();
+        window.pointer_down(scope, MouseButton::Left, cx);
+        window.pointer_up(scope, MouseButton::Left, cx);
+      })
+      .unwrap();
+      cx.run_until_parked();
+      fixture.opened.recv().await.unwrap();
+      assert_eq!(
+        tokio::task::coop::unconstrained(async { executor.block_test(rx.recv()) }).await,
+        Some(false)
+      );
+    }
+    // GPUI drives its own tasks; the external startup waits above run on Tokio.
     tokio::task::coop::unconstrained(async {
       executor.block_test(async {
-        let base = std::env::temp_dir().join(format!("alvin-sidebar-{}", alvin_protocol::EventId::new().as_uuid()));
-        let repo = base.join("repo");
-        let sessions = base.join("sessions").join("-repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        std::fs::create_dir_all(&sessions).unwrap();
-        assert!(
-          std::process::Command::new("git")
-            .args(["init", "--quiet"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success()
-        );
-        let repo = repo.canonicalize().unwrap();
-        let seed =
-          include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
-        std::fs::write(
-          sessions.join("2026-01-01T00-00-00-000Z_01a18ff1-ab74-73b8-a3a2-79905565c49b.jsonl"),
-          seed,
-        )
-        .unwrap();
-        let gateway = Gateway::new(
-          GatewayConfig::builder()
-            .sessions_dir(base.join("sessions"))
-            .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
-            .build(),
-        );
-        let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
-          .await
-          .unwrap();
-        let projects = ProjectsApiClient::list(&client).await.unwrap();
-        let project = projects.first().unwrap();
-        let key = alvin_conversation::SessionsKey {
-          project: project.id.clone(),
-          checkout: Some(project.checkouts.first().unwrap().id.clone()),
-        };
-        let page = SessionsApiClient::list(
-          &client,
-          ListSessions {
-            project: key.project.clone(),
-            checkout: key.checkout.clone(),
-            after: None,
-            limit: 50,
-          },
-        )
-        .await
-        .unwrap();
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let (handle, workspace, _events) = cx.update(|cx| {
-          gpui_kit::init(cx);
-          crate::init(cx);
-          let model = cx.new(|cx| {
-            let mut model = Model::new(client.clone(), cx);
-            model.seed_workspace(projects, vec![(key, page)], cx);
-            model
-          });
-          let (handle, workspace) = gpui_kit::open_window(
-            WindowOptions {
-              window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1100.), px(700.))))),
-              ..Default::default()
-            },
-            cx,
-            |window, cx| cx.new(|cx| Workspace::new(model.clone(), client, window, cx)),
-          )
-          .unwrap();
-          let events = cx.new(|cx| Events::new(&model, &workspace, tx, cx));
-          (handle, workspace, events)
-        });
-        cx.update_window(handle, |_, window, cx| {
-          window.render_frame(cx);
-          assert_eq!(window.find("navigation-back").disabled(), Some(true));
-          window.click("titlebar-toggle-sidebar", cx);
-          assert!(!workspace.read(cx).sidebar_visible());
-          window.click("titlebar-toggle-sidebar", cx);
-          assert!(workspace.read(cx).sidebar_visible());
-          window.click("user-menu", cx);
-          window.render_frame(cx);
-          let settings = window.find_by_label("Settings…").bounds().center();
-          window.pointer_down(settings, MouseButton::Left, cx);
-          window.pointer_up(settings, MouseButton::Left, cx);
-        })
-        .unwrap();
-        assert_eq!(rx.recv().await, Some(true));
-        cx.update_window(handle, |_, window, cx| {
-          window.render_frame(cx);
-          window.click("sidebar-settings", cx);
-        })
-        .unwrap();
-        assert_eq!(rx.recv().await, Some(true));
-        for _ in 0..2 {
-          cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-            window.click("new-session", cx);
-            window.render_frame(cx);
-            let scope = window.find_by_label(repo.to_str().unwrap()).bounds().center();
-            window.pointer_down(scope, MouseButton::Left, cx);
-            window.pointer_up(scope, MouseButton::Left, cx);
-          })
-          .unwrap();
-          assert_eq!(rx.recv().await, Some(false));
-        }
         let (first, second) = cx
           .update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -1212,9 +1372,7 @@ mod tests {
         .unwrap();
         output_rx.recv().await.unwrap().unwrap();
         cx.update_window(handle, |_, window, cx| {
-          let size = window.find("close-terminal").bounds().size;
-          // Startup notifications can cover the button's center; use its exposed trailing edge.
-          window.click_at("close-terminal", gpui_kit::point(size.width - px(2.), size.height / 2.), cx);
+          window.click("close-terminal", cx);
         })
         .unwrap();
         closed_rx.recv().await.unwrap();
@@ -1230,8 +1388,6 @@ mod tests {
         .unwrap();
         let cleanup = cx.update(|cx| workspace.update(cx, |workspace, cx| workspace.shutdown(cx)));
         cleanup.await;
-        gateway.shutdown().await.unwrap();
-        std::fs::remove_dir_all(base).unwrap();
       });
     })
     .await;

@@ -56,3 +56,33 @@ pub trait ModelApi {
   #[method(name = "thinking/cycle")]
   async fn cycle_thinking(&self, live: LiveSessionId) -> jsonrpsee::core::RpcResult<Option<ThinkingLevelCycleResult>>;
 }
+
+#[cfg(test)]
+mod tests {
+  use serde_json::json;
+
+  use crate::{Command, ConfiguredThinkingLevel, CycleThinkingLevelCommand, ThinkingLevelCycleResult};
+
+  #[test]
+  fn thinking_cycle_decodes_all_levels_and_rejects_unknown_values() {
+    for (wire, level) in [
+      ("auto", ConfiguredThinkingLevel::Auto),
+      ("inherit", ConfiguredThinkingLevel::Inherit),
+      ("off", ConfiguredThinkingLevel::Off),
+      ("minimal", ConfiguredThinkingLevel::Minimal),
+      ("low", ConfiguredThinkingLevel::Low),
+      ("medium", ConfiguredThinkingLevel::Medium),
+      ("high", ConfiguredThinkingLevel::High),
+      ("xhigh", ConfiguredThinkingLevel::Xhigh),
+      ("max", ConfiguredThinkingLevel::Max),
+    ] {
+      let result = CycleThinkingLevelCommand::decode(Some(json!({ "level": wire }))).unwrap();
+      assert_eq!(result, Some(ThinkingLevelCycleResult { level }));
+    }
+
+    assert!(CycleThinkingLevelCommand::decode(Some(json!({ "level": "invalid" }))).is_err());
+    assert!(CycleThinkingLevelCommand::decode(Some(json!({}))).is_err());
+    assert_eq!(CycleThinkingLevelCommand::decode(None).unwrap(), None);
+    assert_eq!(CycleThinkingLevelCommand::decode(Some(json!(null))).unwrap(), None);
+  }
+}

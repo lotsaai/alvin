@@ -1,0 +1,30 @@
+[
+  {
+    "id": "01a1ae4b-a6e5-702a-b60e-cc6e0b0aa30f",
+    "live": "01a1ae4b-7cf2-70d1-a1d7-d61d15240ee7",
+    "at": "2026-11-06T00:39:15.941415Z",
+    "body": {
+      "kind": "agent",
+      "frame": {
+        "rules": [
+          {
+            "name": "capture-rule",
+            "path": "/tmp/alvin-ttsr-capture/.omp/rules/capture-rule.md",
+            "content": "This temporary capture rule records a thinking-stream match.",
+            "alwaysApply": false,
+            "condition": ["user"],
+            "scope": ["thinking"],
+            "interruptMode": "always",
+            "_source": {
+              "provider": "native",
+              "providerName": "OMP",
+              "path": "/tmp/alvin-ttsr-capture/.omp/rules/capture-rule.md",
+              "level": "project"
+            }
+          }
+        ],
+        "type": "ttsr_triggered"
+      }
+    }
+  }
+]

@@ -468,10 +468,10 @@ impl Model {
     self.session_checkouts.get(&live)
   }
 
-  fn set_state(&mut self, live: LiveSessionId, state: &alvin_protocol::SessionState) {
+  fn set_state(&mut self, live: LiveSessionId, state: &alvin_protocol::SessionState, request: EventId) {
     if self.conversation.live(live).is_some() {
       self.session_ids.insert(live, SessionId::from(state.session_id.clone()));
-      self.conversation.set_state(live, state);
+      self.conversation.set_state(live, state, request);
     }
   }
 
@@ -485,15 +485,23 @@ impl Model {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       loop {
+        let request = match this.update(cx, |model, _| {
+          model.conversation.live_mut(live).map(|view| view.begin_state_request())
+        }) {
+          Ok(Some(request)) => request,
+          _ => return,
+        };
         match load(&client, live).await {
           Ok((state, page)) => {
             let loaded = this.update(cx, |model, cx| {
-              model.set_state(live, &state);
+              model.set_state(live, &state, request);
               model.conversation.load_page(live, page);
               model.load_catalog(live, cx);
               model.refresh_tree(live, cx);
+              model.refresh_stats(live, cx).detach();
               cx.emit(ModelChange::Session(live));
               cx.emit(ModelChange::SessionMetadata(live));
+              cx.notify();
             });
             if loaded.is_err() {
               return;
@@ -516,8 +524,15 @@ impl Model {
             Some(Ok(event)) => {
               if this
                 .update(cx, |model, cx| {
+                  let model_changed = matches!(&event.body, alvin_protocol::EventBody::ConfigUpdate(update)
+                  if update.model.as_ref().is_some_and(|next| {
+                    model.conversation.live(live).and_then(|view| view.model.as_ref()) != Some(next)
+                  }));
                   let seen = model.conversation.live(live).map_or(0, |view| view.notices.len());
                   model.conversation.apply(&event);
+                  if model_changed {
+                    model.refresh_thinking_levels(live, cx);
+                  }
                   model.announce(live, seen, cx);
                   if model.conversation.live(live).is_some_and(|view| view.tree_stale) {
                     model.refresh_tree(live, cx);
@@ -525,6 +540,10 @@ impl Model {
                   // omp said the model changed without saying to what.
                   if model.conversation.live(live).is_some_and(|view| view.state_stale) {
                     model.refresh_state(live, cx);
+                  }
+                  if matches!(&event.body, alvin_protocol::EventBody::SessionSettled(_)) {
+                    cx.notify();
+                    model.refresh_stats(live, cx).detach();
                   }
                   Self::session_event_changed(&event, cx);
                 })
@@ -628,6 +647,20 @@ impl Model {
           }
         }
         Err(error) => fail(&this, cx, &error),
+      }
+    })
+  }
+
+  /// Switches only this session's model, leaving omp's configured roles unchanged.
+  pub(crate) fn switch_model(&mut self, live: LiveSessionId, model: &ModelInfo, cx: &mut Context<Self>) -> Task<()> {
+    let message = format!("/switch {}/{}", model.provider, model.id);
+    let client = self.client.clone();
+    cx.spawn(async move |this, cx| {
+      if let Err(error) = LiveApiClient::prompt(&client, PromptRequest { live, message })
+        .await
+        .map_err(Error::from)
+      {
+        fail(&this, cx, &error);
       }
     })
   }
@@ -794,17 +827,21 @@ impl Model {
   /// Reads the session's state and transcript again, and its history: the active branch changed under the views. With
   /// `new_file` the session moved onto another file, so the tree starts over.
   fn reload(&mut self, live: LiveSessionId, new_file: bool, cx: &mut Context<Self>) {
+    let Some(request) = self.conversation.live_mut(live).map(|view| view.begin_state_request()) else {
+      return;
+    };
     let client = self.client.clone();
     cx.spawn(async move |this, cx| match load(&client, live).await {
       Ok((state, page)) => {
         if this
           .update(cx, |model, cx| {
-            model.set_state(live, &state);
+            model.set_state(live, &state, request);
             model.conversation.load_page(live, page);
             if new_file {
               model.conversation.forget_tree(live);
             }
             model.refresh_tree(live, cx);
+            model.refresh_stats(live, cx).detach();
             cx.emit(ModelChange::Session(live));
             cx.emit(ModelChange::SessionMetadata(live));
           })
@@ -1065,15 +1102,23 @@ impl Model {
 
   /// Reads `live/state` again, for what changed in omp without an event that says what.
   fn refresh_state(&mut self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let Some(request) = self.conversation.live_mut(live).map(|view| view.begin_state_request()) else {
+      return;
+    };
     let client = self.client.clone();
     cx.spawn(
       async move |this, cx| match LiveApiClient::state(&client, live).await.map_err(Error::from) {
         Ok(state) => {
           if this
             .update(cx, |model, cx| {
-              model.set_state(live, &state);
+              let model_changed = model.conversation.live(live).and_then(|view| view.model.as_ref()) != state.model.as_ref();
+              model.set_state(live, &state, request);
+              if model_changed {
+                model.refresh_thinking_levels(live, cx);
+              }
               cx.emit(ModelChange::Session(live));
               cx.emit(ModelChange::SessionMetadata(live));
+              cx.notify();
             })
             .is_err()
           {
@@ -1102,6 +1147,7 @@ impl Model {
             .update(cx, |model, cx| {
               model.catalogs.insert(live, catalog);
               cx.emit(ModelChange::Session(live));
+              cx.notify();
             })
             .is_err()
           {
@@ -1111,6 +1157,30 @@ impl Model {
         Err(error) => fail(&this, cx, &error),
       }
     })
+    .detach();
+  }
+
+  fn refresh_thinking_levels(&self, live: LiveSessionId, cx: &mut Context<Self>) {
+    let client = self.client.clone();
+    cx.spawn(
+      async move |this, cx| match ModelApiClient::thinking_levels(&client, live).await.map_err(Error::from) {
+        Ok(levels) => {
+          if this
+            .update(cx, |model, cx| {
+              if let Some(catalog) = model.catalogs.get_mut(&live) {
+                catalog.levels = levels;
+                cx.emit(ModelChange::Session(live));
+                cx.notify();
+              }
+            })
+            .is_err()
+          {
+            tracing::debug!("model released before thinking levels loaded");
+          }
+        }
+        Err(error) => fail(&this, cx, &error),
+      },
+    )
     .detach();
   }
 
@@ -1160,7 +1230,6 @@ impl Model {
         if this
           .update(cx, |model, cx| {
             model.refresh_state(live, cx);
-            model.load_catalog(live, cx);
           })
           .is_err()
         {

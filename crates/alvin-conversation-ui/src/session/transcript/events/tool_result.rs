@@ -10,9 +10,11 @@ pub(in crate::session::transcript) fn input(message: &ToolResultMessage) -> Tool
   };
   ToolInput {
     name: message.tool_name.clone().unwrap_or_else(|| "tool".into()),
+    task_progress: None,
     intent: None,
     args: None,
     result: Some(result),
+    delivery: None,
     stream: Vec::new(),
     running: false,
     failed: message.is_error.unwrap_or(false),

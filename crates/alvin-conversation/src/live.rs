@@ -4,10 +4,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use alvin_protocol::{
-  AgentMessage, AutoRetryStartEvent, AvailableSlashCommand, EventBody, ExtensionUiRequest, HistoryEntries, LiveSessionId,
-  LiveSessionSummary, MessageEndEvent, MessageStartEvent, MessageUpdateEvent, MessagesPage, ModelInfo, NotifyType, PromptStatus,
-  RpcAgentEvent, SessionState, ThinkingLevel, WidgetPlacement,
+  AgentMessage, AutoRetryStartEvent, AvailableSlashCommand, ConfiguredThinkingLevel, CustomMessage, EventBody, EventId, ExtensionUiRequest,
+  HistoryEntries, LiveSessionId, LiveSessionSummary, MessageEndEvent, MessageStartEvent, MessageUpdateEvent, MessagesPage, ModelInfo,
+  NotifyType, PromptStatus, RpcAgentEvent, SessionState, ThinkingLevel, TodoPhase, TodoReminderEvent, WidgetPlacement,
 };
+use serde_json::Value;
 
 use crate::dialogs::Dialogs;
 use crate::queue::Queue;
@@ -51,7 +52,7 @@ pub struct Retry {
 pub type Level = NotifyType;
 
 /// Where a [`Notice`] came from.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Origin {
   /// omp's own notice, with its source when it gave one.
   Notice(Option<String>),
@@ -72,17 +73,23 @@ pub enum Origin {
   FrameDropped(Option<String>),
   /// A frame arrived that did not decode.
   Undecodable,
+  /// Rules reported by a TTSR trigger, including their complete metadata.
+  TtsrTriggered(Vec<serde_json::Map<String, Value>>),
+  /// An unfinished-task reminder with its reported tasks and attempt.
+  TodoReminder(TodoReminderEvent),
 }
 
 /// Something the user should be told, in arrival order.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Notice {
-  /// How serious it is.
-  pub level: Level,
+  /// Reported or source-defined severity, if any.
+  pub level: Option<Level>,
   /// Where it came from.
   pub origin: Origin,
   /// What it says.
   pub text: String,
+  /// The original payload when a frame could not be decoded.
+  pub raw: Option<Value>,
 }
 
 /// A widget an extension asked for.
@@ -115,6 +122,13 @@ pub struct LiveView {
   pub streaming: Option<Streaming>,
   /// Tool executions of the current turn.
   pub tools: Tools,
+  /// The current plan, independent of historical todo tool results.
+  pub todo_phases: Vec<TodoPhase>,
+  /// The latest unfinished-task reminder, if one has not been cleared.
+  pub todo_reminder: Option<TodoReminderEvent>,
+  /// IRC arrivals not yet represented by committed history.
+  irc_pending: Vec<CustomMessage>,
+  state_request: EventId,
   /// Where the session stands.
   pub run: Run,
   /// How the last prompt ended.
@@ -147,6 +161,8 @@ pub struct LiveView {
   pub model: Option<ModelInfo>,
   /// The thinking level in use.
   pub thinking: Option<ThinkingLevel>,
+  /// The selector reported by a thinking-change event, when distinct from the effective level.
+  pub thinking_selector: Option<ConfiguredThinkingLevel>,
   /// Status lines extensions set, by key.
   pub statuses: BTreeMap<String, String>,
   /// Widgets extensions set, by key.
@@ -167,6 +183,10 @@ impl LiveView {
       total_messages: 0,
       streaming: None,
       tools: Tools::default(),
+      todo_phases: Vec::new(),
+      todo_reminder: None,
+      irc_pending: Vec::new(),
+      state_request: EventId::new(),
       run: Run::Idle,
       last_prompt: None,
       compaction: None,
@@ -183,6 +203,7 @@ impl LiveView {
       commands: Vec::new(),
       model: None,
       thinking: None,
+      thinking_selector: None,
       statuses: BTreeMap::new(),
       widgets: BTreeMap::new(),
       editor_text: None,
@@ -192,6 +213,12 @@ impl LiveView {
   /// The text an extension asked to put in the composer, once.
   pub fn take_editor_text(&mut self) -> Option<String> {
     self.editor_text.take()
+  }
+
+  /// Starts a state request, invalidating earlier requests for this session.
+  pub fn begin_state_request(&mut self) -> EventId {
+    self.state_request = EventId::new();
+    self.state_request
   }
 
   /// Replaces the tree with the one the session's entries make.
@@ -213,16 +240,26 @@ impl LiveView {
   /// Replaces the transcript with a page of `live/messages` and clears the reload-needed mark.
   pub(crate) fn load_page(&mut self, page: MessagesPage) {
     self.total_messages = usize::try_from(page.total_messages).unwrap_or(0);
+    self.irc_pending.retain(|pending| {
+      !Self::irc_id(pending).is_some_and(|id| page.messages.iter().any(|message| Self::message_irc_id(message) == Some(id)))
+    });
     self.transcript = page.messages;
+    self.transcript.extend(self.irc_pending.iter().cloned().map(AgentMessage::Custom));
     self.message_ids = vec![None; self.transcript.len()];
     self.snapshot_generation = self.snapshot_generation.saturating_add(1);
     self.reload_needed = false;
   }
 
-  pub(crate) fn set_state(&mut self, state: &SessionState) {
+  pub(crate) fn set_state(&mut self, state: &SessionState, request: EventId) {
+    if self.model != state.model || self.thinking != state.thinking_level {
+      self.thinking_selector = None;
+    }
     self.model.clone_from(&state.model);
     self.thinking = state.thinking_level;
-    self.state_stale = false;
+    if self.state_request == request {
+      self.todo_phases.clone_from(&state.todo_phases);
+      self.state_stale = false;
+    }
     if self.run != Run::Settled || state.is_streaming {
       self.run = if state.is_streaming { Run::Running } else { Run::Idle };
     }
@@ -235,6 +272,8 @@ impl LiveView {
   pub(crate) fn resync(&mut self) {
     self.transcript.clear();
     self.message_ids.clear();
+    self.transcript.extend(self.irc_pending.iter().cloned().map(AgentMessage::Custom));
+    self.message_ids.resize(self.transcript.len(), None);
     self.snapshot_generation = self.snapshot_generation.saturating_add(1);
     self.total_messages = 0;
     self.streaming = None;
@@ -242,6 +281,11 @@ impl LiveView {
     self.reload_needed = true;
     self.tree = None;
     self.tree_stale = false;
+    self.thinking_selector = None;
+    self.todo_phases.clear();
+    self.todo_reminder = None;
+    self.state_request = EventId::new();
+    self.state_stale = true;
   }
 
   /// The effect of one event. Every variant of [`EventBody`] has one; frames that change nothing a view shows say so.
@@ -272,6 +316,11 @@ impl LiveView {
         }
       }
       EventBody::ConfigUpdate(update) => {
+        if (update.model.is_some() && self.model != update.model)
+          || (update.thinking_level.is_some() && self.thinking != update.thinking_level)
+        {
+          self.thinking_selector = None;
+        }
         if update.model.is_some() {
           self.model.clone_from(&update.model);
         }
@@ -284,7 +333,12 @@ impl LiveView {
         Origin::FrameDropped(error.original_type.clone()),
         error.error.clone(),
       ),
-      EventBody::Undecodable { error, .. } => self.notice(NotifyType::Warning, Origin::Undecodable, error.clone()),
+      EventBody::Undecodable { error, raw } => self.notices.push(Notice {
+        level: Some(NotifyType::Warning),
+        origin: Origin::Undecodable,
+        text: error.clone(),
+        raw: Some(raw.clone()),
+      }),
       EventBody::ProcessExited => {
         self.exited = true;
         self.streaming = None;
@@ -317,7 +371,21 @@ impl LiveView {
       RpcAgentEvent::ToolExecutionStart(start) => self.tools.start(start),
       RpcAgentEvent::ToolExecutionUpdate(update) => self.tools.update(update),
       RpcAgentEvent::ToolStreamUpdate(update) => self.tools.stream_update(update),
-      RpcAgentEvent::ToolExecutionEnd(end) => self.tools.end(end),
+      RpcAgentEvent::ToolExecutionEnd(end) => {
+        self.tools.end(end);
+        if end.tool_name == "todo"
+          && end.is_error == Some(false)
+          && let Some(phases) = end
+            .result
+            .as_ref()
+            .and_then(|result| result.get("details"))
+            .and_then(|details| details.get("phases"))
+          && let Ok(phases) = serde_json::from_value::<Vec<TodoPhase>>(phases.clone())
+        {
+          self.todo_phases = phases;
+          self.state_request = EventId::new();
+        }
+      }
       RpcAgentEvent::AutoCompactionStart(_) => self.compaction = Some(Compaction { manual: false }),
       RpcAgentEvent::AutoCompactionEnd(end) => {
         self.compaction = None;
@@ -354,26 +422,54 @@ impl LiveView {
       }
       RpcAgentEvent::ModelChanged(_) => self.state_stale = true,
       RpcAgentEvent::ThinkingLevelChanged(changed) => {
+        self.thinking_selector = changed.configured;
         if changed.thinking_level.is_some() {
           self.thinking = changed.thinking_level;
         }
       }
+      RpcAgentEvent::RetryFallbackApplied(fallback) => {
+        let mut text = format!("Fallback: {} → {}\nRole: {}", fallback.from, fallback.to, fallback.role);
+        if let Some(reason) = &fallback.reason {
+          text.push('\n');
+          text.push_str(reason);
+        }
+        self.notice(NotifyType::Warning, Origin::Run, text);
+      }
+      RpcAgentEvent::RetryFallbackSucceeded(fallback) => self.notices.push(Notice {
+        level: None,
+        origin: Origin::Run,
+        text: format!("Fallback succeeded on {}\nRole: {}", fallback.model, fallback.role),
+        raw: None,
+      }),
       RpcAgentEvent::Notice(notice) => self.notice(notice.level, Origin::Notice(notice.source.clone()), notice.message.clone()),
       RpcAgentEvent::QueueUpdate(update) => self.queue.replace(update),
-      // These change nothing a view shows: turn start (the run state follows `agent_start`), prompt-cache refreshes, retry
-      // fallbacks, warnings about configuration, advisor cost, rule injection, todo and goal bookkeeping, IRC asides.
+      RpcAgentEvent::TodoReminder(reminder) => {
+        self.todo_reminder = Some(reminder.clone());
+        self.notices.push(Notice {
+          level: None,
+          origin: Origin::TodoReminder(reminder.clone()),
+          text: format!("Attempt {} of {}", reminder.attempt, reminder.max_attempts),
+          raw: None,
+        });
+      }
+      RpcAgentEvent::TodoAutoClear(_) => {
+        self.todo_phases.clear();
+        self.todo_reminder = None;
+        self.state_request = EventId::new();
+      }
+      RpcAgentEvent::TtsrTriggered(event) => self.notice(
+        NotifyType::Warning,
+        Origin::TtsrTriggered(event.rules.clone()),
+        "Rules triggered".to_owned(),
+      ),
+      RpcAgentEvent::IrcMessage(event) => self.irc_message(&event.message),
+      // These are lifecycle or bookkeeping updates.
       RpcAgentEvent::TurnStart(_)
       | RpcAgentEvent::CacheWarmingStart(_)
       | RpcAgentEvent::CacheWarmingEnd(_)
-      | RpcAgentEvent::RetryFallbackApplied(_)
-      | RpcAgentEvent::RetryFallbackSucceeded(_)
       | RpcAgentEvent::ConfigWarningsChanged(_)
       | RpcAgentEvent::AdvisorCostChanged(_)
       | RpcAgentEvent::AdvisorYielded(_)
-      | RpcAgentEvent::TtsrTriggered(_)
-      | RpcAgentEvent::TodoReminder(_)
-      | RpcAgentEvent::TodoAutoClear(_)
-      | RpcAgentEvent::IrcMessage(_)
       | RpcAgentEvent::GoalUpdated(_) => {}
     }
   }
@@ -398,7 +494,52 @@ impl LiveView {
     });
   }
 
+  fn irc_id(message: &CustomMessage) -> Option<&str> {
+    if message.custom_type.as_deref() != Some("irc:incoming") {
+      return None;
+    }
+    message.details.as_ref()?.get("id")?.as_str().filter(|id| !id.is_empty())
+  }
+
+  fn message_irc_id(message: &AgentMessage) -> Option<&str> {
+    match message {
+      AgentMessage::Custom(message) => Self::irc_id(message),
+      _ => None,
+    }
+  }
+
+  fn irc_message(&mut self, message: &CustomMessage) {
+    if Self::irc_id(message).is_some_and(|id| self.transcript.iter().any(|existing| Self::message_irc_id(existing) == Some(id))) {
+      return;
+    }
+    self.irc_pending.push(message.clone());
+    self.transcript.push(AgentMessage::Custom(message.clone()));
+    self.message_ids.resize(self.transcript.len(), None);
+  }
+
   fn message_end(&mut self, end: &MessageEndEvent) {
+    if let Some(id) = Self::message_irc_id(&end.message)
+      && let Some(pending) = self.irc_pending.iter().position(|message| Self::irc_id(message) == Some(id))
+    {
+      self.irc_pending.remove(pending);
+      if let Some(index) = self.transcript.iter().position(|message| Self::message_irc_id(message) == Some(id)) {
+        if let Some(message) = self.transcript.get_mut(index) {
+          *message = end.message.clone();
+        }
+        self.message_ids.resize(self.transcript.len(), None);
+        if let Some(message_id) = self.message_ids.get_mut(index) {
+          *message_id = end.message_id.clone();
+        }
+        self.total_messages = self.total_messages.saturating_add(1);
+        self.streaming = None;
+        return;
+      }
+    }
+    if Self::message_irc_id(&end.message).is_some_and(|id| self.transcript.iter().any(|message| Self::message_irc_id(message) == Some(id)))
+    {
+      self.streaming = None;
+      return;
+    }
     self.message_ids.resize(self.transcript.len(), None);
     self.message_ids.push(
       end
@@ -455,7 +596,12 @@ impl LiveView {
   }
 
   fn notice(&mut self, level: Level, origin: Origin, text: String) {
-    self.notices.push(Notice { level, origin, text });
+    self.notices.push(Notice {
+      level: Some(level),
+      origin,
+      text,
+      raw: None,
+    });
   }
 }
 
@@ -467,5 +613,305 @@ impl From<&AutoRetryStartEvent> for Retry {
       delay_ms: start.delay_ms,
       error_message: start.error_message.clone(),
     }
+  }
+}
+#[cfg(test)]
+mod tests {
+  use alvin_protocol::{
+    AgentMessage, CustomMessage, Event, EventBody, IrcMessageEvent, LiveSessionId, LiveSessionSummary, MessageEndEvent, MessagesPage,
+    NotifyType, RpcAgentEvent, SessionState,
+  };
+  use serde_json::{Value, json};
+
+  use super::LiveView;
+
+  fn events(source: &str) -> Vec<Event> {
+    serde_json::from_str(source).unwrap()
+  }
+
+  fn view(events: &[Event]) -> LiveView {
+    LiveView::new(&LiveSessionSummary {
+      live: events[0].live,
+      cwd: "/repo".into(),
+      file: "/session".into(),
+      exited: false,
+    })
+  }
+
+  fn state(source: &str) -> SessionState {
+    serde_json::from_str(source).unwrap()
+  }
+
+  fn install(view: &mut LiveView, state: &SessionState) {
+    let request = view.begin_state_request();
+    view.set_state(state, request);
+  }
+
+  fn irc(id: Value, display: bool) -> CustomMessage {
+    serde_json::from_value(json!({
+      "role": "custom", "customType": "irc:incoming", "content": "envelope", "display": display,
+      "details": {"id": id, "from": "peer", "message": "body", "future": {"key": true}},
+      "attribution": "agent", "unknown": 7
+    }))
+    .unwrap()
+  }
+
+  fn page(messages: Vec<AgentMessage>) -> MessagesPage {
+    MessagesPage {
+      total_messages: i64::try_from(messages.len()).unwrap(),
+      messages,
+      next_cursor: None,
+    }
+  }
+
+  #[test]
+  fn undecodable_notice_preserves_original_payload_and_error() {
+    let mut view = LiveView::new(&LiveSessionSummary {
+      live: LiveSessionId::new(),
+      cwd: "/repo".into(),
+      file: "/session".into(),
+      exited: false,
+    });
+    let raw = json!({"type": "message_end", "message": {"unexpected": ["α", 7]}});
+    view.apply(&EventBody::Undecodable {
+      raw: raw.clone(),
+      error: "missing field role".into(),
+    });
+    let notice = view.notices.last().unwrap();
+    assert_eq!(notice.raw.as_ref(), Some(&raw));
+    assert_eq!(notice.text, "missing field role");
+    assert_eq!(notice.level, Some(NotifyType::Warning));
+    assert_eq!(notice.origin, super::Origin::Undecodable);
+  }
+
+  #[test]
+  fn rule_triggers_preserve_every_violation_and_rule_field() {
+    let mut view = LiveView::new(&LiveSessionSummary {
+      live: LiveSessionId::new(),
+      cwd: "/repo".into(),
+      file: "/session".into(),
+      exited: false,
+    });
+    let rules = json!([{"name":"safety","path":"/rules/safety.md","content":"complete rule","future":{"x":7}}]);
+    let event = RpcAgentEvent::from_value(json!({"type":"ttsr_triggered","rules":rules})).unwrap();
+    view.apply(&EventBody::Agent(event.clone()));
+    view.apply(&EventBody::Agent(event));
+    assert_eq!(view.notices.len(), 2);
+    for notice in &view.notices {
+      assert_eq!(notice.level, Some(NotifyType::Warning));
+      let super::Origin::TtsrTriggered(retained) = &notice.origin else {
+        panic!("expected rule trigger");
+      };
+      assert_eq!(json!(retained), rules);
+      assert!(notice.raw.is_none());
+    }
+  }
+
+  #[test]
+  fn recorded_rule_trigger_retains_source_and_full_content() {
+    let events = events(include_str!("../fixtures/real_ttsr_trigger.events.json"));
+    let mut view = view(&events);
+    for event in &events {
+      view.apply(&event.body);
+    }
+    let notice = &view.notices[0];
+    assert_eq!(notice.level, Some(NotifyType::Warning));
+    let super::Origin::TtsrTriggered(rules) = &notice.origin else {
+      panic!("expected rule trigger");
+    };
+    assert_eq!(rules[0]["name"], "capture-rule");
+    assert_eq!(rules[0]["content"], "This temporary capture rule records a thinking-stream match.");
+    assert_eq!(rules[0]["_source"]["level"], "project");
+    assert_eq!(rules[0]["scope"], json!(["thinking"]));
+  }
+
+  #[test]
+  fn fallback_warning_preserves_source_fields() {
+    let mut view = LiveView::new(&LiveSessionSummary {
+      live: LiveSessionId::new(),
+      cwd: "/repo".into(),
+      file: "/session".into(),
+      exited: false,
+    });
+    let event = RpcAgentEvent::from_value(json!({
+      "type":"retry_fallback_applied", "from":"primary", "to":"backup", "role":"main", "reason":"rate limited"
+    }))
+    .unwrap();
+    view.apply(&EventBody::Agent(event));
+    let notice = &view.notices[0];
+    assert_eq!(notice.level, Some(NotifyType::Warning));
+    assert_eq!(notice.origin, super::Origin::Run);
+    assert_eq!(notice.text, "Fallback: primary → backup\nRole: main\nrate limited");
+    let success = RpcAgentEvent::from_value(json!({
+      "type":"retry_fallback_succeeded", "model":"backup", "role":"main"
+    }))
+    .unwrap();
+    view.apply(&EventBody::Agent(success));
+    let status = &view.notices[1];
+    assert_eq!(status.level, None);
+    assert_eq!(status.origin, super::Origin::Run);
+    assert_eq!(status.text, "Fallback succeeded on backup\nRole: main");
+  }
+
+  #[test]
+  fn recorded_todo_transitions_and_snapshots_replace_current_plan() {
+    let events = events(include_str!("../fixtures/real_todo_transitions.events.json"));
+    let before = state(include_str!("../fixtures/real_todo_transitions.state_before.json"));
+    let blocked = state(include_str!("../fixtures/real_todo_transitions.state_blocked.json"));
+    let completed = state(include_str!("../fixtures/real_todo_transitions.state_completed.json"));
+    let mut view = view(&events);
+    install(&mut view, &before);
+    assert!(view.todo_phases.is_empty());
+    for event in &events {
+      view.apply(&event.body);
+    }
+    assert_eq!(view.todo_phases, completed.todo_phases);
+    assert_eq!(view.todo_phases[0].tasks[2].blocker.as_deref(), Some("Waiting for an example"));
+    install(&mut view, &blocked);
+    assert_eq!(view.todo_phases, blocked.todo_phases);
+    install(&mut view, &before);
+    assert!(view.todo_phases.is_empty());
+    let history: MessagesPage = serde_json::from_str(include_str!("../fixtures/real_todo_transitions.messages.json")).unwrap();
+    view.load_page(history);
+    assert!(view.todo_phases.is_empty());
+  }
+
+  #[test]
+  fn failed_missing_and_malformed_tool_results_do_not_replace_plan() {
+    let events = events(include_str!("../fixtures/real_todo_transitions.events.json"));
+    let blocked = state(include_str!("../fixtures/real_todo_transitions.state_blocked.json"));
+    let mut view = view(&events);
+    install(&mut view, &blocked);
+    for (is_error, result) in [
+      (true, json!({"details":{"phases":[]}})),
+      (false, json!({"details":{}})),
+      (false, json!({"details":{"phases":"bad"}})),
+    ] {
+      let event = RpcAgentEvent::from_value(json!({
+        "type":"tool_execution_end", "toolCallId":"constructed", "toolName":"todo", "isError":is_error, "result":result
+      }))
+      .unwrap();
+      view.apply(&EventBody::Agent(event));
+      assert_eq!(view.todo_phases, blocked.todo_phases);
+    }
+    let repeated = events.iter().find(|event| matches!(&event.body, EventBody::Agent(RpcAgentEvent::MessageEnd(end)) if matches!(&end.message, AgentMessage::ToolResult(result) if result.tool_name.as_deref() == Some("todo")))).unwrap();
+    view.apply(&repeated.body);
+    assert_eq!(view.todo_phases, blocked.todo_phases);
+    let clear = RpcAgentEvent::from_value(json!({
+      "type":"tool_execution_end", "toolCallId":"constructed", "toolName":"todo", "isError":false, "result":{"details":{"phases":[]}}
+    }))
+    .unwrap();
+    view.apply(&EventBody::Agent(clear));
+    assert!(view.todo_phases.is_empty());
+  }
+
+  #[test]
+  fn reminders_do_not_replace_plan_and_clear_invalidates_snapshot() {
+    let events = events(include_str!("../fixtures/real_todo_reminder_repeated.events.json"));
+    let snapshot = state(include_str!("../fixtures/real_todo_reminder_repeated.state.json"));
+    let mut view = view(&events);
+    install(&mut view, &snapshot);
+    for event in &events {
+      if matches!(&event.body, EventBody::Agent(RpcAgentEvent::TodoReminder(_))) {
+        view.apply(&event.body);
+      }
+    }
+    assert_eq!(view.todo_phases, snapshot.todo_phases);
+    assert_eq!(view.todo_reminder.as_ref().unwrap().attempt, 1);
+    assert_eq!(view.todo_reminder.as_ref().unwrap().max_attempts, 3);
+    let request = view.begin_state_request();
+    let clear = RpcAgentEvent::from_value(json!({"type":"todo_auto_clear"})).unwrap();
+    view.apply(&EventBody::Agent(clear));
+    view.set_state(&snapshot, request);
+    assert!(view.todo_phases.is_empty());
+    assert!(view.todo_reminder.is_none());
+    let old = view.begin_state_request();
+    view.resync();
+    assert!(view.state_stale);
+    view.set_state(&snapshot, old);
+    assert!(view.todo_phases.is_empty());
+    assert!(view.state_stale);
+    install(&mut view, &snapshot);
+    assert_eq!(view.todo_phases, snapshot.todo_phases);
+  }
+
+  #[test]
+  fn newer_todo_event_and_newer_request_win_over_stale_snapshots() {
+    let events = events(include_str!("../fixtures/real_todo_transitions.events.json"));
+    let before = state(include_str!("../fixtures/real_todo_transitions.state_before.json"));
+    let blocked = state(include_str!("../fixtures/real_todo_transitions.state_blocked.json"));
+    let mut view = view(&events);
+    let old = view.begin_state_request();
+    let new = view.begin_state_request();
+    view.set_state(&blocked, new);
+    view.set_state(&before, old);
+    assert_eq!(view.todo_phases, blocked.todo_phases);
+    let old = view.begin_state_request();
+    let event = events
+      .iter()
+      .find(|event| matches!(&event.body, EventBody::Agent(RpcAgentEvent::ToolExecutionEnd(end)) if end.tool_name == "todo"))
+      .unwrap();
+    view.apply(&event.body);
+    let after_event = view.todo_phases.clone();
+    view.set_state(&before, old);
+    assert_eq!(view.todo_phases, after_event);
+  }
+
+  #[test]
+  fn irc_live_commit_and_history_use_same_payload_and_preserve_unmatched() {
+    let events = events(include_str!("../fixtures/real_todo_transitions.events.json"));
+    let mut view = view(&events);
+    let first = irc(json!("one"), false);
+    let second = irc(json!("two"), true);
+    for message in [&first, &first, &second] {
+      view.apply(&EventBody::Agent(RpcAgentEvent::IrcMessage(IrcMessageEvent {
+        message: message.clone(),
+      })));
+    }
+    assert_eq!(view.transcript.len(), 2);
+    assert_eq!(view.transcript[0], AgentMessage::Custom(first.clone()));
+    assert_eq!(first.display, Some(false));
+    let committed = AgentMessage::Custom(first.clone());
+    view.message_end(&MessageEndEvent {
+      message: committed.clone(),
+      message_id: Some("wire-id".into()),
+    });
+    assert_eq!(view.transcript, vec![committed.clone(), AgentMessage::Custom(second.clone())]);
+    assert_eq!(view.message_ids[0].as_deref(), Some("wire-id"));
+    view.resync();
+    assert_eq!(view.transcript, vec![AgentMessage::Custom(second.clone())]);
+    view.load_page(page(vec![committed.clone()]));
+    assert_eq!(view.transcript, vec![committed, AgentMessage::Custom(second.clone())]);
+    view.load_page(page(vec![AgentMessage::Custom(first), AgentMessage::Custom(second.clone())]));
+    assert_eq!(view.transcript.len(), 2);
+    view.irc_message(&second);
+    view.message_end(&MessageEndEvent {
+      message: AgentMessage::Custom(second),
+      message_id: None,
+    });
+    assert_eq!(view.transcript.len(), 2);
+  }
+
+  #[test]
+  fn irc_missing_or_invalid_ids_remain_distinct() {
+    let events = events(include_str!("../fixtures/real_todo_transitions.events.json"));
+    let mut view = view(&events);
+    for id in [Value::Null, json!(""), json!(7)] {
+      let message = irc(id, true);
+      view.irc_message(&message);
+      view.message_end(&MessageEndEvent {
+        message: AgentMessage::Custom(message),
+        message_id: None,
+      });
+    }
+    let mut missing = irc(Value::Null, true);
+    assert!(missing.details.as_mut().unwrap().as_object_mut().unwrap().remove("id").is_some());
+    view.irc_message(&missing);
+    view.irc_message(&missing);
+    assert_eq!(view.transcript.len(), 8);
+    view.resync();
+    assert_eq!(view.transcript.len(), 5);
+    view.load_page(page(Vec::new()));
+    assert_eq!(view.transcript.len(), 5);
   }
 }

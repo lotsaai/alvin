@@ -1,0 +1,147 @@
+{
+  "sessionId": "01a1adf8-c626-7484-a34f-76e297b22bb0",
+  "model": {
+    "id": "inclusionai/ling-3.0-flash",
+    "name": "Ling 3.0 Flash",
+    "api": "openrouter",
+    "provider": "openrouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "reasoning": true,
+    "input": [
+      "text"
+    ],
+    "cost": {
+      "input": 0.021,
+      "output": 0.063,
+      "cacheRead": 0.004200000000000001,
+      "cacheWrite": 0
+    },
+    "contextWindow": 262144,
+    "maxTokens": 32768,
+    "thinking": {
+      "mode": "effort",
+      "efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "compat": {
+      "supportsStore": true,
+      "supportsDeveloperRole": false,
+      "supportsMultipleSystemMessages": true,
+      "supportsReasoningEffort": true,
+      "supportsReasoningParams": true,
+      "supportsSamplingParams": true,
+      "supportsPenaltyAndStopParams": true,
+      "reasoningEffortMap": {},
+      "supportsUsageInStreaming": true,
+      "alwaysSendMaxTokens": false,
+      "disableReasoningOnForcedToolChoice": false,
+      "disableReasoningOnToolChoice": false,
+      "disableReasoningWithTools": false,
+      "supportsToolChoice": true,
+      "supportsForcedToolChoice": true,
+      "supportsNamedToolChoice": true,
+      "maxTokensField": "max_completion_tokens",
+      "requiresToolResultName": false,
+      "requiresAssistantAfterToolResult": false,
+      "requiresThinkingAsText": false,
+      "requiresMistralToolIds": false,
+      "thinkingFormat": "openrouter",
+      "reasoningDisableMode": "openrouter-enabled-false",
+      "omitReasoningEffort": false,
+      "includeEncryptedReasoning": true,
+      "filterReasoningHistory": false,
+      "reasoningContentField": "reasoning_content",
+      "requiresReasoningContentForToolCalls": true,
+      "requiresReasoningContentForAllAssistantTurns": false,
+      "allowsSyntheticReasoningContentForToolCalls": true,
+      "replayReasoningContent": false,
+      "qwenPreserveThinking": false,
+      "qwenTemplateReasoningEffort": false,
+      "requiresAssistantContentForToolCalls": false,
+      "supportsPromptCacheBreakpoints": false,
+      "isOpenRouterHost": true,
+      "wireModelIdMode": "openrouter",
+      "isVercelGatewayHost": false,
+      "supportsStrictMode": true,
+      "toolStrictMode": "mixed",
+      "stripDeepseekSpecialTokens": false,
+      "officialEndpoint": false,
+      "streamMarkupHealingPattern": "thinking",
+      "reasoningDeltasMayBeCumulative": false,
+      "emptyLengthFinishIsContextError": false,
+      "usesOpenAIToolCallIdLimit": false,
+      "dropThinkingWhenReasoningEffort": false,
+      "nativeKimiK3Reasoning": false,
+      "zaiReasoningEffortDialect": false,
+      "clampOutputToModelMax": false,
+      "stripImageInput": false,
+      "rejectRootObjectUnion": false,
+      "retryWithoutStrictOnGrammarError": false,
+      "supportsPromptCacheKey": false,
+      "supportsLongPromptCacheRetention": false,
+      "strictResponsesPairing": false,
+      "supportsImageDetailOriginal": false,
+      "supportsObfuscationOptOut": false,
+      "storeResponses": false,
+      "connectionBoundNativeHistory": false,
+      "supportsAllTurnsReasoningContext": false,
+      "supportsConfigurationUpdate": false,
+      "supportsSteering": false,
+      "harmonyLeakMitigation": false,
+      "requiresReasoningOffJuiceInstruction": false,
+      "supportsReasoningSummary": true
+    }
+  },
+  "thinkingLevel": "low",
+  "isStreaming": false,
+  "isCompacting": false,
+  "steeringMode": "all",
+  "followUpMode": "all",
+  "interruptMode": "immediate",
+  "sessionFile": "/tmp/alvin-real-capture-ogx54n/sessions/-project/2026-11-05T23-08-44-454Z_01a1adf8-c626-7484-a34f-76e297b22bb0.jsonl",
+  "autoCompactionEnabled": true,
+  "fastModeEnabled": false,
+  "fastModeActive": false,
+  "slowModeSupported": false,
+  "slowModeEnabled": false,
+  "tokensPerSecond": 24.29841813427557,
+  "messageCount": 18,
+  "queuedMessageCount": 0,
+  "hasPendingAsyncWork": false,
+  "isSettled": true,
+  "queuedMessages": {
+    "steering": [],
+    "followUp": [],
+    "liveSteered": 0
+  },
+  "todoPhases": [
+    {
+      "name": "Capture",
+      "tasks": [
+        {
+          "content": "Task 1: first item",
+          "status": "completed"
+        },
+        {
+          "content": "Task 2: second item",
+          "status": "completed"
+        },
+        {
+          "content": "Task 3: third item",
+          "status": "completed",
+          "blocker": "Waiting for an example"
+        }
+      ]
+    }
+  ],
+  "contextUsage": {
+    "tokens": 24994,
+    "contextWindow": 262144,
+    "percent": 9.534454345703123
+  },
+  "goal": null
+}

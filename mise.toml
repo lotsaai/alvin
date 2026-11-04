@@ -32,6 +32,9 @@ python = "3.14"
 yamllint = "latest"
 watchexec = "latest"
 pitchfork = { version = "latest", workflow = "release.yml@refs/heads/main" }
+shfmt = "latest"
+zig = "latest"
+"cargo:docsrs-mcp" = "latest"
 
 [daemons.gateway]
 task = "gateway"

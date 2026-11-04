@@ -1,0 +1,86 @@
+{
+  "source": "Final state from live/state; prior transitions from real todo tool event details",
+  "live": "01a1af80-946e-7770-b060-61f219f6b0c2",
+  "transitions": [
+    {
+      "op": "init",
+      "phases": [
+        {
+          "name": "Capture",
+          "tasks": [
+            {
+              "content": "Capture evidence",
+              "status": "in_progress"
+            },
+            {
+              "content": "Native inspection",
+              "status": "pending"
+            }
+          ]
+        }
+      ],
+      "storage": "session"
+    },
+    {
+      "op": "done",
+      "phases": [
+        {
+          "name": "Capture",
+          "tasks": [
+            {
+              "content": "Capture evidence",
+              "status": "completed"
+            },
+            {
+              "content": "Native inspection",
+              "status": "in_progress"
+            }
+          ]
+        }
+      ],
+      "storage": "session",
+      "completedTasks": [
+        {
+          "phase": "Capture",
+          "content": "Capture evidence"
+        }
+      ]
+    },
+    {
+      "op": "block",
+      "phases": [
+        {
+          "name": "Capture",
+          "tasks": [
+            {
+              "content": "Capture evidence",
+              "status": "completed"
+            },
+            {
+              "content": "Native inspection",
+              "status": "blocked",
+              "blocker": "Awaiting parent native inspection"
+            }
+          ]
+        }
+      ],
+      "storage": "session"
+    }
+  ],
+  "finalRpcTodoPhases": [
+    {
+      "name": "Capture",
+      "tasks": [
+        {
+          "content": "Capture evidence",
+          "status": "completed"
+        },
+        {
+          "content": "Native inspection",
+          "status": "blocked",
+          "blocker": "Awaiting parent native inspection"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+[
+  {
+    "id": "01a1af78-046a-71db-8571-c2a31297d928",
+    "live": "01a1af4e-5afe-74e0-b29c-75474693df86",
+    "at": "2026-11-06T06:07:20.682925Z",
+    "body": {
+      "kind": "undecodable",
+      "frame": {
+        "raw": {
+          "type": "turn_end",
+          "message": false,
+          "toolResults": [],
+          "verification": "controlled malformed producer frame"
+        },
+        "error": "unknown AgentMessage role None"
+      }
+    }
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "todoPhases": [
+    {
+      "name": "Capture",
+      "tasks": [
+        {
+          "content": "{\"phase\":\"Capture\",\"items\":[\"Capture file tools\"]}",
+          "status": "in_progress"
+        },
+        {
+          "content": "{\"phase\":\"Capture\",\"items\":[\"Native inspection\"]}",
+          "status": "pending"
+        }
+      ]
+    }
+  ]
+}

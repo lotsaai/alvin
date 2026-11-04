@@ -22,12 +22,15 @@ Shapes follow omp's wire types (generated into `alvin-protocol`, read from omp-r
   - `transcript`: committed messages (`AgentMessage`: user, assistant, tool result, bash execution, branch and compaction summaries, and the other variants omp defines), loaded newest page first from `live/messages` (`MessagesPage { messages, total_messages, next_cursor }`) and extended by `message_end`.
   - `streaming`: the assistant message being built, keyed by omp's `message_id`, from `message_update` deltas (`AssistantMessageEvent`: text, thinking, tool call start/delta/end, done, error). `message_end` replaces it with the committed message.
   - `tools`: running tool executions keyed by `tool_call_id`, from `tool_execution_start`/`update`/`stream_update`/`end`. Args and results stay `serde_json::Value`, as omp's schema defines them; the view renders them per tool name.
+  - `todo_phases`: the current typed plan from session state and successful todo results, separate from historical todo operations. `todo_auto_clear` removes the current plan without rewriting history.
+  - `todo_reminder`: the latest unfinished-task reminder. Each reminder also produces neutral System activity with its complete typed payload. A reminder does not replace or duplicate the current plan.
+  - Internal agent messages retain sender identity and complete content for the shared notice presentation. The omp adapter represents pending typed IRC arrivals as committed `irc:incoming` messages and reconciles matching history rather than producing a second transcript row.
   - `queue`: `steering` and `follow_up` text lists plus `live_steered` (leading steering entries already sent, which `queue/remove` cannot reach), replaced whole by each `queue_update`.
   - `run`: idle, running, or settled, from `agent_start`, `agent_end` (`yielded`, `awaiting_async_work`), `prompt_result`, `session_settled`. Plus compaction and retry progress.
   - `model` and `thinking`: from `live/state`, updated by `model_changed`, `thinking_level_changed`, `config_update`.
   - `dialogs`: pending extension UI requests by request id, removed when answered or cancelled (`cancel` with `targetId`).
   - `commands`: the slash-command catalog from `available_commands_update`.
-  - `notices`: `notice`, `command_output`, `extension_error`, untranslated-frame and dropped-frame events, in arrival order.
+  - `notices`: `notice`, `command_output`, `extension_error`, source-defined rule triggers, typed todo reminders, untranslated-frame and dropped-frame events, in arrival order. Retain reported severity, provenance and complete original details; do not infer event types from message text.
   - `title`: from the session list and `session_info_update`.
   - `exited`: set by the process-exited event.
   - `tree`: the history tree (`Tree`: roots, children, labels, leaf), built from `live/entries` and kept current from `live/entries { since }`. The leaf marks the active branch; the transcript is that branch. omp sends no tree-change event, so `turn_end`, `agent_end`, compaction end, and the replies to `live/navigateTree` and `live/label` set `tree_stale`; the UI then fetches entries since `tree_cursor`. `live/branch` and `live/fork` move the session onto a new file (`docs/rpc.md:235-247`), so after either the UI fetches the whole tree and the first transcript page again.

@@ -2,6 +2,7 @@
 //! they hold no domain state, create no runtime and never see the gateway directly.
 
 mod actions;
+mod conversation_preferences;
 mod error;
 mod model;
 mod session;
@@ -11,6 +12,7 @@ mod test_support;
 mod workspace;
 
 pub use actions::{Abort, ToggleSidebar, ToggleTerminal, init};
+pub use conversation_preferences::ConversationPreferences;
 pub use error::{Error, Result};
 pub use model::{Model, ModelEvent};
 pub use session::{UserMessageColors, refresh_markdown_theme};

@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -8,9 +9,9 @@ use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::{AppContext as _, Context, Entity, Subscription, Window};
 use serde_json::{Value, json};
 
-use super::events::{AssistantBlock, Block, UserBlock, bash_input, result_input};
+use super::events::{AssistantBlock, Block, UserBlock, bash_input, python_input, result_input};
 use super::tool::{ToolBlock, ToolInput};
-use super::{ToolResults, message_at, message_id};
+use super::{ToolResults, hidden, message_at, message_id, synthetic_directive};
 
 struct Slot {
   source: Rc<AgentMessage>,
@@ -27,6 +28,7 @@ pub(in crate::session) struct Transcript {
   generation: Option<u64>,
   slots: Vec<Slot>,
   blocks: Rc<BlockSnapshot>,
+  process_open: Rc<RefCell<HashMap<usize, bool>>>,
 }
 
 pub(in crate::session) struct Prepared {
@@ -41,6 +43,57 @@ struct Entry {
   tools: Rc<HashMap<usize, ToolInput>>,
   streaming: bool,
   matched: bool,
+}
+fn task_delivery(view: &LiveView, result: &Value) -> Option<Value> {
+  let job = result.pointer("/details/async/jobId")?.as_str().filter(|job| !job.is_empty())?;
+  let count = view
+    .transcript
+    .iter()
+    .filter(|message| match message {
+      AgentMessage::ToolResult(result) => {
+        result
+          .details
+          .as_ref()
+          .and_then(|details| details.pointer("/async/jobId"))
+          .and_then(Value::as_str)
+          == Some(job)
+      }
+      _ => false,
+    })
+    .count();
+  if count != 1 {
+    return None;
+  }
+  let mut deliveries = view.transcript.iter().filter_map(|message| {
+    let (details, key) = match message {
+      AgentMessage::Custom(message) if message.custom_type.as_deref() == Some("async-result") => (message.details.as_ref()?, "jobId"),
+      AgentMessage::ToolResult(result) if result.tool_name.as_deref() == Some("wait") => {
+        let details = result.details.as_ref()?;
+        if details.get("op").and_then(Value::as_str) != Some("wait") {
+          return None;
+        }
+        (details, "id")
+      }
+      _ => return None,
+    };
+    if !details
+      .get("jobs")?
+      .as_array()?
+      .iter()
+      .any(|entry| entry.get(key).and_then(Value::as_str) == Some(job))
+    {
+      return None;
+    }
+    match serde_json::to_value(message) {
+      Ok(value) => Some(value),
+      Err(error) => {
+        tracing::warn!(%error, "could not serialize job delivery");
+        None
+      }
+    }
+  });
+  let delivery = deliveries.next()?;
+  deliveries.next().is_none().then_some(delivery)
 }
 
 impl Prepared {
@@ -86,6 +139,9 @@ impl Transcript {
         if let AgentMessage::Assistant(assistant) = message {
           assistant.content.iter().flatten().enumerate().all(|(position, part)| {
             let AssistantContent::ToolCall(call) = part else { return true };
+            if call.name.as_deref() == Some("task") {
+              return false;
+            }
             if index >= current_turn && call.id.as_deref().and_then(|id| view.tools.get(id)).is_some() {
               return false;
             }
@@ -142,16 +198,18 @@ impl Transcript {
                   .clone()
                   .or_else(|| live.map(|tool| tool.name.clone()))
                   .unwrap_or_else(|| "tool".into()),
+                task_progress: live
+                  .filter(|tool| {
+                    tool.name == "task" && (committed.is_some() || tool.outcome.as_ref().is_some_and(|outcome| outcome.result.is_some()))
+                  })
+                  .and_then(|tool| tool.partial.clone()),
                 intent: call.intent.clone().or_else(|| live.and_then(|tool| tool.intent.clone())),
                 args: live
                   .and_then(|tool| tool.args.clone())
                   .or_else(|| call.arguments.clone().map(Value::Object)),
+                delivery: result.as_ref().and_then(|result| task_delivery(view, result)),
                 result,
-                stream: if committed.is_none() {
-                  live.map(|tool| tool.stream.clone()).unwrap_or_default()
-                } else {
-                  Vec::new()
-                },
+                stream: live.map(|tool| tool.stream.clone()).unwrap_or_default(),
                 running: committed.is_none() && live.is_some_and(|tool| tool.outcome.is_none()),
                 failed: committed.map_or_else(
                   || live.and_then(|tool| tool.outcome.as_ref()).is_some_and(|outcome| outcome.is_error),
@@ -171,7 +229,7 @@ impl Transcript {
       } else {
         Rc::new(tools)
       };
-      let matched = results.results.contains_key(&index);
+      let matched = results.results.contains_key(&index) || hidden(message);
       changed |= self.slots.get(index).is_none_or(|slot| {
         source.is_some() || slot.streaming != streaming || slot.body.is_none() != matched || !Rc::ptr_eq(&slot.tools, &tools)
       });
@@ -200,6 +258,7 @@ impl Transcript {
   ) {
     if self.generation != Some(prepared.generation) {
       self.slots.clear();
+      self.process_open.borrow_mut().clear();
       self.generation = Some(prepared.generation);
     }
     self.slots.truncate(prepared.entries.len());
@@ -207,7 +266,9 @@ impl Transcript {
       let source_changed = entry.source.is_some();
       if let Some(slot) = self.slots.get_mut(index) {
         if let Some(source) = entry.source {
-          if std::mem::discriminant(slot.source.as_ref()) != std::mem::discriminant(source.as_ref()) {
+          if std::mem::discriminant(slot.source.as_ref()) != std::mem::discriminant(source.as_ref())
+            || synthetic_directive(slot.source.as_ref()) != synthetic_directive(source.as_ref())
+          {
             *slot = Self::create(entry.id.clone(), source, entry.matched, composer, scroller, cx);
           } else {
             slot.source = source;
@@ -257,6 +318,21 @@ impl Transcript {
       None
     } else {
       Some(Rc::new(match source.as_ref() {
+        message if synthetic_directive(message) => {
+          let entity = cx.new(|cx| super::events::SystemActivity::new_synthetic(id.clone(), message, cx));
+          subscription = Some(watch(&entity, scroller, cx));
+          Block::Custom { id, entity }
+        }
+        message @ (AgentMessage::BranchSummary(_) | AgentMessage::CompactionSummary(_)) => {
+          let entity = cx.new(|cx| super::events::SystemActivity::new_synthetic(id, message, cx));
+          subscription = Some(watch(&entity, scroller, cx));
+          Block::Boundary(entity)
+        }
+        message @ (AgentMessage::Developer(_) | AgentMessage::FileMention(_)) => {
+          let entity = cx.new(|cx| super::events::SystemActivity::new_synthetic(id.clone(), message, cx));
+          subscription = Some(watch(&entity, scroller, cx));
+          Block::Custom { id, entity }
+        }
         AgentMessage::User(_) => {
           let entity = cx.new(|cx| UserBlock::new(id, source.clone(), composer.clone(), cx));
           subscription = Some(watch(&entity, scroller, cx));
@@ -267,8 +343,24 @@ impl Transcript {
           subscription = Some(watch(&entity, scroller, cx));
           Block::Assistant(entity)
         }
+        AgentMessage::Custom(message) => {
+          let entity = cx.new(|cx| super::events::SystemActivity::new(id.clone(), message, cx));
+          subscription = Some(watch(&entity, scroller, cx));
+          Block::Custom { id, entity }
+        }
+        AgentMessage::HookMessage(message) => {
+          let entity = cx.new(|cx| super::events::SystemActivity::new_hook(id.clone(), message, cx));
+          subscription = Some(watch(&entity, scroller, cx));
+          Block::Custom { id, entity }
+        }
         AgentMessage::BashExecution(message) => {
           let input = bash_input(message);
+          let entity = cx.new(|cx| ToolBlock::new(id, input, cx));
+          subscription = Some(watch(&entity, scroller, cx));
+          Block::Tool(entity)
+        }
+        AgentMessage::PythonExecution(message) => {
+          let input = python_input(message);
           let entity = cx.new(|cx| ToolBlock::new(id, input, cx));
           subscription = Some(watch(&entity, scroller, cx));
           Block::Tool(entity)
@@ -279,10 +371,6 @@ impl Transcript {
           subscription = Some(watch(&entity, scroller, cx));
           Block::Tool(entity)
         }
-        _ => Block::Other {
-          id,
-          message: source.clone(),
-        },
       }))
     };
     Slot {
@@ -307,17 +395,33 @@ impl Transcript {
       (Some(Block::Assistant(entity)), AgentMessage::Assistant(_)) => {
         entity.update(cx, |block, cx| block.sync(slot.source.clone(), tools, streaming, window, cx))
       }
+      (Some(Block::Custom { entity, .. }), AgentMessage::Custom(message)) if source_changed => {
+        entity.update(cx, |block, cx| block.sync(message, cx))
+      }
+      (Some(Block::Custom { entity, .. }), AgentMessage::HookMessage(message)) if source_changed => {
+        entity.update(cx, |block, cx| block.sync_hook(message, cx))
+      }
+      (Some(Block::Custom { entity, .. } | Block::Boundary(entity)), message)
+        if source_changed
+          && (synthetic_directive(message)
+            || matches!(
+              message,
+              AgentMessage::Developer(_)
+                | AgentMessage::FileMention(_)
+                | AgentMessage::BranchSummary(_)
+                | AgentMessage::CompactionSummary(_)
+            )) =>
+      {
+        entity.update(cx, |block, cx| block.sync_synthetic(message, cx))
+      }
       (Some(Block::Tool(entity)), AgentMessage::BashExecution(message)) if source_changed => {
         entity.update(cx, |block, cx| block.sync(&bash_input(message), cx))
       }
+      (Some(Block::Tool(entity)), AgentMessage::PythonExecution(message)) if source_changed => {
+        entity.update(cx, |block, cx| block.sync(&python_input(message), cx))
+      }
       (Some(Block::Tool(entity)), AgentMessage::ToolResult(message)) if source_changed => {
         entity.update(cx, |block, cx| block.sync(&result_input(message), cx))
-      }
-      (Some(Block::Other { id, message }), _) if !Rc::ptr_eq(message, &slot.source) => {
-        slot.body = Some(Rc::new(Block::Other {
-          id: id.clone(),
-          message: slot.source.clone(),
-        }))
       }
       _ => {}
     }
@@ -329,6 +433,10 @@ impl Transcript {
 
   pub(super) fn blocks(&self) -> Rc<BlockSnapshot> {
     self.blocks.clone()
+  }
+
+  pub(super) fn process_open(&self) -> Rc<RefCell<HashMap<usize, bool>>> {
+    self.process_open.clone()
   }
 }
 
@@ -344,6 +452,36 @@ mod tests {
 
   use super::Transcript;
   use crate::test_support::live_session;
+
+  #[test]
+  fn recorded_async_delivery_is_paired_only_with_unique_job() {
+    for (recording, kind_key, kind) in [
+      (
+        include_str!("../../../fixtures/task_turn.messages.json"),
+        "customType",
+        "async-result",
+      ),
+      (include_str!("../../../fixtures/real_task_wait.messages.json"), "toolName", "wait"),
+    ] {
+      let session = live_session("/work/api");
+      let mut conversation = Conversation::default();
+      conversation.open(&session);
+      let mut view = conversation.live(session.live).unwrap().clone();
+      let recording: serde_json::Value = serde_json::from_str(recording).unwrap();
+      view.transcript = serde_json::from_value(recording["messages"].clone()).unwrap();
+      let result = recording["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|message| message.pointer("/details/async/jobId").is_some())
+        .unwrap();
+      let delivery = super::task_delivery(&view, result).unwrap();
+      assert_eq!(delivery[kind_key], kind);
+      let duplicate: alvin_protocol::AgentMessage = serde_json::from_value(result.clone()).unwrap();
+      view.transcript.push(duplicate);
+      assert!(super::task_delivery(&view, result).is_none());
+    }
+  }
 
   #[test]
   fn committed_results_stay_at_call_positions_and_orphans_remain() {
@@ -367,6 +505,30 @@ mod tests {
     assert!(prepared.entries[3].matched);
     assert_eq!(prepared.entries[1].tools[&0].result.as_ref().unwrap()["content"][0]["text"], "A");
     assert_eq!(prepared.entries[1].tools[&1].result.as_ref().unwrap()["content"][0]["text"], "B");
+  }
+
+  #[test]
+  fn committed_result_retains_live_stream_updates() {
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    conversation.apply(&crate::test_support::event(
+      session.live,
+      json!({
+        "kind":"agent",
+        "frame":{"type":"tool_stream_update","toolCallId":"call","toolName":"bash","update":{"unknown":"original"}}
+      }),
+    ));
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.transcript = serde_json::from_value(json!([
+      {"role":"assistant","content":[{"type":"toolCall","id":"call","name":"bash","arguments":{"command":"echo"}}]},
+      {"role":"toolResult","toolCallId":"call","toolName":"bash","content":[{"type":"text","text":"done"}]}
+    ]))
+    .unwrap();
+    let prepared = Transcript::default().prepare(&view);
+    let input = &prepared.entries[0].tools[&0];
+    assert_eq!(input.result.as_ref().unwrap()["content"][0]["text"], "done");
+    assert_eq!(input.stream, vec![json!({"unknown":"original"})]);
   }
 
   #[test]

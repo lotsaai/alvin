@@ -192,7 +192,10 @@ pub(crate) fn run(settings: Configuration) -> eyre::Result<()> {
 #[cfg(test)]
 mod tests {
   use alvin_protocol::{BashRequest, LiveApiClient};
+  use alvin_protocol::{ModelApiClient as _, OpenRequest, OpenTarget};
+  use gpui_kit::AppContext as _;
   use gpui_kit::TestAppContext;
+  use gpui_kit::test::{TestEventExt as _, TestQueryExt as _, TestWindowExt as _};
 
   use super::{AppAssets, Quit, connect, local_user_name, start};
   use crate::test_support::ServerFixture;
@@ -269,5 +272,327 @@ mod tests {
       assert_eq!(reply.exit_code, Some(0));
       assert_eq!(reply.output, "alvin-session-survived");
     })
+  }
+
+  #[test_context(ServerFixture)]
+  #[tokio::test(flavor = "multi_thread")]
+  #[gpui_kit::test]
+  async fn composer_editing_keeps_the_draft_in_the_live_window(fixture: &mut ServerFixture, cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let executor = cx.foreground_executor().clone();
+    // GPUI drives these futures, so Tokio's per-poll budget must not span the whole external executor run.
+    tokio::task::unconstrained(async {
+      executor.block_test(async {
+        let client = connect(&fixture.endpoint).await.unwrap();
+        let probe = connect(&fixture.endpoint).await.unwrap();
+        let workspace = cx.update(|cx| start(cx, client)).unwrap();
+        cx.update(|cx| cx.set_reduce_motion(true));
+        let model = cx.read(|cx| workspace.read(cx).model().clone());
+        let phase = std::rc::Rc::new(std::cell::Cell::new("startup"));
+        let _errors = cx.update(|cx| {
+          let phase = phase.clone();
+          cx.subscribe(&model, move |_, event: &alvin_conversation_ui::ModelEvent, _| {
+            if let alvin_conversation_ui::ModelEvent::Failed { code, message } = event {
+              panic!("composer {} failed ({code:?}): {message}", phase.get());
+            }
+          })
+        });
+        let (notifications, mut notified) = tokio::sync::mpsc::unbounded_channel();
+        let _observer = cx.update(|cx| {
+          cx.observe(&model, move |_, _| {
+            notifications.send(()).unwrap();
+          })
+        });
+        cx.update(|cx| model.update(cx, |model, cx| model.refresh_projects(cx))).await;
+        let (project, checkout) = cx.read(|cx| {
+          let project = model.read(cx).conversation().workspace().projects()[0].clone();
+          (project.id, project.checkouts[0].id.clone())
+        });
+        cx.update(|cx| model.update(cx, |model, cx| model.new_session(project.clone(), checkout.clone(), cx)))
+          .await;
+        let live = cx.read(|cx| workspace.read(cx).active().unwrap());
+        model
+          .condition::<alvin_conversation_ui::ModelEvent>(cx, move |model, _| {
+            model.conversation().live(live).is_some_and(|view| view.model.is_some())
+          })
+          .await;
+        let handle = cx.read(|cx| cx.windows()[0]);
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          let point = window.find_by_label("Message").bounds().center();
+          window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(point, gpui_kit::MouseButton::Left, cx);
+          window.input("abc", cx);
+          window.press("left", cx);
+          window.press("backspace", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some("ac"));
+          window.press("ctrl-c", cx);
+          window.input("hello world", cx);
+          window.press("ctrl-w", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some("hello "));
+          window.input("world", cx);
+          window.press("ctrl-a", cx);
+          window.press("ctrl-d", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+          assert_eq!(window.find_by_label("Message").value(), Some("ello world"));
+          window.press("ctrl-k", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some(""));
+          window.input("draft", cx);
+          window.press("alt-enter", cx);
+          window.input("line two", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some("draft\nline two"));
+          window.press("ctrl-c", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some(""));
+        })
+        .unwrap();
+        let models = probe.models(live).await.unwrap();
+        phase.set("fresh history prompt");
+        cx.update(|cx| model.update(cx, |model, cx| model.send(live, "Reply with the single word ok.", false, cx)))
+          .await;
+        model
+          .condition::<alvin_conversation_ui::ModelEvent>(cx, move |model, _| {
+            model.conversation().live(live).is_some_and(|view| {
+              view.last_prompt.is_some()
+                && view
+                  .transcript
+                  .iter()
+                  .any(|message| matches!(message, alvin_protocol::AgentMessage::User(_)))
+            })
+          })
+          .await;
+        assert_eq!(
+          cx.read(|cx| model.read(cx).conversation().live(live).unwrap().last_prompt),
+          Some(alvin_protocol::PromptStatus::Completed)
+        );
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          let point = window.find_by_label("Message").bounds().center();
+          window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(point, gpui_kit::MouseButton::Left, cx);
+          window.input("recover this draft", cx);
+          window.press("secondary-a", cx);
+          window.press("backspace", cx);
+          window.press("up", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some("Reply with the single word ok."));
+          window.press("down", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some(""));
+          window.press("secondary-z", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some("Reply with the single word ok."));
+          window.press("secondary-z", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some(""));
+          window.press("secondary-z", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some("recover this draft"));
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| window.press("ctrl-c", cx)).unwrap();
+        let initial = LiveApiClient::state(&probe, live).await.unwrap();
+        let original = initial.model.as_ref().unwrap();
+        let mut target = None;
+        for candidate in models
+          .iter()
+          .filter(|candidate| candidate.provider == original.provider && candidate.id != original.id && candidate.reasoning)
+        {
+          let discovery = LiveApiClient::open(
+            &probe,
+            OpenRequest {
+              target: OpenTarget::New {
+                project: project.clone(),
+                checkout: checkout.clone(),
+              },
+              model: Some(format!("{}/{}", candidate.provider, candidate.id)),
+            },
+          )
+          .await
+          .unwrap()
+          .live;
+          let supports_cycle = probe.thinking_levels(discovery).await.unwrap().len() > 1;
+          LiveApiClient::close(&probe, discovery).await.unwrap();
+          if supports_cycle {
+            target = Some(candidate.clone());
+            break;
+          }
+        }
+        let target = target.expect("catalog contains another model with multiple thinking levels");
+        let target_label = format!("{} · {}/{}", target.name, target.provider, target.id);
+        let first = models.iter().find(|candidate| candidate.provider == target.provider).unwrap();
+        let current_suffix = if first.id == original.id { " · Current" } else { "" };
+        let provider_label = format!("{} · {}/{}{}", first.name, first.provider, first.id, current_suffix);
+        cx.update_window(handle, |_, window, cx| {
+          window.input("unsent draft", cx);
+          window.click("model-picker", cx);
+          window.input(&target.id, cx);
+        })
+        .unwrap();
+        loop {
+          let found = cx
+            .update_window(handle, |_, window, cx| {
+              window.render_frame(cx);
+              window.try_find_by_label(&target_label).is_some()
+            })
+            .unwrap();
+          if found {
+            break;
+          }
+          notified.recv().await.expect("model observer remains registered");
+        }
+        cx.update_window(handle, |_, window, cx| {
+          window.press("secondary-a", cx);
+          window.input(&target.provider, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          assert!(window.try_find_by_label(&provider_label).is_some());
+          window.press("secondary-a", cx);
+          window.input(&target.name, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          assert!(window.try_find_by_label(&target_label).is_some());
+          window.press("secondary-a", cx);
+          window.input("no-model-matches-this-query", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          assert!(window.try_find_by_label(&target_label).is_none());
+          window.press("secondary-a", cx);
+          window.input(&target.id, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+          let point = window.find_by_label(&target_label).bounds().center();
+          window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(point, gpui_kit::MouseButton::Left, cx);
+        })
+        .unwrap();
+        assert_eq!(LiveApiClient::state(&probe, live).await.unwrap().model, initial.model);
+        cx.update_window(handle, |_, window, cx| {
+          window.press("escape", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some("unsent draft"));
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+          window.click("model-picker", cx);
+          window.input(&target.id, cx);
+          assert!(window.try_find_by_label(&target_label).is_some());
+          let point = window.find_by_label(&target_label).bounds().center();
+          window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(point, gpui_kit::MouseButton::Left, cx);
+          window.click("model-picker-close", cx);
+          assert_eq!(window.find_by_label("Message").value(), Some("unsent draft"));
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+          let point = window.find_by_label("Message").bounds().center();
+          window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(point, gpui_kit::MouseButton::Left, cx);
+          window.press("alt-p", cx);
+          window.press("escape", cx);
+          assert_eq!(window.find_by_label("Message").focused(), Some(true));
+          assert_eq!(window.find_by_label("Message").value(), Some("unsent draft"));
+        })
+        .unwrap();
+        assert_eq!(LiveApiClient::state(&probe, live).await.unwrap().model, initial.model);
+        let expected_provider = target.provider.clone();
+        let expected_id = target.id.clone();
+        cx.update_window(handle, |_, window, cx| {
+          window.click("model-picker", cx);
+          window.input(&target.id, cx);
+          let point = window.find_by_label(&target_label).bounds().center();
+          window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(point, gpui_kit::MouseButton::Left, cx);
+          window.click("model-picker-use", cx);
+        })
+        .unwrap();
+        let switched = model.condition::<alvin_conversation_ui::ModelEvent>(cx, move |model, _| {
+          model
+            .conversation()
+            .live(live)
+            .and_then(|view| view.model.as_ref())
+            .is_some_and(|current| current.provider == expected_provider && current.id == expected_id)
+        });
+        switched.await;
+        let state = LiveApiClient::state(&probe, live).await.unwrap();
+        assert_eq!(
+          state.model.as_ref().map(|model| (&model.provider, &model.id)),
+          Some((&target.provider, &target.id))
+        );
+        let levels = probe.thinking_levels(live).await.unwrap();
+        phase.set("thinking cycle");
+        assert!(levels.len() > 1, "selected reasoning model must offer multiple thinking levels");
+        let initial_effort = *levels.last().unwrap();
+        cx.update(|cx| model.update(cx, |model, cx| model.set_thinking(live, initial_effort, cx)))
+          .await;
+        model
+          .condition::<alvin_conversation_ui::ModelEvent>(cx, move |model, _| {
+            model.conversation().live(live).is_some_and(|view| {
+              view.thinking == Some(initial_effort) && view.thinking_selector != Some(alvin_protocol::ConfiguredThinkingLevel::Auto)
+            })
+          })
+          .await;
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..levels.len() + 2 {
+          let before = cx.read(|cx| {
+            let view = model.read(cx).conversation().live(live).unwrap();
+            (view.thinking, view.thinking_selector)
+          });
+          cx.update_window(handle, |_, window, cx| {
+            let point = window.find_by_label("Message").bounds().center();
+            window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
+            window.pointer_up(point, gpui_kit::MouseButton::Left, cx);
+            window.press("shift-tab", cx);
+          })
+          .unwrap();
+          model
+            .condition::<alvin_conversation_ui::ModelEvent>(cx, move |model, _| {
+              model
+                .conversation()
+                .live(live)
+                .is_some_and(|view| (view.thinking, view.thinking_selector) != before)
+            })
+            .await;
+          let selector = cx.read(|cx| {
+            let view = model.read(cx).conversation().live(live).unwrap();
+            view
+              .thinking_selector
+              .map(|selector| selector.as_str())
+              .or_else(|| view.thinking.map(|level| level.as_str()))
+              .unwrap()
+          });
+          seen.insert(selector);
+        }
+        assert!(seen.contains("off"));
+        for level in levels {
+          assert!(seen.contains(level.as_str()), "cycle omitted {level:?}");
+        }
+        phase.set("second session");
+        let other = LiveApiClient::open(
+          &probe,
+          OpenRequest {
+            target: OpenTarget::New { project, checkout },
+            model: None,
+          },
+        )
+        .await
+        .unwrap()
+        .live;
+        assert_ne!(other, live);
+        assert_eq!(LiveApiClient::state(&probe, other).await.unwrap().model, initial.model);
+        LiveApiClient::close(&probe, other).await.unwrap();
+        let after = LiveApiClient::state(&probe, live).await.unwrap();
+        assert_eq!(after.message_count, initial.message_count);
+        assert_eq!(after.queued_message_count, initial.queued_message_count);
+      });
+    })
+    .await;
   }
 }

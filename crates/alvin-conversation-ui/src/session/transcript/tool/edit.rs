@@ -29,3 +29,28 @@ pub(super) fn parse(args: Option<&Value>, result: Option<&Value>) -> Option<Pres
     format!("--- a/{path}\n+++ b/{path}\n@@ -{start},{old} +{start},{new} @@\n{lines}"),
   ))
 }
+
+pub(super) fn preview(stream: &[Value]) -> Option<Presentation> {
+  let files = stream.iter().rev().find_map(|update| {
+    let files = update.get("files")?.as_array()?;
+    let files: Vec<_> = files
+      .iter()
+      .filter_map(|file| {
+        let path = file.get("path")?.as_str()?;
+        let detail = file
+          .get("diff")
+          .and_then(Value::as_str)
+          .or_else(|| file.get("error").and_then(Value::as_str))?;
+        Some((path, detail))
+      })
+      .collect();
+    (!files.is_empty()).then_some(files)
+  })?;
+  let summary = if files.len() == 1 { files.first()?.0 } else { "Edits" };
+  let content = files
+    .iter()
+    .map(|(path, detail)| format!("{path}\n{detail}"))
+    .collect::<Vec<_>>()
+    .join("\n");
+  Some(Presentation::text(summary.to_owned(), content))
+}

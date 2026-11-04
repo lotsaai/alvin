@@ -1,9 +1,12 @@
 //! The transcript: committed messages plus the one streaming, in a `MessageScroller`.
 mod content;
 mod events;
+mod lane;
 mod owner;
 mod tool;
 
+pub(super) use events::{SystemActivity, SystemActivityData};
+use gpui_kit::StatefulInteractiveElement as _;
 pub(super) use owner::Transcript;
 
 use std::collections::{HashMap, VecDeque};
@@ -12,18 +15,16 @@ use std::rc::Rc;
 use alvin_conversation::LiveView;
 use alvin_protocol::{AgentMessage, AssistantContent, LiveSessionId, MessageContent, UserContent};
 use gpui_kit::base::TestSupportExt as _;
-use gpui_kit::component::bubble::{Bubble, BubbleVariant};
-use gpui_kit::component::marker::{Marker, MarkerContent, MarkerLoadingStyle, MarkerVariant};
-use gpui_kit::component::message::{Message, MessageContent as MessageBody, MessageHeader};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::marker::{Marker, MarkerContent, MarkerLoadingStyle};
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
-use gpui_kit::component::text::TextView;
-use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
-  AnyElement, App, ElementId, Entity, Global, Hsla, InteractiveElement as _, IntoElement as _, ParentElement as _, SharedString,
-  Styled as _, Window, div,
+  AnyElement, App, Div, ElementId, Entity, Global, Hsla, InteractiveElement as _, IntoElement as _, ParentElement as _, Pixels,
+  SharedString, Styled as _, Window, div, prelude::FluentBuilder as _,
 };
 
-fn fenced(text: &str) -> String {
+pub(super) fn fenced(text: &str) -> String {
   let longest = text.split(|c| c != '`').map(str::len).max().unwrap_or_default();
   let fence = "`".repeat(longest.max(2).saturating_add(1));
   format!("{fence}\n{text}\n{fence}")
@@ -86,6 +87,19 @@ pub(super) fn message_id(view: &LiveView, index: usize) -> SharedString {
   ))
 }
 
+pub(super) fn synthetic_directive(message: &AgentMessage) -> bool {
+  let (synthetic, attribution, user_initiated) = match message {
+    AgentMessage::User(message) => (
+      message.synthetic,
+      message.attribution,
+      message.extra.get("userInitiated").and_then(serde_json::Value::as_bool),
+    ),
+    AgentMessage::Developer(message) => (message.synthetic, message.attribution, message.user_initiated),
+    _ => return false,
+  };
+  synthetic == Some(true) && attribution == Some(alvin_protocol::Attribution::Agent) && user_initiated != Some(true)
+}
+
 fn ancillary(message: &AgentMessage) -> bool {
   matches!(
     message,
@@ -94,7 +108,41 @@ fn ancillary(message: &AgentMessage) -> bool {
 }
 
 fn response_message(message: &AgentMessage) -> bool {
-  matches!(message, AgentMessage::Assistant(_) | AgentMessage::ToolResult(_)) || ancillary(message)
+  matches!(message, AgentMessage::Assistant(_) | AgentMessage::ToolResult(_)) || ancillary(message) || synthetic_directive(message)
+}
+fn hidden(message: &AgentMessage) -> bool {
+  match message {
+    AgentMessage::Custom(message) => message.display == Some(false),
+    AgentMessage::HookMessage(message) => message.display == Some(false),
+    _ => false,
+  }
+}
+
+fn append_read_group(body: Div, reads: &mut Vec<(SharedString, AnyElement)>) -> Div {
+  if reads.is_empty() {
+    return body;
+  }
+  let multiple = reads.len() > 1;
+  let title = reads.first().map(|(id, _)| id.clone());
+  body.child(
+    v_flex()
+      .w_full()
+      .min_w_0()
+      .gap_1()
+      .when(multiple, |group| {
+        group.when_some(title, |group, id| {
+          group.child(
+            div()
+              .id((ElementId::from(id), "read-group-title"))
+              .test_support()
+              .aria_label("Reads")
+              .text_sm()
+              .child("Reads"),
+          )
+        })
+      })
+      .children(std::mem::take(reads).into_iter().map(|(_, view)| view)),
+  )
 }
 
 /// Group response messages and injected context after a visible user message.
@@ -104,8 +152,12 @@ pub(crate) fn rows(view: &LiveView) -> Vec<Row> {
   let mut index = 0;
   let mut after_user = false;
   while index < count {
+    if message_at(view, index).is_some_and(|(message, _)| hidden(message)) {
+      index += 1;
+      continue;
+    }
     match message_at(view, index).map(|(message, _)| message) {
-      Some(AgentMessage::User(_)) => {
+      Some(message @ AgentMessage::User(_)) if !synthetic_directive(message) => {
         rows.push(Row::Message(index));
         after_user = true;
         index += 1;
@@ -114,6 +166,10 @@ pub(crate) fn rows(view: &LiveView) -> Vec<Row> {
         let start = index;
         let mut has_assistant = false;
         while let Some((message, _)) = message_at(view, index) {
+          if hidden(message) {
+            index += 1;
+            continue;
+          }
           if !response_message(message) {
             break;
           }
@@ -123,7 +179,11 @@ pub(crate) fn rows(view: &LiveView) -> Vec<Row> {
         if has_assistant {
           rows.push(Row::Response { start, end: index });
         } else {
-          rows.extend((start..index).map(Row::Message));
+          rows.extend(
+            (start..index)
+              .filter(|index| message_at(view, *index).is_some_and(|(message, _)| !hidden(message)))
+              .map(Row::Message),
+          );
         }
         after_user = false;
       }
@@ -183,14 +243,16 @@ pub(crate) fn transcript(
   scroller: &Entity<MessageScrollerState>,
   rows: Rc<Vec<Row>>,
   transcript: &owner::Transcript,
-  wide: bool,
+  max_width: Option<Pixels>,
 ) -> MessageScroller {
   let blocks = transcript.blocks();
   let transcript_generation = transcript.generation();
+  let process_open = transcript.process_open();
+  let scroller = scroller.clone();
   MessageScroller::new(
     ElementId::from(SharedString::from(format!("transcript-{}", live.as_uuid()))),
     scroller.clone(),
-    move |index, _: &mut Window, _: &mut App| {
+    move |index, _: &mut Window, cx: &mut App| {
       let Some(row) = rows.get(index) else {
         return div().into_any_element();
       };
@@ -198,19 +260,188 @@ pub(crate) fn transcript(
         Row::Message(index) => *index..index.saturating_add(1),
         Row::Response { start, end } => *start..*end,
       };
+      let timeline = range
+        .clone()
+        .filter_map(|index| blocks.get(index).and_then(|(block, _)| block.as_ref()))
+        .any(|block| block.is_timeline());
+      let continues = rows.get(index.saturating_add(1)).is_some_and(|next| {
+        let start = match next {
+          Row::Message(index) => *index,
+          Row::Response { start, .. } => *start,
+        };
+        blocks
+          .get(start)
+          .and_then(|(block, _)| block.as_ref())
+          .is_some_and(|block| block.is_timeline())
+      });
       let mut body = v_flex().w_full().gap_2();
-      for index in range.clone() {
-        if let Some((block, streaming)) = blocks.get(index) {
-          if let Some(block) = block {
-            body = body.child(block.view());
+      if matches!(row, Row::Response { .. })
+        || matches!(blocks.get(range.start), Some((Some(block), _)) if matches!(block.as_ref(), events::Block::Assistant(_)))
+      {
+        let last_assistant = range
+          .clone()
+          .rev()
+          .find(|index| matches!(blocks.get(*index), Some((Some(block), _)) if matches!(block.as_ref(), events::Block::Assistant(_))));
+        let open = process_open.borrow().get(&range.start).copied().unwrap_or(true);
+        let mut process = open.then(|| v_flex().w_full().gap_2());
+        let mut final_content = v_flex().w_full().gap_2();
+        let mut reads = Vec::new();
+        let mut footers = Vec::new();
+        let mut has_process = false;
+        for index in range.clone() {
+          let Some((block, streaming)) = blocks.get(index) else { continue };
+          let Some(block) = block else { continue };
+          if let events::Block::Assistant(entity) = block.as_ref() {
+            let assistant = entity.read(cx);
+            let parts = assistant.parts(cx);
+            let empty = parts.is_some_and(|parts| parts.is_empty());
+            let is_last = last_assistant == Some(index);
+            let eligible = is_last && assistant.may_have_answer();
+            let collapsed_answer = eligible && assistant.collapsed_answer(cx);
+            let mut has_answer = collapsed_answer;
+            if let Some(parts) = parts {
+              let suffix = if eligible {
+                parts.iter().rposition(|part| !part.is_text()).map_or(0, |position| position + 1)
+              } else {
+                parts.len()
+              };
+              for (position, part) in parts.iter().enumerate() {
+                if eligible && position >= suffix && part.is_text() {
+                  if open {
+                    process = process.map(|process| append_read_group(process, &mut reads).children(std::mem::take(&mut footers)));
+                  }
+                  final_content = final_content.child(part.projected_view(cx));
+                  has_answer = true;
+                } else {
+                  has_process = true;
+                  if open {
+                    if part.is_read() {
+                      reads.push((part.id().clone(), part.projected_view(cx)));
+                    } else {
+                      process = process.map(|process| {
+                        append_read_group(process, &mut reads)
+                          .children(std::mem::take(&mut footers))
+                          .child(part.projected_view(cx))
+                      });
+                    }
+                  }
+                }
+              }
+            } else if collapsed_answer {
+              if open {
+                process = process.map(|process| append_read_group(process, &mut reads).children(std::mem::take(&mut footers)));
+              }
+              final_content = final_content.child(div().child("Message collapsed"));
+            } else {
+              has_process = true;
+              if open {
+                process = process.map(|process| {
+                  append_read_group(process, &mut reads)
+                    .children(std::mem::take(&mut footers))
+                    .child(div().child("Message collapsed"))
+                });
+              }
+            }
+            if let Some(diagnostic) = assistant.diagnostic() {
+              if open {
+                process = process.map(|process| append_read_group(process, &mut reads).children(std::mem::take(&mut footers)));
+              }
+              if !range
+                .clone()
+                .skip(index.saturating_add(1).saturating_sub(range.start))
+                .any(|index| blocks.get(index).is_some_and(|(block, _)| block.is_some()))
+              {
+                final_content = final_content.child(diagnostic.clone());
+                has_answer = true;
+              } else {
+                has_process = true;
+                if open {
+                  process = process.map(|process| process.child(diagnostic.clone()));
+                }
+              }
+            }
+            if has_answer || (is_last && eligible && empty) {
+              final_content = final_content.child(assistant.footer(cx));
+            } else {
+              has_process = true;
+              if open {
+                let footer = assistant.footer(cx);
+                if reads.is_empty() {
+                  process = process.map(|process| process.child(footer));
+                } else {
+                  footers.push(footer);
+                }
+              }
+            }
+          } else {
+            has_process = true;
+            if open {
+              process = process.map(|process| {
+                let process = append_read_group(process, &mut reads).children(std::mem::take(&mut footers));
+                if let events::Block::Custom { id, .. } = block.as_ref() {
+                  process.child(lane::item(id.clone(), gpui_kit::component::IconName::Info, block.view(), cx))
+                } else {
+                  process.child(block.view())
+                }
+              });
+            }
           }
           if *streaming {
-            body = body.child(
-              Marker::new()
-                .loading(true)
-                .with_loading_style(MarkerLoadingStyle::Shimmer)
-                .content(MarkerContent::new().text("Working")),
-            );
+            has_process = true;
+            if open {
+              process = process.map(|process| {
+                append_read_group(process, &mut reads).children(std::mem::take(&mut footers)).child(
+                  Marker::new()
+                    .loading(true)
+                    .with_loading_style(MarkerLoadingStyle::Shimmer)
+                    .content(MarkerContent::new().text("Working")),
+                )
+              });
+            }
+          }
+        }
+        process = process.map(|process| append_read_group(process, &mut reads).children(footers));
+        if has_process {
+          let state = process_open.clone();
+          let scroller = scroller.clone();
+          let start = range.start;
+          body = body.child(
+            Button::new(SharedString::from(format!(
+              "process-{}-snapshot-{}-{start}",
+              live.as_uuid(),
+              transcript_generation
+            )))
+            .ghost()
+            .small()
+            .label(if open { "Hide process" } else { "Show process" })
+            .on_click(move |_, window, cx| {
+              let mut state = state.borrow_mut();
+              let value = state.entry(start).or_insert(true);
+              *value = !*value;
+              drop(state);
+              scroller.update(cx, |scroller, cx| scroller.remeasure(cx));
+              window.refresh();
+            }),
+          );
+          if let Some(process) = process {
+            body = body.child(process);
+          }
+        }
+        body = body.child(final_content);
+      } else {
+        for index in range.clone() {
+          if let Some((block, streaming)) = blocks.get(index) {
+            if let Some(block) = block {
+              body = body.child(block.view());
+            }
+            if *streaming {
+              body = body.child(
+                Marker::new()
+                  .loading(true)
+                  .with_loading_style(MarkerLoadingStyle::Shimmer)
+                  .content(MarkerContent::new().text("Working")),
+              );
+            }
           }
         }
       }
@@ -219,12 +450,37 @@ pub(crate) fn transcript(
         .group("message-actions")
         .w_full()
         .justify_center()
-        .px_4()
+        .px_10()
         .child(
-          super::reading_lane(wide)
+          super::reading_lane(max_width)
             .id(SharedString::from(format!("{id}-reading-lane")))
             .test_support()
-            .child(body),
+            .child(
+              div()
+                .relative()
+                .w_full()
+                .when(timeline, |this| {
+                  this.child(
+                    div()
+                      .absolute()
+                      .left(gpui_kit::rems(-2.))
+                      .top_0()
+                      .bottom(if continues { gpui_kit::rems(-2.) } else { gpui_kit::rems(0.) })
+                      .w_6()
+                      .flex()
+                      .justify_center()
+                      .child(
+                        div()
+                          .id(SharedString::from(format!("{id}-lane-connector")))
+                          .test_support()
+                          .h_full()
+                          .w(gpui_kit::px(1.))
+                          .bg(cx.theme().border),
+                      ),
+                  )
+                })
+                .child(body),
+            ),
         )
         .into_any_element()
     },
@@ -232,42 +488,6 @@ pub(crate) fn transcript(
   .with_row_style(gpui_kit::StyleRefinement::default().px_0())
   .w_full()
   .flex_1()
-}
-
-/// A titled block of text that is not the user's and not the assistant's: output, results, custom messages.
-fn note(row: Message, id: &SharedString, title: &str, text: &str) -> AnyElement {
-  row
-    .header(MessageHeader::new().child(SharedString::from(title.to_owned())))
-    .content(
-      MessageBody::new().bubble(
-        Bubble::new()
-          .with_variant(BubbleVariant::Muted)
-          .child(TextView::markdown(SharedString::from(format!("{id}-text")), fenced(text))),
-      ),
-    )
-    .into_any_element()
-}
-
-/// A point in the transcript that stands for what came before: a separator, and the summary under it.
-fn boundary(row: Message, id: &SharedString, title: &str, summary: &str) -> AnyElement {
-  v_flex()
-    .w_full()
-    .child(
-      Marker::new()
-        .id(SharedString::from(format!("{id}-marker")))
-        .with_variant(MarkerVariant::Separator)
-        .content(MarkerContent::new().text(SharedString::from(title.to_owned()))),
-    )
-    .child(
-      row.content(
-        MessageBody::new().bubble(
-          Bubble::new()
-            .with_variant(BubbleVariant::Ghost)
-            .child(TextView::markdown(SharedString::from(format!("{id}-text")), summary.to_owned())),
-        ),
-      ),
-    )
-    .into_any_element()
 }
 
 fn content_text(content: &MessageContent) -> String {
@@ -328,6 +548,36 @@ mod tests {
     let page: MessagesPage = serde_json::from_str(include_str!("../../../alvin-conversation/fixtures/plain_turn.messages.json")).unwrap();
     conversation.load_page(session.live, page);
     assert_ne!(before, super::message_id(conversation.live(session.live).unwrap(), 0));
+  }
+  #[gpui_kit::test]
+  fn constructed_synthetic_directives_do_not_reclassify_user_text(_cx: &mut TestAppContext) {
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.transcript = serde_json::from_value(serde_json::json!([
+      {"role": "user", "content": "<system-interrupt>example</system-interrupt>"},
+      {"role": "user", "content": "<system-interrupt>redirect</system-interrupt>", "synthetic": true, "attribution": "agent"},
+      {"role": "developer", "content": "directive", "synthetic": true, "attribution": "agent"},
+      {"role": "assistant", "content": [{"type": "text", "text": "answer"}]},
+      {"role": "user", "content": "interjection", "steering": true},
+      {"role": "developer", "content": "user requested", "synthetic": true, "userInitiated": true, "attribution": "agent"}
+    ]))
+    .unwrap();
+    assert!(!super::synthetic_directive(&view.transcript[0]));
+    assert!(super::synthetic_directive(&view.transcript[1]));
+    assert!(super::synthetic_directive(&view.transcript[2]));
+    assert!(!super::synthetic_directive(&view.transcript[4]));
+    assert!(!super::synthetic_directive(&view.transcript[5]));
+    assert_eq!(
+      rows(&view),
+      vec![
+        Row::Message(0),
+        Row::Response { start: 1, end: 4 },
+        Row::Message(4),
+        Row::Message(5),
+      ]
+    );
   }
 
   #[gpui_kit::test]
@@ -509,9 +759,255 @@ mod tests {
         &fixture.scroller,
         self.rows.clone(),
         &fixture.transcript,
-        true,
+        None,
       ))
     }
+  }
+
+  #[gpui_kit::test]
+  fn mixed_read_groups_and_process_folding_preserve_disclosures(cx: &mut TestAppContext) {
+    use gpui_kit::test::{TestQueryExt as _, TestWindowExt as _};
+    use gpui_kit::{Bounds, WindowBounds, WindowOptions, px, size};
+
+    cx.update(|cx| {
+      gpui_kit::init(cx);
+      cx.set_reduce_motion(true);
+    });
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.transcript = serde_json::from_value(serde_json::json!([
+      {"role":"user","content":"inspect"},
+      {"role":"assistant","stopReason":"toolUse","usage":{"input":12,"output":3},"content":[
+        {"type":"text","text":"Checking files"},
+        {"type":"toolCall","id":"a","name":"read","arguments":{"path":"a"}}
+      ]},
+      {"role":"assistant","stopReason":"toolUse","content":[
+        {"type":"toolCall","id":"b","name":"read","arguments":{"path":"b"}},
+        {"type":"thinking","thinking":"considering"},
+        {"type":"toolCall","id":"c","name":"read","arguments":{"path":"c"}}
+      ]},
+      {"role":"assistant","stopReason":"toolUse","content":[
+        {"type":"toolCall","id":"d","name":"read","arguments":{"path":"d"}},
+        {"type":"thinking","narration":true,"thinking":"Next"},
+        {"type":"toolCall","id":"e","name":"read","arguments":{"path":"e"}},
+        {"type":"toolCall","id":"shell","name":"bash","arguments":{"command":"pwd"}},
+        {"type":"toolCall","id":"f","name":"read","arguments":{"path":"f"}}
+      ]},
+      {"role":"custom","customType":"notice","content":"context"},
+      {"role":"assistant","stopReason":"toolUse","content":[
+        {"type":"toolCall","id":"g","name":"read","arguments":{"path":"g"}}
+      ]},
+      {"role":"assistant","stopReason":"stop","usage":{"input":9,"output":2},"content":[{"type":"text","text":"Answer"}]}
+    ]))
+    .unwrap();
+    let first = super::message_id(&view, 1);
+    let answer = super::message_id(&view, 6);
+    let process = format!("process-{}-snapshot-{}-1", session.live.as_uuid(), view.snapshot_generation);
+    let rows = std::rc::Rc::new(super::rows(&view));
+    let (window, root) = cx.update(|cx| {
+      gpui_kit::open_window(
+        WindowOptions {
+          window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1000.), px(2400.))))),
+          ..Default::default()
+        },
+        cx,
+        |window, cx| {
+          let fixture = cx.new(|cx| CaptureTranscript::new(view.clone(), window, cx));
+          fixture
+            .read(cx)
+            .scroller
+            .clone()
+            .update(cx, |scroller, cx| scroller.reset(rows.len(), cx));
+          cx.new(|_| VirtualTranscript {
+            fixture,
+            live: session.live,
+            rows,
+          })
+        },
+      )
+      .unwrap()
+    });
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      assert_eq!(window.find_all_by_label("Reads").len(), 2);
+      assert_eq!(window.find_all("message-metadata-trigger").len(), 2);
+      window.click(format!("{first}-part-1-toggle"), cx);
+      assert!(window.find(format!("{first}-part-1-details")).visible());
+      window.click(process.clone(), cx);
+      assert!(window.try_find(format!("{first}-part-1-toggle")).is_none());
+      assert!(window.find(format!("{answer}-part-0-lane-content")).visible());
+      assert_eq!(window.find_all("message-metadata-trigger").len(), 1);
+      view.transcript[3] = serde_json::from_value(serde_json::json!({
+        "role":"assistant","stopReason":"toolUse","content":[
+          {"type":"toolCall","id":"d","name":"read","arguments":{"path":"d"}},
+          {"type":"toolCall","id":"new","name":"read","arguments":{"path":"new"}},
+          {"type":"thinking","narration":true,"thinking":"Next"},
+          {"type":"toolCall","id":"e","name":"read","arguments":{"path":"e"}},
+          {"type":"toolCall","id":"shell","name":"bash","arguments":{"command":"pwd"}},
+          {"type":"toolCall","id":"f","name":"read","arguments":{"path":"f"}}
+        ]
+      }))
+      .unwrap();
+      let fixture = root.read(cx).fixture.clone();
+      fixture.update(cx, |fixture, cx| fixture.sync(&view, window, cx));
+      window.render_frame(cx);
+      window.click(process.clone(), cx);
+      assert_eq!(window.find_all_by_label("Reads").len(), 2);
+      assert!(window.find(format!("{first}-part-1-details")).visible());
+      assert_eq!(window.find_all("message-metadata-trigger").len(), 2);
+      view.streaming = Some(Streaming {
+        message_id: None,
+        message: view.transcript.pop().unwrap(),
+      });
+      fixture.update(cx, |fixture, cx| fixture.sync(&view, window, cx));
+      window.render_frame(cx);
+      window.click(process.clone(), cx);
+      assert!(window.find(format!("{answer}-part-0-lane-content")).visible());
+      view.streaming.as_mut().unwrap().message = serde_json::from_value(serde_json::json!({
+        "role":"assistant","stopReason":"stop","content":[
+          {"type":"text","text":"Answer"},
+          {"type":"toolCall","id":"later","name":"read","arguments":{"path":"later"}}
+        ]
+      }))
+      .unwrap();
+      fixture.update(cx, |fixture, cx| fixture.sync(&view, window, cx));
+      window.render_frame(cx);
+      assert!(window.try_find(format!("{answer}-part-0-lane-content")).is_none());
+      window.click(process.clone(), cx);
+      assert!(window.find(format!("{answer}-part-0-lane-content")).visible());
+      assert!(window.find(format!("{first}-part-1-details")).visible());
+      view.streaming = None;
+      view.transcript.push(
+        serde_json::from_value(serde_json::json!({
+          "role":"assistant","stopReason":"error","errorMessage":"Interrupted","content":[]
+        }))
+        .unwrap(),
+      );
+      fixture.update(cx, |fixture, cx| fixture.sync(&view, window, cx));
+      window.render_frame(cx);
+      window.click(process, cx);
+      assert!(window.try_find(format!("{answer}-part-0-lane-content")).is_none());
+      assert!(window.find(format!("{answer}-diagnostic-group")).visible());
+      window.click(format!("{answer}-diagnostic-details"), cx);
+      assert!(window.find(format!("{answer}-diagnostic-body-container")).visible());
+    })
+    .unwrap();
+  }
+  #[gpui_kit::test]
+  fn timeline_marker_and_content_edges_align_at_window_widths(cx: &mut TestAppContext) {
+    use gpui_kit::test::TestWindowExt as _;
+    use gpui_kit::{Bounds, WindowBounds, WindowOptions, px, size};
+
+    cx.update(gpui_kit::init);
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.transcript = serde_json::from_value(serde_json::json!([
+      {"role":"user","content":"inspect"},
+      {"role":"assistant","content":[
+        {"type":"thinking","thinking":"considering"},
+        {"type":"toolCall","id":"a","name":"read","arguments":{"path":"a"}},
+        {"type":"text","text":format!("{}\n```rust\n{}\n```", "長い内容".repeat(80), "let_unicode_identifier_".repeat(80))}
+      ]}
+    ]))
+    .unwrap();
+    let id = super::message_id(&view, 1);
+    let rows = std::rc::Rc::new(super::rows(&view));
+    for width in [480., 1000., 1800.] {
+      let view = view.clone();
+      let rows = rows.clone();
+      let (window, _) = cx.update(|cx| {
+        gpui_kit::open_window(
+          WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(width), px(1400.))))),
+            ..Default::default()
+          },
+          cx,
+          |window, cx| {
+            let fixture = cx.new(|cx| CaptureTranscript::new(view, window, cx));
+            let scroller = fixture.read(cx).scroller.clone();
+            scroller.update(cx, |scroller, cx| scroller.reset(rows.len(), cx));
+            cx.new(|_| VirtualTranscript {
+              fixture,
+              live: session.live,
+              rows,
+            })
+          },
+        )
+        .unwrap()
+      });
+      cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let first_marker = window.find(format!("{id}-part-0-lane-marker")).bounds();
+        let first_content = window.find(format!("{id}-part-0-lane-content")).bounds();
+        let reading_lane = window.find(format!("{id}-reading-lane")).bounds();
+        assert_eq!(first_content.left(), reading_lane.left());
+        assert_eq!(first_content.right(), reading_lane.right());
+        for part in 1..3 {
+          let marker = window.find(format!("{id}-part-{part}-lane-marker")).bounds();
+          let content = window.find(format!("{id}-part-{part}-lane-content")).bounds();
+          assert_eq!(marker.center().x, first_marker.center().x);
+          assert_eq!(content.left(), first_content.left());
+          assert!(marker.right() <= content.left());
+          assert_eq!(content.right(), reading_lane.right());
+        }
+      })
+      .unwrap();
+    }
+  }
+
+  #[gpui_kit::test]
+  fn timeline_connects_across_virtual_rows_until_user_boundary(cx: &mut TestAppContext) {
+    use gpui_kit::test::TestWindowExt as _;
+    use gpui_kit::{Bounds, WindowBounds, WindowOptions, px, size};
+
+    cx.update(gpui_kit::init);
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.transcript = serde_json::from_value(serde_json::json!([
+      {"role":"assistant","content":[{"type":"text","text":"first"}]},
+      {"role":"assistant","content":[{"type":"text","text":"second"}]},
+      {"role":"user","content":"next"}
+    ]))
+    .unwrap();
+    let first = super::message_id(&view, 0);
+    let second = super::message_id(&view, 1);
+    let user = super::message_id(&view, 2);
+    let rows = std::rc::Rc::new(super::rows(&view));
+    let (window, _) = cx.update(|cx| {
+      gpui_kit::open_window(
+        WindowOptions {
+          window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1000.), px(1400.))))),
+          ..Default::default()
+        },
+        cx,
+        |window, cx| {
+          let fixture = cx.new(|cx| CaptureTranscript::new(view, window, cx));
+          let scroller = fixture.read(cx).scroller.clone();
+          scroller.update(cx, |scroller, cx| scroller.reset(rows.len(), cx));
+          cx.new(|_| VirtualTranscript {
+            fixture,
+            live: session.live,
+            rows,
+          })
+        },
+      )
+      .unwrap()
+    });
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      let first_line = window.find(format!("{first}-lane-connector")).bounds();
+      let second_line = window.find(format!("{second}-lane-connector")).bounds();
+      assert_eq!(first_line.left(), second_line.left());
+      assert_eq!(first_line.bottom(), second_line.top());
+      assert!(window.try_find(format!("{user}-lane-connector")).is_none());
+    })
+    .unwrap();
   }
 
   #[gpui_kit::test]
@@ -519,7 +1015,10 @@ mod tests {
     use gpui_kit::test::TestWindowExt as _;
     use gpui_kit::{Bounds, WindowBounds, WindowOptions, px, size};
 
-    cx.update(gpui_kit::init);
+    cx.update(|cx| {
+      gpui_kit::init(cx);
+      cx.set_global(crate::ConversationPreferences::new(true, true, false));
+    });
     let session = live_session("/work/api");
     let mut conversation = Conversation::default();
     conversation.open(&session);
@@ -586,7 +1085,10 @@ mod tests {
     use gpui_kit::WindowOptions;
     use gpui_kit::test::TestWindowExt as _;
 
-    cx.update(gpui_kit::init);
+    cx.update(|cx| {
+      gpui_kit::init(cx);
+      cx.set_global(crate::ConversationPreferences::new(true, true, false));
+    });
     let session = live_session("/work/api");
     let mut conversation = Conversation::default();
     conversation.open(&session);
@@ -640,7 +1142,10 @@ mod tests {
     use gpui_kit::test::{TestQueryExt as _, TestWindowExt as _};
     use gpui_kit::{Bounds, WindowBounds, WindowOptions, px, size};
 
-    cx.update(gpui_kit::init);
+    cx.update(|cx| {
+      gpui_kit::init(cx);
+      cx.set_global(crate::ConversationPreferences::new(true, true, false));
+    });
     let session = live_session("/work/api");
     let mut conversation = Conversation::default();
     conversation.open(&session);
@@ -736,7 +1241,7 @@ mod tests {
         assert!(window.try_find(reasoning_body.clone()).is_none());
 
         window.click(edit.clone(), cx);
-        let header = window.find(edit.clone()).bounds();
+        let header = window.find(format!("{id}-part-1-header")).bounds();
         let body = window.find(edit_body.clone()).bounds();
         assert!(body.top() >= header.bottom());
         assert_eq!(body.size.width, header.size.width);

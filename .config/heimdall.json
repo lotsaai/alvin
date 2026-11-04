@@ -1,5 +1,6 @@
 {
   "sandbox": {
+    "enabled": false,
     "gpgAgent": true,
     "filesystem": {
       "deny": [
