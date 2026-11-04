@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-04T00:10:38Z",
+  "title": "Design System: Alvin",
+  "extensions": {
+    "colorMeta": {
+      "background": { "role": "neutral", "displayName": "Theme background" },
+      "foreground": { "role": "neutral", "displayName": "Theme foreground" },
+      "sidebar": { "role": "neutral", "displayName": "Sidebar surface" },
+      "muted": { "role": "neutral", "displayName": "Muted surface" },
+      "muted-foreground": { "role": "neutral", "displayName": "Muted foreground" },
+      "border": { "role": "neutral", "displayName": "Theme border" },
+      "primary": { "role": "primary", "displayName": "Selected accent" },
+      "primary-foreground": { "role": "neutral", "displayName": "Primary foreground" },
+      "popover": { "role": "neutral", "displayName": "Popover surface" },
+      "user-message": { "role": "primary", "displayName": "User message colour" }
+    },
+    "typographyMeta": {
+      "composer": { "displayName": "Composer", "purpose": "Markdown editor; active theme monospace size." }
+    },
+    "motion": [
+      { "name": "panel-transition", "value": "180ms", "purpose": "Sidebar, history and terminal open and close using gpui-kit Transition." },
+      { "name": "terminal-cursor-phase", "value": "530ms", "purpose": "Terminal cursor blink half-period when blinking." }
+    ],
+    "breakpoints": [
+      { "name": "query-rail-content-width", "value": "54rem" },
+      { "name": "inline-history-content-width", "value": "80rem" }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "overview": "A restrained native desktop workspace keeps project navigation available while the conversation remains the main working area. The interface uses gpui-kit components, compact controls and a user-selected verdant theme rather than a fixed brand palette.",
+    "keyCharacteristics": [
+      "Persistent project and session navigation with an active session title in the inset work area.",
+      "A centred conversation and composer lane with auxiliary history and terminal regions on demand.",
+      "Semantic theme colours and native control states, including keyboard focus."
+    ],
+    "rules": [],
+    "dos": [
+      "Do use semantic theme roles and preserve user-selected light and dark themes.",
+      "Do keep session context statistics labelled according to what the gateway reported.",
+      "Do use native components, accessible control names and visible interaction states."
+    ],
+    "donts": [
+      "Don't replace dynamic colours with a fixed palette.",
+      "Don't present context-window capacity as current usage.",
+      "Don't treat the deferred editor or generative UI as implemented."
+    ]
+  }
+}

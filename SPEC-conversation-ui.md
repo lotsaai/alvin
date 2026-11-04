@@ -15,22 +15,22 @@ Success:
 
 ## Out of Scope
 
-Gupi features that do not go through omp-rpc: file browser, git changes panel, workspace diff review, camera, quote capture, settings window, tray, temporary windows. They need filesystem or git access the UI does not have (the UI sees only the gateway). Adding them means new gateway methods; ask first.
+Gupi features that do not go through omp-rpc: file browser, git changes panel, workspace diff review, camera, quote capture, tray, temporary windows. They need filesystem or git access the UI does not have (the UI sees only the gateway). Adding them means new gateway methods; ask first. A right-side tabbed editor and generative UI are deferred, not implemented.
 
 ## Layout
 
 ```
-┌ TitleBar: navigation · live session tabs · session menu · terminal ┐
-│ Sidebar        │ Session view                    │ Context/History │
-│  projects      │  transcript (MessageScroller)   │ (toggle)        │
-│   checkouts    │  queue and status               │                 │
-│    sessions    │  composer card                  │                 │
-└────────────────────────────────────────────────────────────────────┘
+┌ Sidebar controls ─────┬─ Inset session header ──────────────────┐
+│ Sidebar               │ Conversation                │ History   │
+│  projects             │  transcript                 │ optional  │
+│   checkouts           │  context trigger / composer │           │
+│    sessions           ├─ terminal (optional) ────────┤           │
+└───────────────────────┴──────────────────────────────┴───────────┘
 ```
 
-The title bar keeps one title per tab and puts the active session menu beside the tabs. The remaining title-bar space supports window dragging. The composer groups the editor, model and thinking controls, and Send or Stop in one card. History and Context toggle the auxiliary panel.
+The outer title bar holds sidebar and back/forward controls; the inset work area's header shows the active session title, menu and close control, not a tab strip, with a terminal toggle at the trailing edge. Open live sessions remain available through sidebar navigation and back/forward history. The composer groups the editor, model and thinking controls, and Send or Stop in one card. Its top-edge Context trigger opens a popover and refreshes statistics: it shows available session details, last reported context usage and usage totals. The trigger displays the model's context-window capacity, not current usage. History opens a separate auxiliary region. The terminal is below the conversation.
 
-Components include `TitleBar`, `TabBar`, `Resizable`, `MessageScroller`, `Editor`, `Select`, `Dialog`, `Notification`, and `v_virtual_list`.
+Components include `TitleBar`, `Resizable`, `MessageScroller`, `Editor`, `Select`, `Popover`, `Dialog`, `Notification`, and `v_virtual_list`.
 
 ## Views
 
@@ -39,20 +39,24 @@ Modules are grouped by capability: workspace composition, live-session interacti
 - `Workspace` (root view, one per window): owns the `alvin_client::Client`, the `Entity<Model>` (below), the sidebar, the open tabs, and the active session view. Placed directly under gpui-kit's `Root`.
 - `ProjectSidebar`: projects → checkouts (main, git worktrees, jj workspaces) → sessions, newest first, loaded in pages. Search and recently updated grouping load all remaining pages before displaying results, with loading and retry states. The project/worktree hierarchy retains explicit controls for loading more pages. Project and checkout scope rows use distinct icons and stronger type. A sole root checkout is flattened into its project. New sessions start from a compact `+` on the applicable scope; projects with multiple checkouts expose creation on each checkout. Scope actions appear on hover or keyboard focus and remain visible while their menu is open.
   The search icon opens a popover with a focused search field. Search filters as the user types; Escape or clicking outside dismisses the popover, clears the query, and returns focus to the search icon.
-  The sidebar keeps New session, Automations, and Plugins above the independently scrolling projects; Automations and Plugins are disabled and marked Coming soon. New session asks for an existing project checkout instead of choosing one implicitly. The fixed footer shows the local display name and avatar, a user menu with Settings…, a disabled mobile control, and a Settings button. The face supplies the local name; absent names display Local user. The top strip retains sidebar toggle and session back/forward controls even when the sidebar is hidden.
+  The sidebar keeps New session above the independently scrolling projects. New session asks for an existing project checkout instead of choosing one implicitly. The fixed footer shows the local display name and avatar, a user menu with Settings…, and a Settings button. The face supplies the local name; absent names display Local user. The sidebar title strip retains sidebar toggle and session back/forward controls even when the sidebar is hidden. Live sessions appear in their project or checkout tree alongside indexed history.
   Project aliases, pins, and hidden state and session pins and hidden state are local Alvin preferences. Hiding never deletes repositories or omp files; hidden projects and sessions have restore controls. Session rows show the file's relative modification age, recalculated when the view renders. A spinner means an open live session is running, not that a historical transcript ends with an unanswered message.
   The active session is highlighted by its session ID, known on open for listed sessions and from `live/state` for new sessions; the live file identifies a new session until its state loads. Keyboard tree selection remains independent of the active tab.
-- `SessionView` (one per live session): transcript, widgets, queue, status, composer, and the session menu (rename, compact, stats, export HTML, and model and thinking cycling). The tab closes the session. A newly opened session has a centred greeting and composer until a command succeeds. An existing session with an empty transcript remains a transcript, not a new-session view. The gateway opens a new live session when the user selects a checkout, before the first command.
+- `SessionView` (one per live session): transcript, widgets, queue, status, composer, context popover, and the session menu (rename, compact, stats, export HTML, and model and thinking cycling). The header close control closes the active session. A newly opened session has a centred greeting and composer until a command succeeds. An existing session with an empty transcript remains a transcript, not a new-session view. The gateway opens a new live session when the user selects a checkout, before the first command.
 - `TerminalPanel`: one retained terminal per checkout and workspace window, below the active conversation in a vertical resizable region. The titlebar button and `ToggleTerminal` action show or hide it without stopping its shell. Closing the panel stops the gateway-owned process; opening after close starts a new shell. The terminal is a sibling of `SessionView`, so its keys do not invoke composer actions.
 - Terminal rendering uses the private gpui-cn terminal source cut and `ghostty-vt`; chrome uses the active gpui-kit theme. The retained engine consumes ordered output while hidden. A reconnect resumes into the same engine from the last accepted event; input is never automatically retried.
 - Terminal font family, ordered fallbacks, size, colors, palette, and cursor defaults come from the application's terminal appearance settings. The workspace applies changes to retained panels and supplies them to new panels. Unset font values follow the theme's monospace defaults rather than app zoom; a terminal's explicit zoom remains until reset.
-- `Transcript`: `MessageScroller` over the active branch. Rows are committed messages plus one streaming row. Row kinds follow omp's `AgentMessage` variants: user (text, images), assistant (markdown text, thinking in a `Collapsible`, tool calls), tool result, bash execution, branch summary, compaction summary, custom messages. Older pages load on scroll to the top (`live/messages` cursor); `MessageScroller` keeps the reader's position on insert.
+- `Transcript`: `MessageScroller` over the active branch. Following a visible user message, a contiguous run of assistant and tool-result messages forms a presentation group: trailing assistant text remains visible, while reasoning, tools and intermediate text appear in one process disclosure. This grouping does not assert omp turn identity; other message boundaries and messages without a visible preceding user remain standalone. Rows also cover bash execution, branch summary, compaction summary and custom messages. Older pages load on scroll to the top (`live/messages` cursor); `MessageScroller` keeps the reader's position on insert. Image display is not claimed by this specification.
   User bubbles use the application-provided `UserMessageColors` background and foreground, falling back to the theme's primary colors when no global is installed. Assistant and tool roles keep their own theme colors.
+  Message footers expose Copy message on hover or keyboard focus and through the footer context menu. User copy preserves text; assistant copy uses the final trailing text block, excluding intermediate activity. Assistant metadata shows available reported provider/model, token totals or input/output counts, and request duration; it does not infer whole-turn elapsed time or substitute the current model.
+  `ConversationTimeline` marks loaded user messages at the transcript's left edge when content width is at least 54rem; narrower content uses a Queries menu in the session header, outside the scrolling transcript. Hover or focus previews a query. Selecting it scrolls to its presentation row without branching or changing history; the rail supports arrow keys, Home, End, Enter and Space.
 - `ToolCard`: one per tool call, keyed by `tool_call_id`. Running state with streamed output (`tool_execution_update`/`stream_update`), then the result. Renderers by tool name for omp's built-in tools (bash: command and output; read; edit and write: `Diff` when the result carries a patch; grep, find, glob: match lists; task: subagent summary). Any other tool name renders its args and result as formatted JSON; tool args and results are open JSON in omp's schema, so a tool alvin does not know is a normal case, not an error. Which result fields carry patches is read from recorded fixtures in the first slice.
 - `Composer`: a markdown `Editor`. Enter sends, Shift+Enter inserts a newline. Text starting with `!` goes to `live/bash` with the rest as the command; everything else goes to `live/prompt` unchanged, and omp expands `/` commands, skills, templates, and `^model` (`SPEC.md`). While a run is active, Enter steers by default; modified Enter queues a follow-up. With an empty editor, Stop aborts the active turn or bash command. If messages are queued, Restore queue returns them to the editor instead of aborting. Interrupt and send replaces the active turn with the editor text. `/` offers completion from the session's command catalogue; choosing one inserts text without running it. `set_editor_text` requests replace the composer text.
+  Expand fills the available session content with the same editor state, preserving draft, selection, undo and completion. In expanded mode Enter inserts a newline, Command/Control+Enter submits using existing follow-up semantics, and Escape collapses without discarding the draft. Completion handles its own keys first.
 - `QueueView`: steering and follow-up entries from `queue_update`, with remove and promote (`queue/remove`, `queue/promote`). Entries counted in `live_steered` show as sent and have no actions.
 - `ModelPicker` and `ThinkingPicker`: `Select` controls for `model/list` and `thinking/levels`; set values in the composer and cycle them from the session menu. Current values come from `live/state` and model and thinking events.
 - `HistoryTreeView`: the session's tree (`alvin-conversation` `tree`), rendered as rows in a `v_virtual_list`: a chain of single children stays at one indent, a branch point indents its children, so a long linear session is a flat list. The active path (root to leaf) is highlighted; labels show inline. Actions on a row: navigate here (`live/navigateTree`, with optional summary and custom instructions), branch from a user message (`live/branch`, candidates from `live/branchMessages`), fork (`live/fork`), set or clear a label (`live/label`), cancel a running branch summary (`live/abortBranchSummary`). gpui-kit's `Tree` is not used: it nests one level per child, which for omp's chains means one level per message.
+  At a session-content width of at least 80rem, History opens inline at 20rem; narrower content uses a popover with the same retained history view.
 - `DialogHost`: extension UI requests by request id. `select`, `confirm`, `input`, `editor` open a `Dialog` (one at a time per session, queued in arrival order) and answer with `dialog/respond`; a `cancel` from omp for that id closes it. `notify` pushes a `Notification`. `setStatus` updates the status bar segment for that key. `setWidget` renders the widget lines above the composer.
 - `ConnectionBanner` and `SessionBanner`: `Reconnecting { attempt }` and `Lost` from `Client::state()`; reload-needed after `Resync`; process exited with a close action.
 
@@ -77,7 +81,7 @@ Modules are grouped by capability: workspace composition, live-session interacti
 
 ## Platform
 
-Image paste and drop, and clipboard copy, go through GPUI's platform APIs; where the web platform lacks one, the control is not shown on wasm32 (gpui-kit WebAssembly docs, "Web capabilities to plan for"). Everything else is shared. Fonts for the web build are the web face's concern.
+Clipboard and image interactions depend on platform and implementation support; this specification does not claim image paste, drop, or display support. Fonts for the web build are the web face's concern.
 
 ## Dependencies
 
@@ -94,8 +98,8 @@ crates/alvin-conversation-ui/src/
   workspace.rs           window composition and navigation
   workspace/sidebar.rs   project and session browsing
   session.rs             live-session composition and subscriptions
-  session/               composer, transcript, queue, history, dialogs,
-                         pickers, status, tool cards, markdown and ANSI
+  session/               composer, transcript, timeline, message chrome, queue,
+                         history, dialogs, pickers, status, tool cards, markdown and ANSI
   terminal.rs            terminal capability interface and key bindings
   terminal/              panel, settings, rendering engine and transport
   test_support.rs        shared headless test setup

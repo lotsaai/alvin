@@ -31,7 +31,7 @@ pub struct Gateway {
 }
 
 impl Gateway {
-  /// Creates a gateway from its configuration. Create it after [`crate::Telemetry::init`] so its metrics are exported.
+  /// Creates a gateway from its configuration. Initialize [`alvin_telemetry::Telemetry`] first to export its metrics.
   pub fn new(config: GatewayConfig) -> Self {
     Self {
       host: Host::new(config.omp.clone()),

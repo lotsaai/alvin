@@ -8,8 +8,7 @@ description = "alvin desktop app"
 [dependencies]
 alvin-client = { version = "0.1.0", path = "../alvin-client" }
 alvin-conversation-ui = { version = "0.1.0", path = "../alvin-conversation-ui" }
-alvin-gateway = { version = "0.1.0", path = "../alvin-gateway" }
-alvin-workspace-hack = { version = "0.1", path = "../alvin-workspace-hack" }
+alvin-telemetry = { version = "0.1.0", path = "../alvin-telemetry" }
 clap = { version = "4.6.7", features = ["derive", "env"] }
 confique = { version = "0.4.0", features = ["toml"] }
 dirs = "7.0.0"
@@ -24,6 +23,8 @@ url = { version = "2.5.8", features = ["serde"] }
 verdant-themes = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3" }
 
 [dev-dependencies]
+alvin-gateway = { version = "0.1.0", path = "../alvin-gateway" }
 alvin-protocol = { path = "../alvin-protocol" }
 gpui-kit = { version = "0.9.0", features = ["test-support"] }
-tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time"] }
+test-context = "0.5.4"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "time"] }

@@ -4,7 +4,7 @@ Module id `client`, crate `alvin-client`. Depends on `protocol`. Parent: `SPEC.m
 
 ## Objective
 
-The one typed client every UI uses to reach the gateway. The transport is chosen by endpoint and is invisible to callers. v1 transports: channel (in-process) and `ws://`/`wss://`. Builds for `wasm32-unknown-unknown`.
+The one typed client every UI uses to reach the gateway. Desktop production connections use `ws://` or `wss://`. The library also retains channel support for transport acceptance tests and explicit non-desktop consumers. Builds for `wasm32-unknown-unknown`.
 
 Success:
 
@@ -24,7 +24,7 @@ pub enum Endpoint {
 }
 ```
 
-- `ChannelPair` holds a `tokio::sync::mpsc::Sender<String>` to the server and a `Receiver<String>` from it. The embedding side (the app) gets it from `Gateway::connect_channel` and passes it in. `alvin-client` only knows the two channel types, not who made them.
+- `ChannelPair` holds a `tokio::sync::mpsc::Sender<String>` to the server and a `Receiver<String>` from it. An explicit embedding consumer gets the pair from `Gateway::connect_channel`. The desktop does not offer this mode. `alvin-client` knows only the channel types, not who made them.
 - `Endpoint::from_str` parses URLs and accepts only `ws` and `wss`. Other schemes (`stdio`, `tcp`, `tcp+tls`, `http(s)`, iroh) are rejected with a typed unsupported-scheme error until a later transport adds them.
 - Native only: `Channel`. The web build has no embedded gateway (the gateway spawns processes), so `Channel` is `cfg(not(target_arch = "wasm32"))`.
 

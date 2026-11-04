@@ -16,7 +16,7 @@ Success:
 
 ## Configuration
 
-`GatewayConfig` (typed-builder), built by the faces: the omp launch settings (`alvin_omp_host::HostConfig`: executable, extra arguments, environment), the omp sessions directory (resolved by the face, see `SPEC-session-index.md`), and an optional default model (`provider/id`, passed to omp as `--model`). `alvind` adds a listen address, `--omp` and `--model`. No environment reads, no defaults chosen here.
+`GatewayConfig` (typed-builder), built by the `alvind` face: omp launch settings (`alvin_omp_host::HostConfig`), the omp sessions directory, and an optional default model. `alvind` owns `--listen`, `--omp`, `--model`, and `--sessions-dir`. The desktop owns none of these server settings.
 
 ## Live Sessions
 
@@ -55,14 +55,13 @@ One `Error` in `error.rs`; variants wrap `alvin_session_index::Error` and `alvin
 
 OpenTelemetry for logs, traces, and metrics, exported over OTLP. Ported from `~/wagyu/slipstream/bootstrap` (`src/logging.rs`, `src/lib.rs`), with alvin's own defaults. Not a dependency on that crate.
 
-- Built on `init-tracing-opentelemetry` 0.44 `TracingConfig` (read on docs.rs): `with_otel(true)`, `with_logs(true)` (log records exported over OTLP), `with_metrics(true)` with `MetricsExporter::Otlp`, `with_env_fallback("ALVIN_LOG")` then `RUST_LOG`, pretty output in debug builds and JSON in release builds, as `bootstrap` does.
+- `alvin-telemetry` builds the trace, metric, and log providers with `init-tracing-opentelemetry` and installs the global tracing subscriber. Debug output is pretty text; release output is JSON. The filter reads `ALVIN_LOG`, then `RUST_LOG`, then `info`.
 - Service name and version come from the calling face (`alvind` or `alvin-app`), passed in by the face, not from the library's `CARGO_PKG_NAME`.
 - Exporter endpoint, protocol, and sampling come from the standard `OTEL_*` environment variables, read by the OpenTelemetry SDK. alvin adds no knobs of its own.
 - The filter is built from the environment without rewriting it: no `std::env::set_var`.
 - The returned guard flushes and shuts down providers. `init-tracing-opentelemetry`'s `OtelGuard` ignores flush errors on drop, which `AGENTS.md` forbids; the module calls flush and shutdown explicitly at face shutdown and logs any error before dropping the guard.
-- Panic hook from `bootstrap`: logs the panic message and location as an `error` event. Its `block_on(tracer_provider())` step only reads the global provider and flushes nothing, so it is dropped; flushing happens through the guard.
 - Called once, first thing in each face's `main`, before any runtime threads start.
-- The module lives in `alvin-gateway`'s library because both faces depend on it and `AGENTS.md` allows no new crates. Only the faces call it; library code only uses `tracing` macros and the `opentelemetry` metrics API.
+- Shared provider setup lives in `alvin-telemetry`, called only by the faces. Gateway-specific metric instruments stay private in `alvin-gateway/src/telemetry.rs`. The desktop has no production dependency on the gateway.
 - Instrumentation: spans per RPC method (method name, live session id, error code) and per omp command (command name); metrics:
   - `alvin.rpc.duration` histogram, attributes method and outcome (`ok` or error code).
   - `alvin.live.sessions` up-down counter.
@@ -72,11 +71,11 @@ OpenTelemetry for logs, traces, and metrics, exported over OTLP. Ported from `~/
 
 ## alvind
 
-Binary target of this crate. `main.rs` is thin: telemetry setup, configuration loaded with `confique` and its clap layer into `GatewayConfig` plus listen settings (same sources and precedence as `alvin-app`, files under `dirs::config_dir()/alvin/alvind.toml`; `SPEC-app.md`, Configuration), `eyre` at the edge, `listen` defaulting to `127.0.0.1:7410`, the sessions directory from `alvin_gateway::sessions_dir` (omp's rules, a pure function the app reuses) when not configured, telemetry initialised before the async runtime starts (the OTLP HTTP exporter builds a blocking client), run until a shutdown signal, then close all live sessions and flush telemetry.
+Binary target of this crate. `main.rs` loads `alvind.toml` and CLI settings, initializes shared telemetry before runtime threads, then serves the gateway. The listener defaults to `127.0.0.1:7410`. When absent from server configuration, the sessions directory comes from `alvin_gateway::sessions_dir`, following omp's rules. On an OS shutdown signal, `alvind` closes live sessions and flushes telemetry. Desktop connection loss does not shut down the gateway.
 
 ## Dependencies
 
-`alvin-protocol` (`server`), `alvin-session-index`, `alvin-omp-host`, `jsonrpsee` (`server`), `tokio`, `uuid` (v7), `jiff`, `blake3`, `tracing`, `opentelemetry` (metrics API), `init-tracing-opentelemetry` (`otlp`, `tracer`, `logs`, `metrics`: its OTLP provider builders only, not its `Guard`), `opentelemetry_sdk`, `opentelemetry-appender-tracing` (the `tracing` to OTLP logs bridge), `tracing-opentelemetry`, `tracing-subscriber`, `thiserror`, `typed-builder`, `alvin-workspace-hack`; for `alvind` only: `clap`, `confique` (`toml`), `dirs`, `eyre`. `alvin-omp-host` and `alvin-session-index` use `tracing` only. All approved. Every dependency at latest stable when added.
+`alvin-protocol` (`server`), `alvin-session-index`, `alvin-omp-host`, `jsonrpsee` (`server`), `tokio`, `jiff`, `tracing`, `opentelemetry` (metrics API), `thiserror`, `typed-builder`, the existing terminal platform dependencies, and `alvin-workspace-hack`. The `alvind` face also uses `alvin-telemetry`, `clap`, `confique`, `dirs`, and `eyre`. Provider/exporter dependencies belong to `alvin-telemetry`.
 
 ## Project Structure
 
@@ -90,7 +89,7 @@ crates/alvin-gateway/src/rpc.rs          server trait impls, merged module
 crates/alvin-gateway/src/rpc/            one file per protocol area
 crates/alvin-gateway/src/channel.rs      channel transport server half
 crates/alvin-gateway/src/listener.rs     ws listener
-crates/alvin-gateway/src/telemetry.rs    logs, traces, metrics setup for both faces
+crates/alvin-gateway/src/telemetry.rs    gateway metric instruments
 crates/alvin-gateway/src/main.rs         alvind
 crates/alvin-gateway/tests/              acceptance tests: the wire contract through alvin-client
 ```

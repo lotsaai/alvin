@@ -3,7 +3,8 @@
 
 mod settings;
 
-use alvin_gateway::{Gateway, Service, Telemetry};
+use alvin_gateway::Gateway;
+use alvin_telemetry::{Service, Telemetry};
 use clap::Parser as _;
 use settings::{Cli, Settings};
 

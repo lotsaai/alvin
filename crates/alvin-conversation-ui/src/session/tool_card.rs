@@ -6,6 +6,7 @@
 //! the field its view needs falls back the same way: the card shows its arguments and result as formatted JSON.
 
 use alvin_conversation::ToolExecution;
+use gpui_kit::base::motion::{MotionReveal, spring};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::diff::{Diff, DiffFile, DiffState};
@@ -28,6 +29,7 @@ pub(crate) struct ToolCard {
   pub(crate) result: Option<Value>,
   pub(crate) running: bool,
   pub(crate) failed: bool,
+  pub(crate) expanded: bool,
 }
 
 /// What a card shows of a tool's arguments and result.
@@ -217,6 +219,7 @@ impl ToolCard {
       }),
       running: execution.is_some_and(|execution| execution.outcome.is_none()),
       failed: execution.is_some_and(|execution| execution.outcome.as_ref().is_some_and(|outcome| outcome.is_error)),
+      expanded: false,
     }
   }
 }
@@ -225,10 +228,43 @@ impl RenderOnce for ToolCard {
   /// The card: a header that names the call and shows how it is going, and the call's arguments and result below it, folded
   /// away until the user asks. Whether it is open is local to the card, kept under its id.
   fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    if self.expanded {
+      let id = SharedString::from(format!("tool-{}", self.id));
+      let body = body(&self.name, self.args.as_ref(), self.result.as_ref());
+      let extra = additional_result(&body, self.result.as_ref());
+      let theme = cx.theme();
+      return v_flex()
+        .w_full()
+        .gap_1()
+        .child(
+          h_flex()
+            .gap_2()
+            .child(div().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(self.name)))
+            .when_some(self.intent, |this, intent| {
+              this.child(div().text_color(theme.muted_foreground).child(SharedString::from(intent)))
+            })
+            .when(self.failed, |this| this.child(div().text_color(theme.danger).child("Failed")))
+            .when(self.running, |this| this.child("Running")),
+        )
+        .when(!matches!(&body, Body::Json { .. }), |this| {
+          this.children(self.args.as_ref().map(|args| json_block(&id, "raw-args", args)))
+        })
+        .child(body_element(&id, &body, window, cx))
+        .when_some(extra, |this, text| this.child(code_block(&id, "raw-result", &text)))
+        .into_any_element();
+    }
     let id = SharedString::from(format!("tool-{}", self.id));
     let open = window.use_keyed_state(ElementId::from(SharedString::from(format!("{id}-open"))), cx, |_, _| false);
     let is_open = *open.read(cx);
-    let body = body_element(&id, &body(&self.name, self.args.as_ref(), self.result.as_ref()), window, cx);
+    let progress = spring(
+      (ElementId::from(id.clone()), "tool-reveal"),
+      if is_open { 1. } else { 0. },
+      cx.theme().motion_tokens().spring_control,
+      window,
+      cx,
+    );
+    let details =
+      (is_open || progress > 0.).then(|| body_element(&id, &body(&self.name, self.args.as_ref(), self.result.as_ref()), window, cx));
     let theme = cx.theme();
     let status = if self.running {
       Some(
@@ -264,38 +300,50 @@ impl RenderOnce for ToolCard {
     v_flex()
       .id(ElementId::from(id.clone()))
       .w_full()
-      .p_2()
-      .border_1()
-      .border_color(theme.border)
-      .rounded(theme.radius)
-      .child(
-        Collapsible::new()
-          .open(is_open)
-          .gap_1()
-          .child(
-            h_flex()
-              .gap_2()
-              .child(div().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(self.name.clone())))
-              .when_some(self.intent, |this, intent| {
-                this.child(
-                  div()
-                    .min_w_0()
-                    .truncate()
-                    .text_color(theme.muted_foreground)
-                    .child(SharedString::from(intent)),
-                )
-              })
-              .children(status)
-              .child(div().flex_1())
-              .child(toggle),
-          )
-          .content(body),
-      )
+      .child({
+        let mut disclosure = Collapsible::new().open(true);
+        if let Some(details) = details {
+          disclosure = disclosure.content(MotionReveal::new(
+            ElementId::from(SharedString::from(format!("{id}-reveal"))),
+            progress,
+            details,
+          ));
+        }
+        disclosure.gap_1().child(
+          h_flex()
+            .gap_2()
+            .child(div().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(self.name.clone())))
+            .when_some(self.intent, |this, intent| {
+              this.child(
+                div()
+                  .min_w_0()
+                  .truncate()
+                  .text_color(theme.muted_foreground)
+                  .child(SharedString::from(intent)),
+              )
+            })
+            .children(status)
+            .child(div().flex_1())
+            .child(toggle),
+        )
+      })
+      .into_any_element()
   }
 }
 
-/// How many lines of code or output a block shows before it is clipped. The block's own copy action takes all of it.
-const BLOCK_LINES: usize = 40;
+fn additional_result(body: &Body, result: Option<&Value>) -> Option<String> {
+  let text = result.map(result_text)?;
+  if text.is_empty() {
+    return None;
+  }
+  let represented = match body {
+    Body::Bash { output, .. } | Body::File { text: output, .. } => output == &text,
+    Body::Matches { lines, .. } => lines.join("\n") == text,
+    Body::Json { .. } => true,
+    Body::Diff { .. } | Body::Subagents(_) => false,
+  };
+  (!represented).then_some(text)
+}
 
 /// `text` as a Markdown code block. The fence is longer than any run of backticks in the text, so the text cannot end it.
 pub(crate) fn fenced(text: &str) -> String {
@@ -306,7 +354,7 @@ pub(crate) fn fenced(text: &str) -> String {
 
 /// A code block: selectable, with the copy action `TextView` gives its fences.
 fn code_block(id: &SharedString, part: &str, text: &str) -> TextView {
-  TextView::markdown(SharedString::from(format!("{id}-{part}")), fenced(text)).max_lines(BLOCK_LINES)
+  TextView::markdown(SharedString::from(format!("{id}-{part}")), fenced(text))
 }
 
 fn caption(text: String, cx: &App) -> gpui_kit::Div {
@@ -377,7 +425,16 @@ fn body_element(id: &SharedString, body: &Body, window: &mut Window, cx: &mut Ap
 mod tests {
   use serde_json::Value;
 
-  use super::{Body, body};
+  use super::{Body, additional_result, body};
+
+  #[test]
+  fn specialized_views_preserve_unrepresented_result_once() {
+    let result = serde_json::json!({"content": [{"type": "text", "text": "wrote file"}]});
+    let write = body("write", Some(&serde_json::json!({"path": "a", "content": "input"})), Some(&result));
+    assert_eq!(additional_result(&write, Some(&result)).as_deref(), Some("wrote file"));
+    let bash = body("bash", Some(&serde_json::json!({"command": "echo"})), Some(&result));
+    assert_eq!(additional_result(&bash, Some(&result)), None);
+  }
 
   /// The frames of a recorded run's tool calls: `(type, tool name, args, result or partial result)` in arrival order. omp
   /// sends the arguments with the start and the updates but not the end, so the end carries those of its call.

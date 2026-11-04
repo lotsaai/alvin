@@ -34,6 +34,7 @@ const TOGGLE_TERMINAL_KEY: &str = "ctrl-j";
 /// Registers this crate's key bindings. Call after `gpui_kit::init`.
 pub fn init(cx: &mut App) {
   crate::session::refresh_markdown_theme(cx);
+  crate::session::init_timeline(cx);
   cx.bind_keys(crate::terminal::default_key_bindings());
   cx.bind_keys([
     KeyBinding::new("escape", Abort, Some(SESSION_CONTEXT)),

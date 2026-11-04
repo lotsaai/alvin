@@ -22,17 +22,17 @@ impl ProjectPreferencesFile {
       Ok(bytes) => bytes,
       Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(ProjectPreferences::new()),
       Err(source) => {
-        return Err(Error::ReadPreferences {
+        return Err(Error::Read {
           path: self.path.clone(),
           source,
         });
       }
     };
-    let value: Value = serde_json::from_slice(&bytes).map_err(|source| Error::ParsePreferences {
+    let value: Value = serde_json::from_slice(&bytes).map_err(|source| Error::Parse {
       path: self.path.clone(),
       source,
     })?;
-    let invalid = || Error::InvalidPreferences { path: self.path.clone() };
+    let invalid = || Error::Invalid { path: self.path.clone() };
     let projects = value.as_object().ok_or_else(invalid)?;
     let mut preferences = ProjectPreferences::new();
     for (key, value) in projects {
@@ -118,7 +118,7 @@ impl ProjectPreferencesFile {
       }
       result
     };
-    write().map_err(|source| Error::WritePreferences {
+    write().map_err(|source| Error::Write {
       path: self.path.clone(),
       source,
     })
@@ -168,15 +168,15 @@ mod tests {
       "{\"project\": {\"alias\": null, \"pinned\": false, \"hidden\": false, \"pinned_sessions\": [1]}}",
     )
     .unwrap();
-    assert!(matches!(store.load(), Err(Error::InvalidPreferences { .. })));
+    assert!(matches!(store.load(), Err(Error::Invalid { .. })));
     std::fs::write(&store.path, "{").unwrap();
-    assert!(matches!(store.load(), Err(Error::ParsePreferences { .. })));
+    assert!(matches!(store.load(), Err(Error::Parse { .. })));
     std::fs::write(&store.path, "{\"project\": {\"alias\": null, \"pinned\": 1, \"hidden\": false}}").unwrap();
-    assert!(matches!(store.load(), Err(Error::InvalidPreferences { .. })));
+    assert!(matches!(store.load(), Err(Error::Invalid { .. })));
     std::fs::remove_file(&store.path).unwrap();
     std::fs::create_dir(&store.path).unwrap();
-    assert!(matches!(store.load(), Err(Error::ReadPreferences { .. })));
-    assert!(matches!(store.save(&preferences), Err(Error::WritePreferences { .. })));
+    assert!(matches!(store.load(), Err(Error::Read { .. })));
+    assert!(matches!(store.save(&preferences), Err(Error::Write { .. })));
     std::fs::remove_dir_all(dir).unwrap();
   }
 }

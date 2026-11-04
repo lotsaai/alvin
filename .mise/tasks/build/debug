@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
 #MISE description="Build the application (Debug)"
-#MISE sources=["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml", "crates/*/build.rs", "crates/*/src/**/*.rs"]
+#MISE sources=["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml", "crates/*/build.rs", "crates/*/src/**/*.rs", "crates/*/examples/**/*.rs", ".mise/tasks/build/debug"]
 
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
 
 set -euo pipefail
 
-cargo build --quiet --workspace "$@"
+cargo build --quiet --workspace --lib --bins --examples "$@"
+cargo build --quiet --workspace --target wasm32-unknown-unknown --exclude alvin-app --exclude alvin-conversation-ui --exclude alvin-gateway --exclude alvin-omp-host --exclude alvin-session-index --exclude alvin-telemetry --exclude alvin-workspace-hack "$@"

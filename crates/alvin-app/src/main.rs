@@ -9,7 +9,7 @@ mod terminal_font;
 #[cfg(test)]
 mod test_support;
 
-use alvin_gateway::{Service, Telemetry};
+use alvin_telemetry::{Service, Telemetry};
 use clap::Parser as _;
 use error::Error;
 

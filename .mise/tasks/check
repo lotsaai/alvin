@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#MISE description="Run the linters and formatters, build alvin-protocol native and wasm32, verify the omp pins and generated wire types"
+#MISE description="Run linters and formatters"
 
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
@@ -8,35 +8,3 @@ cd "$proj_dir" || exit 1
 set -euo pipefail
 
 hk check --all
-
-# alvin-protocol is the wasm-compatible leaf: the default (client) half must build without `server`.
-cargo build --quiet -p alvin-protocol
-cargo build --quiet --target wasm32-unknown-unknown -p alvin-protocol
-cargo build --quiet -p alvin-protocol --features server
-cargo clippy --quiet -p alvin-protocol --all-targets --features server -- -D warnings
-
-# alvin-client builds for wasm32 and links neither the gateway nor jsonrpsee's server half.
-cargo build --quiet --target wasm32-unknown-unknown -p alvin-client
-if cargo tree --quiet -p alvin-client --target all --edges normal | grep -E 'alvin-gateway|jsonrpsee-server'; then
-	echo "alvin-client must not depend on the gateway or jsonrpsee-server" >&2
-	exit 1
-fi
-
-# alvin-conversation is pure state and builds for wasm32 too.
-cargo build --quiet --target wasm32-unknown-unknown -p alvin-conversation
-
-# alvin-conversation-ui is the views. gpui-kit's browser build needs a nightly compiler (wasm_thread uses unstable features),
-# so this crate is not built for wasm32 here. What it must keep: no gateway, omp host or session index outside dev-dependencies.
-if cargo tree --quiet -p alvin-conversation-ui --target all --edges normal | grep -E 'alvin-gateway|alvin-omp-host|alvin-session-index'; then
-	echo "alvin-conversation-ui must not depend on the gateway, the omp host or the session index outside dev-dependencies" >&2
-	exit 1
-fi
-
-mise run generate:omp-wire -- --check
-
-# The omp-rpc git tag in alvin-omp-host must name the same release as the pinned omp package.
-omp_version=$(bun -e 'console.log(JSON.parse(await Bun.file("package.json").text()).devDependencies["@oh-my-pi/pi-coding-agent"])')
-if ! grep -q "tag = \"v${omp_version}\"" crates/alvin-omp-host/Cargo.toml; then
-	echo "crates/alvin-omp-host/Cargo.toml: the omp-rpc tag must be v${omp_version}, the version pinned in package.json" >&2
-	exit 1
-fi

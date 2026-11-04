@@ -1,6 +1,6 @@
 # AGENTS.md - alvin
 
-alvin is a desktop client for the `omp` coding agent. A gateway owns one `omp --mode rpc` process per live session and reads omp's session files for history; every UI reaches the gateway through one typed client whose transport is chosen by endpoint.
+alvin is a desktop client for the `omp` coding agent. A separately running gateway owns one `omp --mode rpc-ui` process per live session and reads omp's session files for history. The desktop reaches it through `alvin-client` over WebSocket.
 
 ## Crate Roles & Boundaries
 
@@ -17,26 +17,28 @@ alvin is a desktop client for the `omp` coding agent. A gateway owns one `omp --
 | `alvin-protocol` | **Wire contract**: `#[rpc]` traits (client half by default, server half behind the `server` feature), request/response/event types, UUIDv7 id newtypes, error codes. No IO, no async runtime. Builds for wasm32. | `jsonrpsee` (`client-core`, `macros`; `server-core` only behind `server`), `serde`, `uuid`, `jiff`, `thiserror` |
 | `alvin-session-index` | **Module**: read-only scan of omp JSONL session files; groups sessions by repository with git worktrees and jj workspaces as sub-groups. | `alvin-protocol`, `code-workspace`, `serde_json`, async/runtime utilities, `alvin-workspace-hack` |
 | `alvin-omp-host` | **Infrastructure**: spawns and supervises one `omp --mode rpc-ui` process per live session over its own async transport (JSON lines on the process's stdio, requests matched to responses by id), turns omp frames into protocol events. Process-group teardown on Unix, Job Object teardown on Windows. | `alvin-protocol`, `omp-rpc` (wire types only), `tokio` (`process`, `io-util`, `sync`, `time`, `rt`), `tracing`, `thiserror`, `typed-builder`, `serde`, `serde_json`, `rustix` (unix), `win32job` (windows), `alvin-workspace-hack` |
-| `alvin-gateway` | **Application boundary**: implements the protocol server traits over `alvin-session-index` and `alvin-omp-host`; semantic validation; live-session registry and in-memory event logs; mounts the same methods on the channel transport and a WebSocket listener; exports telemetry over OTLP. Binary target `alvind` (face). | `alvin-protocol` (`server`), `alvin-session-index`, `alvin-omp-host`, `jsonrpsee` server, `tokio`, `jiff`, `portable-pty`, `libc` (Unix), `windows-sys` (Windows), OpenTelemetry and `tracing` crates (`init-tracing-opentelemetry`, `opentelemetry`, `opentelemetry_sdk`, `opentelemetry-appender-tracing`, `tracing-opentelemetry`, `tracing-subscriber`), for the `alvind` target `clap`, `confique`, `dirs`, `eyre`, `alvin-workspace-hack` |
+| `alvin-gateway` | **Application boundary**: implements protocol server traits, semantic validation, live-session registry, event logs, and channel and WebSocket listeners. Binary target `alvind` owns server configuration and process lifetime. | `alvin-protocol` (`server`), `alvin-session-index`, `alvin-omp-host`, `jsonrpsee` server, `tokio`, `jiff`, `portable-pty`, `libc` (Unix), `windows-sys` (Windows), `opentelemetry` metrics, `tracing`, for `alvind` also `alvin-telemetry`, `clap`, `confique`, `dirs`, `eyre`, `alvin-workspace-hack` |
 | `alvin-client` | **Typed client**: one client type; the transport (channel, `ws://`, `wss://`) is an implementation detail picked by endpoint. Builds for wasm32. | `alvin-protocol`, `jsonrpsee` client transports, `tokio`, `jiff`, `tracing`, `url`, `gloo-timers` and `wasm-bindgen-futures` (wasm only) |
 | `alvin-conversation` | **UI state**: projects, sessions, live turns, queue, history tree, folded from protocol events. No IO. Builds for wasm32. | `alvin-protocol`, `serde_json` |
 | `alvin-conversation-ui` | **UI views**: gpui-kit components rendering `alvin-conversation` state and issuing commands through `alvin-client`. The composer is a markdown editor highlighted through verdant's tree-sitter grammars and completes omp's slash commands. | `alvin-conversation`, `alvin-client`, `alvin-protocol`, `gpui-kit`, `ghostty-vt` (terminal emulation), `lsp-types` (the version gpui-kit uses, for its completion types), `serde_json`, `tracing`, `verdant` and `verdant-parsers-git` (git, branch `main-git-deploy`, only the `markdown` and `markdown_inline` grammars) |
-| `alvin-app` | **Face**: desktop binary. Owns config and argument parsing; embeds the gateway over the channel transport or connects to a `ws(s)://` URL. | `alvin-conversation-ui`, `alvin-client`, `alvin-gateway`, `gpui-kit`, `tokio`, `clap`, `confique`, `dirs`, `url`, `tracing`, `eyre`, `serde_json`, `verdant-themes` (git, branch `main-git-deploy`), `alvin-workspace-hack` |
+| `alvin-app` | **Face**: desktop binary. Owns client config and argument parsing; connects to a running gateway over `ws://` or `wss://`. Never embeds or starts a gateway. | `alvin-conversation-ui`, `alvin-client`, `alvin-telemetry`, `gpui-kit`, `tokio`, `clap`, `confique`, `dirs`, `url`, `tracing`, `eyre`, `serde_json`, `verdant-themes` (git, branch `main-git-deploy`); `alvin-gateway` only as a dev-dependency for real WebSocket tests |
+| `alvin-telemetry` | **Infrastructure**: shared OTLP logs, traces, metrics provider setup, and explicit shutdown for both faces. No gateway, protocol, or agent dependencies. | `init-tracing-opentelemetry`, `opentelemetry`, `opentelemetry_sdk`, `opentelemetry-appender-tracing`, `tracing-opentelemetry`, `tracing-subscriber`, `tracing`, `thiserror` |
 | `alvin-workspace-hack` | **Build-only**: `cargo-hakari` feature unification. | Managed by hakari only. |
 
 ### Dependency Rules (STRICT)
 
 1. **Faces own wiring only.** `alvin-app` and the `alvind` target compose crates and parse config; no protocol, session, or agent logic lives in them.
 2. **`alvin-protocol` is a leaf.** It depends on no alvin crate, has no IO and no async runtime, and must build for `wasm32-unknown-unknown`. Server-only jsonrpsee features stay behind its `server` feature.
-3. **`alvin-gateway` is the only consumer of `alvin-omp-host` and `alvin-session-index`.** No UI crate, client, or face reaches them directly (the app reaches them only through an embedded `alvin-gateway`).
+3. **`alvin-gateway` is the only consumer of `alvin-omp-host` and `alvin-session-index`.** No UI crate, client, or desktop face reaches them directly or transitively in production.
 4. **`alvin-omp-host` is the only crate that depends on `omp-rpc` or spawns omp.** One omp process per live session; omp holds one active session per process. `omp-rpc` supplies the wire types only; the transport is `alvin-omp-host`'s own, adapted from `omp-rpc`'s client.
 5. **`alvin-session-index` is the only crate that reads omp session files and the only consumer of `code-workspace`.** It opens them read-only and never writes, renames, or deletes them.
 6. **`alvin-omp-host` and `alvin-session-index` do not depend on each other** or on `alvin-gateway`.
-7. **UI crates see the gateway only through `alvin-client`.** `alvin-conversation` and `alvin-conversation-ui` never depend on `alvin-gateway`, `alvin-omp-host`, or `alvin-session-index`. One exception: `alvin-conversation-ui` takes `alvin-gateway` as a dev-dependency so its in-module UI tests run against an embedded gateway; production code never sees it.
+7. **UI crates see the gateway only through `alvin-client`.** `alvin-conversation`, `alvin-conversation-ui`, and `alvin-app` never depend on server implementations in production. UI and app tests may take `alvin-gateway` as a dev-dependency for real-server fixtures; app tests connect over WebSocket.
 8. **`alvin-client` never depends on `alvin-gateway`.** The in-process channel transport is handed to the client by the embedding side; the client stays wasm-compatible.
 9. **No ACP.** The gateway API is our own `#[rpc]` design; do not add ACP crates or shape the API after ACP.
 10. **No new crates** beyond this table without approval.
 11. **The workspace-hack crate is a build-only exception.** Members depend on it only because hakari manages it; never import from it or add logic to it.
+12. **Desktop and server are separate processes.** `alvin-app` has only a WebSocket endpoint, never server configuration or gateway lifetime ownership. Quitting the desktop leaves agent sessions running on `alvind`. `mise run check-boundaries` rejects server implementation crates in the normal and build dependency graphs of client-facing crates.
 
 ## Non-negotiable Rules
 
@@ -62,6 +64,7 @@ alvin is a desktop client for the `omp` coding agent. A gateway owns one `omp --
 - omp session files are read-only to alvin. Never write, rename, or delete them.
 - Support only what omp-rpc supports. `!cmd` maps to the `bash` command; `prompt` expands `/` commands, skills, templates, and `^model` on the omp side. Do not invent composer conventions.
 - `wire.rs` in `omp-rpc` is generated; never hand-edit it. The transport is ours: it keeps omp's protocol semantics (ids correlate requests and responses, `bash` and `prompt` complete concurrently) and adds no limits omp does not have: no per-call deadline, no worker pool, no queue bound.
+- **omp version conflicts: upgrade.** When the omp executable, package pins, installed packages, or `omp-rpc` versions disagree, upgrade older versions to the latest stable release and align the related pins and lockfiles. Never downgrade omp or bypass version checks.
 - No access controls: no tokens, no auth, no protective defaults. Users are competent.
 
 ### Wire Errors Keep Their Codes
@@ -116,6 +119,7 @@ Banned domain vocabulary with required replacements: "birth"/"born" → "join"/"
 ## Configuration
 
 - Config file/env loading, merge precedence, and `clap` mechanics belong to the faces: `alvin-app` and the `alvind` target.
+- The desktop configures only its WebSocket endpoint and local presentation. Configure omp, the initial model, and sessions directory on `alvind`, not in desktop settings.
 - `alvin-gateway` consumes a typed config (omp executable, model selection, listen address for `alvind`). Lower crates receive only the values they need as constructor inputs.
 - New entrypoints become subcommands of an existing face, not new binaries with their own loaders.
 

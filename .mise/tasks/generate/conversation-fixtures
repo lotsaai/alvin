@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 #MISE description="Record conversation fixtures from real omp through the gateway (needs a working omp config; slow)"
+#MISE depends=["build:debug"]
 #MISE sources=["crates/alvin-gateway/examples/record_conversation.rs"]
 
 proj_dir=$(git rev-parse --show-toplevel)
@@ -8,4 +9,4 @@ cd "$proj_dir" || exit 1
 
 set -euo pipefail
 
-cargo run --quiet -p alvin-gateway --example record_conversation -- crates/alvin-conversation/fixtures crates/alvin-conversation-ui/fixtures
+exec target/debug/examples/record_conversation crates/alvin-conversation/fixtures crates/alvin-conversation-ui/fixtures

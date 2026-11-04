@@ -19,4 +19,3 @@ pub use error::{Error, Result};
 pub use gateway::Gateway;
 pub use listener::WsServer;
 pub use omp_dirs::sessions_dir;
-pub use telemetry::{Service, Telemetry};

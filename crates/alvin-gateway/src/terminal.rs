@@ -19,6 +19,8 @@ const BROADCAST_CAPACITY: usize = 128;
 /// Maximum output chunks awaiting acknowledgment by the retained terminal engine.
 const RETAINED_EVENTS: usize = 128;
 
+type TerminalSubscription = (Vec<Arc<TerminalEvent>>, broadcast::Receiver<Arc<TerminalEvent>>);
+
 #[derive(Debug, Default)]
 struct EventLog {
   events: VecDeque<Arc<TerminalEvent>>,
@@ -250,7 +252,7 @@ impl Terminal {
     });
   }
 
-  pub(crate) fn subscribe(&self, after: Option<EventId>) -> Result<(Vec<Arc<TerminalEvent>>, broadcast::Receiver<Arc<TerminalEvent>>)> {
+  pub(crate) fn subscribe(&self, after: Option<EventId>) -> Result<TerminalSubscription> {
     let log = self.events.lock().unwrap_or_else(PoisonError::into_inner);
     let start = match after {
       None if log.floor.is_none() => 0,

@@ -1,52 +1,84 @@
 //! Settings editing and the window's active gateway.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use alvin_conversation_ui::{Model, ProjectPreferences, UserMessageColors, Workspace, WorkspaceEvent};
-use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonGroup, ButtonVariants as _};
+use gpui_kit::base::{StyledExt as _, TestSupportExt as _};
+use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
+use gpui_kit::component::color_picker::{ColorPickerEvent, ColorPickerState, ColorSelect};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::searchable_list::SearchableVec;
 use gpui_kit::component::select::{Select, SelectEvent, SelectState};
-use gpui_kit::component::{ActiveTheme as _, IconName, Selectable as _, Sizable as _, Theme, ThemeMode, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Icon, Selectable as _, Theme, ThemeMode, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
   App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
   StatefulInteractiveElement as _, Styled as _, Subscription, Window, div, rgb,
 };
 
-use crate::app::{Embedded, connect};
-use crate::config::{Appearance, COLOR_CHOICES, ColorChoice, Configuration, Settings};
+use crate::app::connect;
+use crate::config::{Appearance, ColorChoice, Configuration};
 use crate::project_preferences::ProjectPreferencesFile;
+use url::Url;
 
-#[derive(Clone, Copy)]
-enum GatewayField {
-  Endpoint,
-  Omp,
-  Model,
-  Sessions,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SettingsTopic {
+  General,
+  Appearance,
+  Hosts,
+  Terminal,
+}
+
+impl SettingsTopic {
+  const ALL: [Self; 4] = [Self::General, Self::Appearance, Self::Hosts, Self::Terminal];
+
+  fn label(self) -> &'static str {
+    match self {
+      Self::General => "General",
+      Self::Appearance => "Appearance",
+      Self::Hosts => "Hosts",
+      Self::Terminal => "Terminal",
+    }
+  }
+
+  fn id(self) -> &'static str {
+    match self {
+      Self::General => "settings-general",
+      Self::Appearance => "settings-appearance",
+      Self::Hosts => "settings-hosts",
+      Self::Terminal => "settings-terminal",
+    }
+  }
+
+  fn icon(self) -> gpui_kit::assets::IconName {
+    match self {
+      Self::General => gpui_kit::assets::IconName::SlidersHorizontal,
+      Self::Appearance => gpui_kit::assets::IconName::Palette,
+      Self::Hosts => gpui_kit::assets::IconName::Server,
+      Self::Terminal => gpui_kit::assets::IconName::Terminal,
+    }
+  }
 }
 
 pub(crate) struct AppView {
   workspace: Entity<Workspace>,
-  embedded: Embedded,
   config: Option<Configuration>,
   preferences_file: Option<ProjectPreferencesFile>,
   preferences: ProjectPreferences,
   preferences_error: Option<String>,
-  connected_gateway: Option<Settings>,
+  connected_gateway: Option<Url>,
   endpoint: Entity<InputState>,
-  omp: Entity<InputState>,
-  model: Entity<InputState>,
-  sessions: Entity<InputState>,
   appearance: Appearance,
   light_theme: Entity<SelectState<SearchableVec<String>>>,
   dark_theme: Entity<SelectState<SearchableVec<String>>>,
+  accent_color: Entity<ColorPickerState>,
+  user_color: Entity<ColorPickerState>,
   terminal_family: Entity<SelectState<SearchableVec<String>>>,
   terminal_size: Entity<InputState>,
   terminal_error: Option<String>,
   _settings_subscriptions: Vec<Subscription>,
   open: bool,
+  topic: SettingsTopic,
   connecting: bool,
   shutting_down: bool,
   error: Option<String>,
@@ -63,7 +95,6 @@ impl AppView {
 
   pub(crate) fn new(
     workspace: Entity<Workspace>,
-    embedded: Embedded,
     config: Option<Configuration>,
     preferences_file: Option<ProjectPreferencesFile>,
     preferences: ProjectPreferences,
@@ -78,34 +109,7 @@ impl AppView {
       })
     };
     let current = config.as_ref().map(|config| &config.config);
-    let endpoint = input(
-      current
-        .and_then(|config| config.endpoint.as_ref())
-        .map(ToString::to_string)
-        .unwrap_or_default(),
-      window,
-      cx,
-    );
-    let omp = input(
-      current
-        .map(|config| config.gateway.omp.to_string_lossy().into_owned())
-        .unwrap_or_default(),
-      window,
-      cx,
-    );
-    let model = input(
-      current.and_then(|config| config.gateway.model.clone()).unwrap_or_default(),
-      window,
-      cx,
-    );
-    let sessions = input(
-      current
-        .and_then(|config| config.gateway.sessions_dir.as_ref())
-        .map(|path| path.to_string_lossy().into_owned())
-        .unwrap_or_default(),
-      window,
-      cx,
-    );
+    let endpoint = input(current.map(|config| config.endpoint.to_string()).unwrap_or_default(), window, cx);
     let appearance = match current.map(|config| config.appearance.as_str()) {
       Some("light") => Appearance::Light,
       Some("dark") => Appearance::Dark,
@@ -133,6 +137,8 @@ impl AppView {
     let accent = current.map(|config| config.accent_color).unwrap_or(ColorChoice::MODULE);
     let user = current.map(|config| config.user_message_color).unwrap_or(ColorChoice::OPERATOR);
     apply_appearance(appearance, &light, &dark, accent, user, window, cx);
+    let accent_color = cx.new(|cx| ColorPickerState::new(window, cx).default_value(cx.theme().primary));
+    let user_color = cx.new(|cx| ColorPickerState::new(window, cx).default_value(cx.global::<UserMessageColors>().background()));
     let terminal_family =
       cx.new(|cx| SelectState::new(SearchableVec::new(cx.text_system().all_font_names()), None, window, cx).searchable(true));
     let terminal_size = input(
@@ -163,6 +169,14 @@ impl AppView {
         },
       ),
     ];
+    for (picker, user) in [(&accent_color, false), (&user_color, true)] {
+      settings_subscriptions.push(cx.subscribe_in(picker, window, move |_, _, event: &ColorPickerEvent, window, cx| {
+        if let ColorPickerEvent::Change(Some(color)) = event {
+          let choice = ColorChoice::from_color(*color);
+          cx.defer_in(window, move |this, window, cx| this.select_color(user, choice, window, cx));
+        }
+      }));
+    }
     settings_subscriptions.push(cx.subscribe_in(
       &terminal_family,
       window,
@@ -177,18 +191,11 @@ impl AppView {
         this.save_terminal_size(window, cx);
       }
     }));
-    for (input, field) in [
-      (&endpoint, GatewayField::Endpoint),
-      (&omp, GatewayField::Omp),
-      (&model, GatewayField::Model),
-      (&sessions, GatewayField::Sessions),
-    ] {
-      settings_subscriptions.push(cx.subscribe_in(input, window, move |this, _, event: &InputEvent, window, cx| {
-        if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
-          this.save_gateway_field(field, window, cx);
-        }
-      }));
-    }
+    settings_subscriptions.push(cx.subscribe_in(&endpoint, window, |this, _, event: &InputEvent, window, cx| {
+      if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
+        this.save_gateway_field(window, cx);
+      }
+    }));
     let subscription = cx.observe_window_appearance(window, |this, window, cx| {
       if this.appearance == Appearance::System {
         this.apply_appearance(window, cx);
@@ -198,27 +205,26 @@ impl AppView {
     workspace.update(cx, |workspace, cx| workspace.set_project_preferences(preferences.clone(), cx));
     let workspace_event_subscription = Self::subscribe_workspace_events(&workspace, cx);
     let workspace_subscription = cx.observe(&workspace, |_, _, cx| cx.notify());
-    let connected_gateway = config.as_ref().map(|config| config.gateway.clone());
+    let connected_gateway = config.as_ref().map(|config| config.config.endpoint.clone());
     let mut view = Self {
       workspace,
-      embedded,
       config,
       preferences_file,
       preferences,
       preferences_error: None,
       connected_gateway,
       endpoint,
-      omp,
-      model,
-      sessions,
       appearance,
       light_theme,
       dark_theme,
+      accent_color,
+      user_color,
       terminal_family,
       terminal_size,
       terminal_error: None,
       _settings_subscriptions: settings_subscriptions,
       open: false,
+      topic: SettingsTopic::General,
       connecting: false,
       shutting_down: false,
       error: None,
@@ -328,85 +334,7 @@ impl AppView {
     })
   }
 
-  fn color_choices(&self, user: bool, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-    let accent = self
-      .config
-      .as_ref()
-      .map(|config| config.config.accent_color)
-      .unwrap_or(ColorChoice::MODULE);
-    let selected = self
-      .config
-      .as_ref()
-      .map(|config| {
-        if user {
-          config.config.user_message_color
-        } else {
-          config.config.accent_color
-        }
-      })
-      .unwrap_or(if user { ColorChoice::OPERATOR } else { ColorChoice::MODULE });
-    let background = cx.theme().background;
-    let foreground = cx.theme().foreground;
-    let theme = verdant_themes::from_str(&cx.theme().highlight_theme.name);
-    let choices = user.then_some(ColorChoice::ACCENT).into_iter().chain(COLOR_CHOICES.iter().copied());
-    div().flex().flex_wrap().gap_2().children(choices.map(|choice| {
-      let key = if choice == ColorChoice::ACCENT { accent } else { choice };
-      let resolved = theme.as_ref().and_then(|theme| theme.find_style(key.as_str())).map(|style| {
-        let color = style.color();
-        (
-          convert_color(color.red, color.green, color.blue),
-          format!("#{:02X}{:02X}{:02X}", color.red, color.green, color.blue),
-        )
-      });
-      let (color, description) = resolved.unwrap_or_else(|| (foreground, "theme foreground".to_owned()));
-      let text = contrasting(color, background, foreground);
-      let hover = color.blend(text.alpha(0.12));
-      let color = if choice == selected { hover } else { color };
-      let text = contrasting(color, background, foreground);
-      let name = if choice == ColorChoice::ACCENT {
-        format!("Use accent color {description}")
-      } else if user {
-        format!("User message color {description}")
-      } else {
-        format!("Accent color {description}")
-      };
-      let id = SharedString::from(format!("{}-{}", if user { "user-color" } else { "accent-color" }, choice.as_str()));
-      let focus = window
-        .use_keyed_state((gpui_kit::ElementId::from(id.clone()), "focus"), cx, |_, cx| {
-          cx.focus_handle().tab_stop(true)
-        })
-        .read(cx)
-        .clone();
-      Button::new(id)
-        .track_focus(&focus)
-        .small()
-        .w_32()
-        .custom(
-          ButtonCustomVariant::new(cx)
-            .color(color)
-            .foreground(text)
-            .hover(hover)
-            .active(color),
-        )
-        .label(if choice == ColorChoice::ACCENT {
-          "Use accent"
-        } else if user {
-          "Message"
-        } else {
-          "Aa"
-        })
-        .accessibility_label(name.clone())
-        .tooltip(name)
-        .toggled(choice == selected)
-        .when(choice == selected, |button| button.icon(IconName::Check))
-        .on_click(cx.listener(move |this, _, window, cx| {
-          focus.focus(window, cx);
-          this.select_color(user, choice, window, cx);
-        }))
-    }))
-  }
-
-  fn apply_appearance(&self, window: &mut Window, cx: &mut App) {
+  fn apply_appearance(&self, window: &mut Window, cx: &mut Context<Self>) {
     let light = self
       .light_theme
       .read(cx)
@@ -430,10 +358,17 @@ impl AppView {
       .map(|config| config.config.user_message_color)
       .unwrap_or(ColorChoice::OPERATOR);
     apply_appearance(self.appearance, &light, &dark, accent, user, window, cx);
+    let accent = cx.theme().primary;
+    let user = cx.global::<UserMessageColors>().background();
+    self.accent_color.update(cx, |picker, cx| picker.set_value(accent, window, cx));
+    self.user_color.update(cx, |picker, cx| picker.set_value(user, window, cx));
   }
 
   fn select_color(&mut self, user: bool, choice: ColorChoice, window: &mut Window, cx: &mut Context<Self>) {
-    let Some(configuration) = &mut self.config else { return };
+    let Some(configuration) = &mut self.config else {
+      self.apply_appearance(window, cx);
+      return;
+    };
     let mut next = configuration.config.clone();
     if user {
       next.user_message_color = choice;
@@ -488,52 +423,21 @@ impl AppView {
     cx.notify();
   }
 
-  fn save_gateway_field(&mut self, field: GatewayField, window: &mut Window, cx: &mut Context<Self>) {
+  fn save_gateway_field(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     if self.connecting {
       return;
     }
     let Some(configuration) = &mut self.config else { return };
     let mut next = configuration.config.clone();
-    match field {
-      GatewayField::Endpoint => {
-        let endpoint = self.endpoint.read(cx).value();
-        next.endpoint = if endpoint.trim().is_empty() {
-          None
-        } else {
-          match endpoint.trim().parse() {
-            Ok(url) => Some(url),
-            Err(error) => {
-              self.error = Some(format!("Invalid gateway URL: {error}"));
-              cx.notify();
-              return;
-            }
-          }
-        };
+    let endpoint = self.endpoint.read(cx).value();
+    next.endpoint = match endpoint.trim().parse() {
+      Ok(url) => url,
+      Err(error) => {
+        self.error = Some(format!("Invalid gateway URL: {error}"));
+        cx.notify();
+        return;
       }
-      GatewayField::Omp => {
-        let omp = self.omp.read(cx).value();
-        if next.gateway.omp.to_string_lossy() != omp.as_ref() {
-          next.gateway.omp = PathBuf::from(omp.as_ref());
-        }
-      }
-      GatewayField::Model => {
-        let model = self.model.read(cx).value();
-        next.gateway.model = (!model.is_empty()).then(|| model.to_string());
-      }
-      GatewayField::Sessions => {
-        let sessions = self.sessions.read(cx).value();
-        if next
-          .gateway
-          .sessions_dir
-          .as_ref()
-          .map(|path| path.to_string_lossy().into_owned())
-          .unwrap_or_default()
-          != sessions.as_ref()
-        {
-          next.gateway.sessions_dir = (!sessions.is_empty()).then(|| PathBuf::from(sessions.as_ref()));
-        }
-      }
-    }
+    };
     let requested = next.clone();
     if let Err(error) = configuration.save(next) {
       self.error = Some(format!("Couldn’t save settings: {error}"));
@@ -541,37 +445,29 @@ impl AppView {
       return;
     }
     let effective = &configuration.config;
-    self.error = (requested.endpoint != effective.endpoint
-      || requested.gateway.omp != effective.gateway.omp
-      || requested.gateway.model != effective.gateway.model
-      || requested.gateway.sessions_dir != effective.gateway.sessions_dir)
+    self.error = (requested.endpoint != effective.endpoint)
       .then(|| "Saved, but command-line, environment, or higher-priority config overrides the requested value.".to_owned());
-    let gateway = configuration.gateway.clone();
+    let gateway = configuration.config.endpoint.clone();
     if self.connected_gateway.as_ref() != Some(&gateway) {
       self.connecting = true;
       cx.spawn_in(window, async move |this, cx| {
         let result = connect(&gateway).await;
-        if let Ok((_, embedded)) = &result {
+        if result.is_ok() {
           let cleanup = this.update(cx, |this, cx| {
             (!this.shutting_down).then(|| this.workspace.update(cx, |workspace, cx| workspace.shutdown(cx)))
           });
           match cleanup {
             Ok(Some(cleanup)) => cleanup.await,
-            Ok(None) | Err(_) => {
-              embedded.shutdown().await;
-              return;
-            }
+            Ok(None) | Err(_) => return,
           }
           if !this.update(cx, |this, _| !this.shutting_down).unwrap_or(false) {
-            embedded.shutdown().await;
             return;
           }
         }
-        let old = this.update_in(cx, |this, window, cx| {
+        drop(this.update_in(cx, |this, window, cx| {
           this.connecting = false;
           match result {
-            Ok((client, embedded)) => {
-              let old = this.embedded.replace(&embedded);
+            Ok(client) => {
               let model = cx.new(|cx| Model::new(client.clone(), cx));
               model.update(cx, |model, cx| model.refresh_projects(cx)).detach();
               let user_name = this.workspace.read(cx).user_name().to_owned();
@@ -585,7 +481,7 @@ impl AppView {
               this._workspace_subscription = cx.observe(&this.workspace, |_, _, cx| cx.notify());
               this.connected_gateway = Some(gateway);
               cx.notify();
-              Some(old)
+              Some(())
             }
             Err(error) => {
               this.error = Some(format!("Couldn’t connect to gateway: {error}"));
@@ -593,10 +489,7 @@ impl AppView {
               None
             }
           }
-        });
-        if let Ok(Some(old)) = old {
-          old.shutdown().await;
-        }
+        }));
       })
       .detach();
     }
@@ -656,12 +549,6 @@ fn apply_appearance(
   let name = if cx.theme().mode == ThemeMode::Dark { dark } else { light };
   if let Some(theme) = verdant_themes::from_str(name) {
     let convert = convert_color;
-    let exact = |key: &str| {
-      theme.get(key).map(|style| {
-        let color = style.color();
-        convert(color.red, color.green, color.blue)
-      })
-    };
     let resolved = |key: &str| {
       theme.find_style(key).map(|style| {
         let color = style.color();
@@ -733,7 +620,7 @@ fn apply_appearance(
         let mut surface = background;
         surface.l = (surface.l + if foreground.l > background.l { -0.035 } else { 0.035 }).clamp(0.0, 1.0);
         colors.sidebar = surface;
-        colors.popover = exact("ibl.indent.char.1").unwrap_or_else(|| background.blend(foreground.alpha(0.08)));
+        colors.popover = background.blend(foreground.alpha(0.08));
         colors.list = background;
         colors.title_bar = surface;
         colors.status_bar = surface;
@@ -758,9 +645,9 @@ fn apply_appearance(
         colors.table_head_foreground = foreground;
         colors.table_foot_foreground = foreground;
         let background = colors.background;
-        let subtle = exact("ibl.indent.char.1").unwrap_or_else(|| background.blend(foreground.alpha(0.08)));
-        let hover = exact("ibl.whitespace.char.1").unwrap_or_else(|| background.blend(foreground.alpha(0.14)));
-        let border = exact("markup.list.unchecked").unwrap_or_else(|| background.blend(foreground.alpha(0.25)));
+        let subtle = background.blend(foreground.alpha(0.08));
+        let hover = background.blend(foreground.alpha(0.14));
+        let border = background.blend(foreground.alpha(0.25));
         colors.accent = hover;
         colors.accent_foreground = foreground;
         colors.border = border;
@@ -788,7 +675,7 @@ fn apply_appearance(
         colors.description_list_label = subtle;
         colors.description_list_label_foreground = foreground;
         colors.chart_grid = border;
-        colors.muted_foreground = exact("comment").unwrap_or_else(|| background.blend(foreground.alpha(0.7)));
+        colors.muted_foreground = background.blend(foreground.alpha(0.7));
         colors.secondary = subtle;
         colors.secondary_foreground = foreground;
         colors.secondary_hover = hover;
@@ -806,7 +693,7 @@ fn apply_appearance(
         colors.sidebar_accent_foreground = foreground;
         colors.tab_bar_segmented = subtle;
       }
-      if let Some(accent) = resolved(accent.as_str()) {
+      if let Some(accent) = accent.color().or_else(|| accent.style_key().and_then(resolved)) {
         let background = colors.background;
         let foreground = colors.foreground;
         colors.primary = accent;
@@ -884,7 +771,7 @@ fn apply_appearance(
     let background = cx.theme().background;
     let foreground = cx.theme().foreground;
     let key = if user == ColorChoice::ACCENT { accent } else { user };
-    let user_background = resolved(key.as_str()).unwrap_or(foreground);
+    let user_background = key.color().or_else(|| key.style_key().and_then(resolved)).unwrap_or(foreground);
     cx.set_global(UserMessageColors::new(
       user_background,
       contrasting(user_background, background, foreground),
@@ -951,93 +838,207 @@ impl Render for AppView {
             cx.notify();
           }
         }));
+      let form = match self.topic {
+        SettingsTopic::General => v_flex()
+          .gap_4()
+          .child("Configure omp and the default model on the gateway server.")
+          .into_any_element(),
+        SettingsTopic::Appearance => v_flex()
+          .gap_4()
+          .child(v_flex().gap_1().child("Mode").child(selector))
+          .child(
+            v_flex()
+              .gap_1()
+              .child("Light theme")
+              .child(Select::new(&self.light_theme).id("light-theme").accessibility_label("Light theme")),
+          )
+          .child(
+            v_flex()
+              .gap_1()
+              .child("Dark theme")
+              .child(Select::new(&self.dark_theme).id("dark-theme").accessibility_label("Dark theme")),
+          )
+          .child(
+            v_flex().gap_1().child("Accent color").child(
+              div()
+                .id("accent-color")
+                .test_support()
+                .child(ColorSelect::new(&self.accent_color).accessibility_label("Accent color")),
+            ),
+          )
+          .child(
+            v_flex()
+              .gap_1()
+              .child("User message color")
+              .child(
+                div()
+                  .id("user-message-color")
+                  .test_support()
+                  .child(ColorSelect::new(&self.user_color).accessibility_label("User message color")),
+              )
+              .child(
+                Button::new("user-color-accent")
+                  .label("Use accent color")
+                  .selected(
+                    self
+                      .config
+                      .as_ref()
+                      .is_some_and(|config| config.config.user_message_color == ColorChoice::ACCENT),
+                  )
+                  .on_click(cx.listener(|this, _, window, cx| this.select_color(true, ColorChoice::ACCENT, window, cx))),
+              ),
+          )
+          .into_any_element(),
+        SettingsTopic::Hosts => v_flex()
+          .gap_4()
+          .child(
+            div()
+              .text_sm()
+              .text_color(cx.theme().muted_foreground)
+              .child("Configure omp on the gateway server. Press Enter to save the WebSocket URL."),
+          )
+          .child(field("Gateway URL", &self.endpoint, self.connecting))
+          .into_any_element(),
+        SettingsTopic::Terminal => v_flex()
+          .gap_4()
+          .child(
+            v_flex().gap_1().child("Terminal font family").child(
+              Select::new(&self.terminal_family)
+                .id("terminal-font-family")
+                .accessibility_label("Terminal font family"),
+            ),
+          )
+          .when(
+            self
+              .config
+              .as_ref()
+              .is_some_and(|config| config.config.terminal_font_family.is_some()),
+            |view| {
+              view.child(
+                Button::new("terminal-font-inherit")
+                  .label("Use inherited font")
+                  .on_click(cx.listener(|this, _, window, cx| this.save_terminal_family(None, window, cx))),
+              )
+            },
+          )
+          .child(field("Terminal font size (px)", &self.terminal_size, false))
+          .child(
+            div()
+              .text_sm()
+              .text_color(cx.theme().muted_foreground)
+              .child("Press Enter to save font size. Leave it empty to use Ghostty or the default."),
+          )
+          .children(
+            self
+              .terminal_error
+              .as_ref()
+              .map(|error| div().text_color(cx.theme().danger).child(SharedString::from(error.clone()))),
+          )
+          .into_any_element(),
+      };
       div()
-        .id("settings-scroll")
+        .flex()
+        .items_stretch()
         .size_full()
-        .overflow_y_scroll()
+        .bg(cx.theme().sidebar)
         .child(
           v_flex()
-            .p_6()
-            .gap_4()
-            .w_full()
-            .when(!cfg!(target_os = "macos"), |view| view.child(div().text_xl().child("Settings")))
-            .child(v_flex().gap_1().child("Appearance").child(selector))
+            .id("settings-sidebar")
+            .test_support()
+            .w_48()
+            .flex_shrink_0()
+            .when(cfg!(target_os = "macos"), |view| {
+              view.child(gpui_kit::component::TitleBar::new().bg(cx.theme().sidebar).border_0())
+            })
             .child(
               v_flex()
+                .p_3()
                 .gap_1()
-                .child("Light theme")
-                .child(Select::new(&self.light_theme).id("light-theme").accessibility_label("Light theme")),
-            )
-            .child(
-              v_flex()
-                .gap_1()
-                .child("Dark theme")
-                .child(Select::new(&self.dark_theme).id("dark-theme").accessibility_label("Dark theme")),
-            )
-            .child(v_flex().gap_2().child("Accent color").child(self.color_choices(false, window, cx)))
-            .child(
-              v_flex()
-                .gap_2()
-                .child("User message color")
-                .child(self.color_choices(true, window, cx)),
-            )
-            .child(
-              div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child("Interface colors are derived from each Verdant theme’s editor and syntax colors."),
-            )
-            .child(div().text_lg().child("Terminal"))
-            .child(
-              v_flex().gap_1().child("Terminal font family").child(
-                Select::new(&self.terminal_family)
-                  .id("terminal-font-family")
-                  .accessibility_label("Terminal font family"),
-              ),
-            )
-            .when(
-              self
-                .config
-                .as_ref()
-                .is_some_and(|config| config.config.terminal_font_family.is_some()),
-              |view| {
-                view.child(
-                  Button::new("terminal-font-inherit")
-                    .label("Use inherited font")
-                    .on_click(cx.listener(|this, _, window, cx| this.save_terminal_family(None, window, cx))),
+                .child(
+                  Button::new("back-to-sessions")
+                    .ghost()
+                    .accessibility_label("Back to sessions")
+                    .child(
+                      h_flex()
+                        .id("settings-back-content")
+                        .test_support()
+                        .w_full()
+                        .gap_2()
+                        .child(Icon::new(gpui_kit::assets::IconName::ArrowLeft).size_4())
+                        .child("Back to sessions"),
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| {
+                      this.open = false;
+                      this.workspace.update(cx, |workspace, cx| workspace.focus(window, cx));
+                      cx.notify();
+                    })),
                 )
-              },
-            )
-            .child(field("Terminal font size (px)", &self.terminal_size, false))
+                .child(div().h_2())
+                .children(SettingsTopic::ALL.into_iter().map(|topic| {
+                  let focus = window
+                    .use_keyed_state((gpui_kit::ElementId::from(topic.id()), "focus"), cx, |_, cx| {
+                      cx.focus_handle().tab_stop(true)
+                    })
+                    .read(cx)
+                    .clone();
+                  Button::new(topic.id())
+                    .track_focus(&focus)
+                    .ghost()
+                    .accessibility_label(topic.label())
+                    .child(
+                      h_flex()
+                        .id("settings-topic-content")
+                        .test_support()
+                        .w_full()
+                        .gap_2()
+                        .child(Icon::new(topic.icon()).size_4())
+                        .child(topic.label()),
+                    )
+                    .selected(self.topic == topic)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                      focus.focus(window, cx);
+                      this.topic = topic;
+                      cx.notify();
+                    }))
+                })),
+            ),
+        )
+        .child(
+          div()
+            .id("settings-scroll")
+            .test_support()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .mt_1()
+            .mr_1()
+            .mb_1()
+            .rounded_lg()
+            .bg(cx.theme().background)
+            .overflow_y_scroll()
             .child(
-              div()
-                .text_sm()
-                .child("Press Enter to save font size. Leave it empty to use Ghostty or the default."),
-            )
-            .child(div().text_lg().child("Gateway"))
-            .child(
-              div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child("Leave the URL empty to use the embedded gateway. Remote gateways are configured where they run."),
-            )
-            .child(
-              div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child("Press Enter to save each field. Changing an embedded gateway closes its live sessions."),
-            )
-            .child(field("Gateway URL", &self.endpoint, self.connecting))
-            .child(field("omp executable", &self.omp, self.connecting))
-            .child(field("Default model", &self.model, self.connecting))
-            .child(field("Sessions directory", &self.sessions, self.connecting))
-            .children(
-              self
-                .error
-                .as_ref()
-                .map(|error| div().text_color(cx.theme().danger).child(SharedString::from(error.clone()))),
-            )
-            .when(self.connecting, |view| view.child("Connecting…")),
+              div().flex().justify_center().w_full().child(
+                v_flex()
+                  .id("settings-content")
+                  .test_support()
+                  .p_6()
+                  .gap_4()
+                  .w_full()
+                  .max_w(gpui_kit::rems(42.))
+                  .child(div().text_xl().font_semibold().child(self.topic.label()))
+                  .child(form)
+                  .when(self.topic != SettingsTopic::Terminal, |view| {
+                    view
+                      .children(
+                        self
+                          .error
+                          .as_ref()
+                          .map(|error| div().text_color(cx.theme().danger).child(SharedString::from(error.clone()))),
+                      )
+                      .when(self.connecting, |view| view.child("Connecting…"))
+                  }),
+              ),
+            ),
         )
         .into_any_element()
     } else {
@@ -1047,29 +1048,15 @@ impl Render for AppView {
       .size_full()
       .bg(cx.theme().background)
       .text_color(cx.theme().foreground)
-      .when(self.open && cfg!(target_os = "macos"), |view| {
-        view.child(gpui_kit::component::TitleBar::new().bg(cx.theme().sidebar).child("Settings"))
-      })
-      .when(self.open, |view| {
-        view.child(
-          Button::new("back-to-sessions")
-            .ghost()
-            .small()
-            .label("Back to sessions")
-            .on_click(cx.listener(|this, _, window, cx| {
-              this.open = false;
-              this.workspace.update(cx, |workspace, cx| workspace.focus(window, cx));
-              cx.notify();
-            })),
+      .child(div().flex_1().min_h_0().child(content))
+      .when(!self.open, |view| {
+        view.children(
+          self
+            .terminal_error
+            .as_ref()
+            .map(|error| div().text_color(cx.theme().danger).child(SharedString::from(error.clone()))),
         )
       })
-      .child(div().flex_1().min_h_0().child(content))
-      .children(
-        self
-          .terminal_error
-          .as_ref()
-          .map(|error| div().text_color(cx.theme().danger).child(SharedString::from(error.clone()))),
-      )
       .children(
         self
           .preferences_error
@@ -1081,33 +1068,29 @@ impl Render for AppView {
 
 #[cfg(test)]
 mod tests {
-  use alvin_client::{ChannelPair, Client, Endpoint};
   use alvin_conversation_ui::{Model, UserMessageColors, Workspace};
-  use alvin_gateway::Gateway;
   use gpui_kit::component::ActiveTheme as _;
   use gpui_kit::test::{TestEventExt as _, TestQueryExt as _, TestWindowExt as _};
   use gpui_kit::{AppContext as _, Bounds, MouseButton, TestAppContext, WindowBounds, WindowOptions, point, px, size};
 
   use super::{AppView, apply_appearance, contrast};
-  use crate::app::Embedded;
+  use crate::app::connect;
   use crate::config::{Appearance, COLOR_CHOICES, ColorChoice, Configuration};
-  use crate::test_support::Fixture;
+  use crate::test_support::ServerFixture;
+  use test_context::test_context;
 
+  #[test_context(ServerFixture)]
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
-  async fn settings_commit_only_the_changed_control(cx: &mut TestAppContext) {
+  async fn settings_commit_only_the_changed_control(fixture: &mut ServerFixture, cx: &mut TestAppContext) {
     cx.executor().allow_parking();
     let executor = cx.foreground_executor().clone();
     executor.block_test(async {
-      let fixture = Fixture::new();
-      let gateway = Gateway::new(fixture.config());
-      let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
-        .await
-        .unwrap();
-      let dir = std::env::temp_dir().join(format!("alvin-settings-{}", alvin_protocol::EventId::new().as_uuid()));
+      let client = connect(&fixture.endpoint).await.unwrap();
+      let dir = fixture.project.base().join("settings");
       std::fs::create_dir_all(&dir).unwrap();
       let path = dir.join("config.toml");
-      std::fs::write(&path, "appearance = 'system'\n").unwrap();
+      std::fs::write(&path, format!("appearance = 'system'\nendpoint = '{}'\n", fixture.endpoint)).unwrap();
       let config = Configuration::for_test(path.clone()).unwrap();
       let (handle, view) = cx.update(|cx| {
         gpui_kit::init(cx);
@@ -1125,17 +1108,7 @@ mod tests {
             let model = cx.new(|cx| Model::new(client.clone(), cx));
             let workspace = cx.new(|cx| Workspace::new(model, client, window, cx));
             workspace.update(cx, |workspace, cx| workspace.set_user_name("Ada".to_owned(), cx));
-            cx.new(|cx| {
-              AppView::new(
-                workspace,
-                Embedded::new(Some(gateway.clone())),
-                Some(config),
-                None,
-                Default::default(),
-                window,
-                cx,
-              )
-            })
+            cx.new(|cx| AppView::new(workspace, Some(config), None, Default::default(), window, cx))
           },
         )
         .unwrap()
@@ -1147,8 +1120,28 @@ mod tests {
       .unwrap();
       cx.run_until_parked();
       cx.update_window(handle, |_, window, cx| {
-        window.click("Default model", cx);
+        window.render_frame(cx);
+        let sidebar = window.find("settings-sidebar").bounds();
+        let back = window.find("back-to-sessions").bounds();
+        let general = window.find("settings-general").bounds();
+        let scroll = window.find("settings-scroll").bounds();
+        let content = window.find("settings-content").bounds();
+        let back_content = window.find("settings-back-content").bounds();
+        let topic_content = window.within("settings-general").find("settings-topic-content").bounds();
+        assert!(back.left() >= sidebar.left() && back.right() <= sidebar.right());
+        assert!(back.bottom() <= general.top());
+        assert_eq!(back_content.left(), topic_content.left());
+        assert!(sidebar.right() <= scroll.left());
+        assert!(scroll.top() > sidebar.top());
+        assert!(content.left() > scroll.left() && content.right() < scroll.right());
+        let left_gap = content.left() - scroll.left();
+        let right_gap = scroll.right() - content.right();
+        assert!(left_gap <= right_gap + px(2.) && right_gap <= left_gap + px(2.));
+        window.click("settings-hosts", cx);
+        window.click("Gateway URL", cx);
+        window.press("secondary-a", cx);
         window.input("unfinished/model", cx);
+        window.click("settings-appearance", cx);
         window.click("appearance-dark", cx);
       })
       .unwrap();
@@ -1171,119 +1164,83 @@ mod tests {
       })
       .unwrap();
       cx.run_until_parked();
-      let theme = verdant_themes::from_str("one::cool").unwrap();
-      let color = |key| {
-        let color = theme.find_style(key).unwrap().color();
-        gpui_kit::Hsla::from(gpui_kit::rgb(
-          (u32::from(color.red) << 16) | (u32::from(color.green) << 8) | u32::from(color.blue),
-        ))
-      };
-      cx.update_window(handle, |_, window, cx| window.click("accent-color-function", cx))
-        .unwrap();
-      cx.run_until_parked();
-      let (accent, user) = cx.update(|cx| {
-        let config = Configuration::for_test(path.clone()).unwrap();
-        assert_eq!(config.config.accent_color.as_str(), "function");
-        assert_eq!(config.config.user_message_color, ColorChoice::OPERATOR);
-        assert_eq!(cx.theme().primary, color("function"));
-        assert_eq!(cx.global::<UserMessageColors>().background(), color("operator"));
-        (cx.theme().primary, cx.global::<UserMessageColors>().background())
-      });
+      let accent_id = cx.read(|cx| view.read(cx).accent_color.entity_id());
+      let user_id = cx.read(|cx| view.read(cx).user_color.entity_id());
+      let accent_input_id = cx.read(|cx| view.read(cx).accent_color.read(cx).hex_input().entity_id());
+      let user_input_id = cx.read(|cx| view.read(cx).user_color.read(cx).hex_input().entity_id());
       cx.update_window(handle, |_, window, cx| {
-        window.click("user-color-keyword", cx);
-        assert_eq!(window.find("user-color-keyword").focused(), Some(true));
+        window.click("accent-color", cx);
+        let input = window
+          .within(("color-select", accent_id))
+          .find(("input", accent_input_id))
+          .bounds()
+          .center();
+        window.pointer_down(input, MouseButton::Left, cx);
+        window.pointer_up(input, MouseButton::Left, cx);
+        window.press("secondary-a", cx);
+        window.input("#34567880", cx);
+        window.press("enter", cx);
       })
       .unwrap();
       cx.run_until_parked();
-      cx.update(|_| {
-        let config = Configuration::for_test(path.clone()).unwrap();
-        assert_eq!(config.config.user_message_color.as_str(), "keyword");
-      });
-      cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        assert_eq!(window.find("user-color-keyword").focused(), Some(true));
-        window.press("tab", cx);
-        assert_eq!(window.find("user-color-diff.minus").focused(), Some(true));
-        window.press("space", cx);
-      })
-      .unwrap();
-      cx.run_until_parked();
-      cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        assert_eq!(window.find("user-color-diff.minus").focused(), Some(true));
-        window.press("shift-tab", cx);
-        assert_eq!(window.find("user-color-keyword").focused(), Some(true));
-      })
-      .unwrap();
-      cx.update(|_| {
-        let config = Configuration::for_test(path.clone()).unwrap();
-        assert_eq!(config.config.user_message_color.as_str(), "diff.minus");
-      });
-      cx.update_window(handle, |_, window, cx| window.click("user-color-keyword", cx))
-        .unwrap();
-      cx.run_until_parked();
-      let independent_user = cx.update(|cx| {
-        let config = Configuration::for_test(path.clone()).unwrap();
-        assert_eq!(config.config.accent_color.as_str(), "function");
-        assert_eq!(config.config.user_message_color.as_str(), "keyword");
-        assert_eq!(cx.theme().primary, accent);
-        let selected = cx.global::<UserMessageColors>().background();
-        assert_eq!(selected, color("keyword"));
-        assert_ne!(selected, user);
-        selected
-      });
-      cx.update_window(handle, |_, window, cx| window.click("accent-color-module", cx))
-        .unwrap();
-      cx.run_until_parked();
-      let changed_accent = cx.update(|cx| {
-        let config = Configuration::for_test(path.clone()).unwrap();
-        assert_eq!(config.config.accent_color.as_str(), "module");
-        assert_eq!(config.config.user_message_color.as_str(), "keyword");
-        assert_eq!(cx.global::<UserMessageColors>().background(), independent_user);
-        let selected = cx.theme().primary;
-        assert_eq!(selected, color("module"));
-        assert_ne!(selected, accent);
-        selected
-      });
-      cx.update_window(handle, |_, window, cx| window.click("user-color-accent", cx))
-        .unwrap();
-      cx.run_until_parked();
+      let accent = ColorChoice::from_color(
+        gpui_kit::Rgba {
+          r: 52. / 255.,
+          g: 86. / 255.,
+          b: 120. / 255.,
+          a: 128. / 255.,
+        }
+        .into(),
+      );
       cx.update(|cx| {
         let config = Configuration::for_test(path.clone()).unwrap();
-        assert_eq!(config.config.user_message_color, ColorChoice::ACCENT);
-        assert_eq!(cx.global::<UserMessageColors>().background(), changed_accent);
+        assert_eq!(config.config.accent_color, accent);
+        assert_eq!(ColorChoice::from_color(cx.theme().primary), accent);
       });
       cx.update_window(handle, |_, window, cx| {
-        window.click("accent-color-function", cx);
-        assert_eq!(window.find("accent-color-function").focused(), Some(true));
+        window.click("accent-color", cx);
+        assert!(view.read(cx).accent_color.read(cx).is_open());
+        window.press("escape", cx);
+        assert!(!view.read(cx).accent_color.read(cx).is_open());
+        window.click("user-message-color", cx);
+        let input = window
+          .within(("color-select", user_id))
+          .find(("input", user_input_id))
+          .bounds()
+          .center();
+        window.pointer_down(input, MouseButton::Left, cx);
+        window.pointer_up(input, MouseButton::Left, cx);
+        window.press("secondary-a", cx);
+        window.input("#abcdef80", cx);
+        window.press("enter", cx);
+      })
+      .unwrap();
+      cx.run_until_parked();
+      let user = ColorChoice::from_color(
+        gpui_kit::Rgba {
+          r: 171. / 255.,
+          g: 205. / 255.,
+          b: 239. / 255.,
+          a: 128. / 255.,
+        }
+        .into(),
+      );
+      cx.update(|cx| {
+        let config = Configuration::for_test(path.clone()).unwrap();
+        assert_eq!(config.config.user_message_color, user);
+        assert_eq!(ColorChoice::from_color(cx.global::<UserMessageColors>().background()), user);
+      });
+      cx.update_window(handle, |_, window, cx| {
+        assert!(!view.read(cx).user_color.read(cx).is_open());
+        window.click("user-color-accent", cx);
       })
       .unwrap();
       cx.run_until_parked();
       cx.update(|cx| {
         let config = Configuration::for_test(path.clone()).unwrap();
-        assert_eq!(config.config.accent_color.as_str(), "function");
         assert_eq!(config.config.user_message_color, ColorChoice::ACCENT);
-        assert_eq!(cx.theme().primary, accent);
-        assert_eq!(cx.global::<UserMessageColors>().background(), accent);
+        assert_eq!(ColorChoice::from_color(cx.global::<UserMessageColors>().background()), accent);
       });
-      cx.update_window(handle, |_, window, cx| window.click("appearance-light", cx))
-        .unwrap();
-      cx.run_until_parked();
-      cx.update(|cx| {
-        let light = verdant_themes::from_str("github::light").unwrap();
-        let color = light.find_style("function").unwrap().color();
-        let expected = gpui_kit::Hsla::from(gpui_kit::rgb(
-          (u32::from(color.red) << 16) | (u32::from(color.green) << 8) | u32::from(color.blue),
-        ));
-        assert_eq!(cx.theme().primary, expected);
-        assert_eq!(cx.global::<UserMessageColors>().background(), expected);
-      });
-      let omp = std::env::split_paths(&std::env::var_os("PATH").unwrap())
-        .map(|dir| dir.join(format!("omp{}", std::env::consts::EXE_SUFFIX)))
-        .find(|path| path.is_file())
-        .expect("omp is on PATH")
-        .canonicalize()
-        .unwrap();
       let old_workspace = cx.update(|cx| {
         let view = view.read(cx);
         assert!(view.error.is_none(), "{:?}", view.error);
@@ -1302,9 +1259,13 @@ mod tests {
         })
       });
       cx.update_window(handle, |_, window, cx| {
-        window.click("omp executable", cx);
+        window.click("settings-hosts", cx);
+        window.click("Gateway URL", cx);
         window.press("secondary-a", cx);
-        window.input(omp.to_str().unwrap(), cx);
+        window.input(
+          &format!("ws://localhost:{}", fixture.server.as_ref().unwrap().local_addr().port()),
+          cx,
+        );
         window.press("enter", cx);
       })
       .unwrap();
@@ -1340,6 +1301,7 @@ mod tests {
       .unwrap();
       cx.update_window(handle, |_, window, cx| {
         window.click("Gateway URL", cx);
+        window.press("secondary-a", cx);
         window.input("not a url", cx);
         window.press("enter", cx);
       })
@@ -1350,6 +1312,7 @@ mod tests {
       assert!(!saved.contains("unfinished/model"));
       assert!(!saved.contains("not a url"));
       cx.update(|cx| assert!(view.read(cx).error.as_deref().unwrap().contains("Invalid gateway URL")));
+      let connected_workspace = cx.read(|cx| view.read(cx).workspace.entity_id());
       let (finished, completion) = tokio::sync::oneshot::channel();
       let mut finished = Some(finished);
       let subscription = cx.update(|cx| {
@@ -1373,6 +1336,7 @@ mod tests {
       drop(subscription);
       cx.update(|cx| {
         let view = view.read(cx);
+        assert_eq!(view.workspace.entity_id(), connected_workspace);
         assert!(
           view
             .error
@@ -1382,44 +1346,47 @@ mod tests {
           view.error
         );
       });
+      let workspace = cx.read(|cx| view.read(cx).workspace.clone());
+      let model = cx.read(|cx| workspace.read(cx).model().clone());
+      cx.update(|cx| model.update(cx, |model, cx| model.refresh_projects(cx))).await;
+      let (project, checkout) = cx.read(|cx| {
+        let project = model.read(cx).conversation().workspace().projects().first().unwrap();
+        (project.id.clone(), project.checkouts.first().unwrap().id.clone())
+      });
+      assert!(cx.read(|cx| workspace.read(cx).active().is_none()));
+      cx.update(|cx| model.update(cx, |model, cx| model.new_session(project, checkout, cx)))
+        .await;
+      let live = cx.read(|cx| workspace.read(cx).active().unwrap());
+      let probe = connect(&fixture.endpoint).await.unwrap();
+      assert!(
+        alvin_protocol::LiveApiClient::list(&probe)
+          .await
+          .unwrap()
+          .iter()
+          .any(|session| session.live == live)
+      );
       let saved = std::fs::read_to_string(&path).unwrap();
       assert!(saved.contains("ws://127.0.0.1:1"));
       assert!(!saved.contains("unfinished/model"));
-      let embedded = cx.update(|cx| view.read(cx).embedded.clone());
-      embedded.shutdown().await;
-      gateway.shutdown().await.unwrap();
       std::fs::remove_dir_all(dir).unwrap();
     });
   }
 
+  #[test_context(ServerFixture)]
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
-  async fn settings_and_sidebar_controls_remain_accessible(cx: &mut TestAppContext) {
+  async fn settings_and_sidebar_controls_remain_accessible(fixture: &mut ServerFixture, cx: &mut TestAppContext) {
     cx.executor().allow_parking();
     let executor = cx.foreground_executor().clone();
     executor.block_test(async {
-      let fixture = Fixture::new();
-      let gateway = Gateway::new(fixture.config());
-      let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
-        .await
-        .unwrap();
+      let client = connect(&fixture.endpoint).await.unwrap();
       let handle = cx.update(|cx| {
         gpui_kit::init(cx);
         alvin_conversation_ui::init(cx);
         gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
           let model = cx.new(|cx| Model::new(client.clone(), cx));
           let workspace = cx.new(|cx| Workspace::new(model, client, window, cx));
-          cx.new(|cx| {
-            AppView::new(
-              workspace,
-              Embedded::new(Some(gateway.clone())),
-              None,
-              None,
-              Default::default(),
-              window,
-              cx,
-            )
-          })
+          cx.new(|cx| AppView::new(workspace, None, None, Default::default(), window, cx))
         })
         .unwrap()
         .0
@@ -1461,9 +1428,6 @@ mod tests {
           let foreground = convert!(theme.fg().unwrap());
           assert_eq!(cx.theme().background, background);
           assert_eq!(cx.theme().foreground, foreground);
-          if let Some(style) = theme.get("markup.list.unchecked") {
-            assert_eq!(cx.theme().border, convert!(style.color()));
-          }
           assert_eq!(cx.theme().primary, convert!(theme.find_style("module").unwrap().color()));
           assert_eq!(cx.theme().link, convert!(theme.find_style("function").unwrap().color()));
           for &choice in COLOR_CHOICES {
@@ -1502,6 +1466,25 @@ mod tests {
       cx.run_until_parked();
       cx.update_window(handle, |_, window, cx| {
         window.render_frame(cx);
+        assert!(window.find("settings-general").visible());
+        window.click("settings-general", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("settings-general").focused(), Some(true));
+        window.press("tab", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("settings-appearance").focused(), Some(true));
+        window.press("shift-tab", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("settings-general").focused(), Some(true));
+        window.press("tab", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("settings-appearance").focused(), Some(true));
+        window.press("space", cx);
+        window.render_frame(cx);
+        assert!(window.find_by_label("Light theme").visible());
+        window.click("settings-terminal", cx);
+        assert!(window.find_by_label("Terminal font family").visible());
+        window.click("settings-hosts", cx);
         assert!(window.find_by_label("Gateway URL").visible());
         window.click("back-to-sessions", cx);
         window.render_frame(cx);
@@ -1514,7 +1497,6 @@ mod tests {
         assert_eq!(window.find("titlebar-toggle-sidebar").label(), Some("Hide sidebar"));
       })
       .unwrap();
-      gateway.shutdown().await.unwrap();
     });
   }
 }

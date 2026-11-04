@@ -187,14 +187,6 @@ pub enum Error {
   /// The WebSocket listener was already stopped.
   #[error("stopping the WebSocket listener")]
   AlreadyStopped(#[from] jsonrpsee::server::AlreadyStoppedError),
-
-  /// Setting up telemetry failed.
-  #[error("setting up telemetry")]
-  Telemetry(#[from] init_tracing_opentelemetry::Error),
-
-  /// The log filter in `ALVIN_LOG` or `RUST_LOG` does not parse.
-  #[error("parsing the log filter")]
-  LogFilter(#[from] tracing_subscriber::filter::ParseError),
 }
 
 /// Result alias for this crate.
@@ -272,9 +264,7 @@ impl From<Error> for ErrorObjectOwned {
       | Error::SessionFilePath { .. }
       | Error::Bind(_)
       | Error::AlreadyStopped(_)
-      | Error::RegisterMethods(_)
-      | Error::Telemetry(_)
-      | Error::LogFilter(_) => ErrorObject::owned(INTERNAL_ERROR_CODE, message, None::<()>),
+      | Error::RegisterMethods(_) => ErrorObject::owned(INTERNAL_ERROR_CODE, message, None::<()>),
     }
   }
 }

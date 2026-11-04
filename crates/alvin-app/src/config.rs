@@ -1,43 +1,65 @@
-//! alvin-app's settings: command-line flags, `ALVIN_*` environment variables and `config.toml`, merged by confique. Parsing
-//! only: whether the omp executable exists or the model is valid is for the gateway to say.
+//! Desktop settings loaded from command-line flags, environment, and config files.
 
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use alvin_gateway::{GatewayConfig, HostConfig};
 use confique::Config as _;
 use eyre::{bail, eyre};
+use gpui_kit::{Hsla, Rgba, rgba};
 use url::Url;
 
 /// Verdant style keys offered for interface colors.
 pub(crate) const COLOR_CHOICES: &[ColorChoice] = &[
-  ColorChoice("markup.link.url"),
-  ColorChoice("constructor.lua"),
-  ColorChoice("attribute.builtin"),
-  ColorChoice("keyword"),
-  ColorChoice("diff.minus"),
-  ColorChoice("markup.italic"),
-  ColorChoice("attribute"),
-  ColorChoice("type"),
-  ColorChoice("string"),
-  ColorChoice("character"),
-  ColorChoice("constructor"),
+  ColorChoice::Style("markup.link.url"),
+  ColorChoice::Style("constructor.lua"),
+  ColorChoice::Style("attribute.builtin"),
+  ColorChoice::Style("keyword"),
+  ColorChoice::Style("diff.minus"),
+  ColorChoice::Style("markup.italic"),
+  ColorChoice::Style("attribute"),
+  ColorChoice::Style("type"),
+  ColorChoice::Style("string"),
+  ColorChoice::Style("character"),
+  ColorChoice::Style("constructor"),
   ColorChoice::OPERATOR,
-  ColorChoice("function"),
+  ColorChoice::Style("function"),
   ColorChoice::MODULE,
 ];
 
-/// A supported Verdant color key, or the user-message accent sentinel.
+/// A Verdant style key, an explicit RGBA color, or the user-message accent sentinel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ColorChoice(&'static str);
+pub enum ColorChoice {
+  /// A theme-dependent Verdant style key or the `accent` sentinel.
+  Style(&'static str),
+  /// An explicit color packed as `0xRRGGBBAA`.
+  Rgba(u32),
+}
 
 impl ColorChoice {
-  pub(crate) const MODULE: Self = Self("module");
-  pub(crate) const OPERATOR: Self = Self("operator");
-  pub(crate) const ACCENT: Self = Self("accent");
+  pub(crate) const MODULE: Self = Self::Style("module");
+  pub(crate) const OPERATOR: Self = Self::Style("operator");
+  pub(crate) const ACCENT: Self = Self::Style("accent");
 
-  pub(crate) fn as_str(self) -> &'static str {
-    self.0
+  /// Converts a picker color to eight-bit RGBA channels.
+  pub fn from_color(color: Hsla) -> Self {
+    let color = Rgba::from(color);
+    let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u32;
+    Self::Rgba((channel(color.r) << 24) | (channel(color.g) << 16) | (channel(color.b) << 8) | channel(color.a))
+  }
+
+  /// Returns the explicit color, or `None` for a theme-dependent choice.
+  pub fn color(self) -> Option<Hsla> {
+    match self {
+      Self::Rgba(color) => Some(rgba(color).into()),
+      Self::Style(_) => None,
+    }
+  }
+
+  /// Returns the theme key or accent sentinel, or `None` for an explicit color.
+  pub fn style_key(self) -> Option<&'static str> {
+    match self {
+      Self::Style(key) => Some(key),
+      Self::Rgba(_) => None,
+    }
   }
 }
 
@@ -45,18 +67,33 @@ impl std::str::FromStr for ColorChoice {
   type Err = String;
 
   fn from_str(value: &str) -> Result<Self, Self::Err> {
+    if let Some(hex) = value.strip_prefix('#') {
+      if !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(format!("unknown color choice: {value}"));
+      }
+      let color = match hex.len() {
+        6 => u32::from_str_radix(hex, 16).map(|rgb| (rgb << 8) | 0xff),
+        8 => u32::from_str_radix(hex, 16),
+        _ => return Err(format!("unknown color choice: {value}")),
+      };
+      return color.map(Self::Rgba).map_err(|_| format!("unknown color choice: {value}"));
+    }
     COLOR_CHOICES
       .iter()
       .copied()
       .chain([Self::ACCENT])
-      .find(|choice| choice.as_str() == value)
+      .find(|choice| choice.style_key() == Some(value))
       .ok_or_else(|| format!("unknown color choice: {value}"))
   }
 }
 
 impl std::fmt::Display for ColorChoice {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_str(self.0)
+    match self {
+      Self::Style(key) => f.write_str(key),
+      Self::Rgba(color) if color & 0xff == 0xff => write!(f, "#{:06x}", color >> 8),
+      Self::Rgba(color) => write!(f, "#{color:08x}"),
+    }
   }
 }
 
@@ -69,7 +106,7 @@ impl<'de> confique::serde::Deserialize<'de> for ColorChoice {
 
 impl confique::serde::Serialize for ColorChoice {
   fn serialize<S: confique::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_str(self.0)
+    serializer.collect_str(self)
   }
 }
 
@@ -79,10 +116,10 @@ impl confique::serde::Serialize for ColorChoice {
 // A key nothing reads is a typo; confique would otherwise skip it silently.
 #[config(layer_attr(serde(deny_unknown_fields)))]
 pub struct AppConfig {
-  /// Connect to a running gateway (`ws://` or `wss://`). Absent: embed one.
-  #[config(env = "ALVIN_ENDPOINT")]
+  /// Connect to a running gateway (`ws://` or `wss://`).
+  #[config(default = "ws://127.0.0.1:7410", env = "ALVIN_ENDPOINT")]
   #[config(layer_attr(arg(long)))]
-  pub endpoint: Option<Url>,
+  pub endpoint: Url,
   /// Interface appearance: system, light, or dark.
   #[config(default = "system", env = "ALVIN_APPEARANCE")]
   #[config(layer_attr(arg(long)))]
@@ -95,11 +132,11 @@ pub struct AppConfig {
   #[config(default = "github::dark", env = "ALVIN_DARK_THEME")]
   #[config(layer_attr(arg(long)))]
   pub dark_theme: String,
-  /// Verdant key used for primary interface color.
+  /// Verdant style key or custom `#RRGGBB` / `#RRGGBBAA` primary color.
   #[config(default = "module", env = "ALVIN_ACCENT_COLOR")]
   #[config(layer_attr(arg(long)))]
   pub accent_color: ColorChoice,
-  /// Verdant key used for user messages, or `accent` to follow the accent.
+  /// Verdant style key, custom hex color, or `accent` to follow the accent.
   #[config(default = "operator", env = "ALVIN_USER_MESSAGE_COLOR")]
   #[config(layer_attr(arg(long)))]
   pub user_message_color: ColorChoice,
@@ -111,29 +148,6 @@ pub struct AppConfig {
   #[config(env = "ALVIN_TERMINAL_FONT_SIZE")]
   #[config(layer_attr(arg(long)))]
   pub terminal_font_size: Option<f32>,
-  /// The embedded gateway's settings. They do not apply to a remote gateway, which is configured where it runs.
-  #[config(nested)]
-  #[config(layer_attr(command(flatten)))]
-  pub gateway: EmbeddedGateway,
-}
-
-/// Settings for the gateway the app embeds.
-#[derive(confique::Config, Debug, Clone)]
-#[config(layer_attr(derive(clap::Args, Clone)))]
-#[config(layer_attr(serde(deny_unknown_fields)))]
-pub struct EmbeddedGateway {
-  /// The omp executable, found on `PATH` when it has no directory.
-  #[config(default = "omp", env = "ALVIN_OMP")]
-  #[config(layer_attr(arg(long)))]
-  pub omp: PathBuf,
-  /// The model sessions start with, as `provider/id`. Absent: omp's own choice.
-  #[config(env = "ALVIN_MODEL")]
-  #[config(layer_attr(arg(long)))]
-  pub model: Option<String>,
-  /// omp's sessions directory. Absent: resolved from omp's own rules.
-  #[config(env = "ALVIN_SESSIONS_DIR")]
-  #[config(layer_attr(arg(long)))]
-  pub sessions_dir: Option<PathBuf>,
 }
 
 /// alvin-app's command line.
@@ -147,33 +161,8 @@ pub struct Cli {
   pub config: <AppConfig as confique::Config>::Layer,
 }
 
-/// How the app reaches a gateway.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Settings {
-  /// Connect to a running gateway.
-  Remote(Url),
-  /// Run a gateway inside the app.
-  Embedded {
-    /// The omp executable.
-    omp: PathBuf,
-    /// The model sessions start with.
-    model: Option<String>,
-    /// omp's sessions directory, resolved.
-    sessions_dir: PathBuf,
-  },
-}
-
-/// The configuration of the gateway the app embeds.
-pub(crate) fn gateway_config(omp: &Path, model: Option<&str>, sessions_dir: &Path) -> GatewayConfig {
-  GatewayConfig::builder()
-    .sessions_dir(sessions_dir.to_path_buf())
-    .omp(HostConfig::builder().omp(omp.to_path_buf()).build())
-    .default_model(model.map(str::to_owned))
-    .build()
-}
-
 impl Cli {
-  /// Merges every source into [`Settings`], reading omp's own environment variables to find its sessions directory.
+  /// Merges the configuration sources.
   pub(crate) fn settings(self) -> eyre::Result<Configuration> {
     let home = dirs::home_dir().ok_or_else(|| eyre!("cannot determine the home directory"))?;
     let files = config_files(self.config_file, dirs::config_dir(), &home);
@@ -182,12 +171,11 @@ impl Cli {
       .cloned()
       .ok_or_else(|| eyre!("cannot determine the config directory"))?;
     let config = load(self.config.clone(), &files)?;
-    let gateway = settings(config.clone(), &home, |name| std::env::var_os(name))?;
+    validate_endpoint(&config.endpoint)?;
     Appearance::parse(&config.appearance)?;
     validate_themes(&config)?;
     Ok(Configuration {
       config,
-      gateway,
       path,
       files,
       flags: self.config,
@@ -246,7 +234,7 @@ impl Appearance {
 
 fn validate_themes(config: &AppConfig) -> eyre::Result<()> {
   if config.accent_color == ColorChoice::ACCENT {
-    bail!("accent_color must be a Verdant color key");
+    bail!("accent_color must be a Verdant color key or custom hex color");
   }
   for name in [&config.light_theme, &config.dark_theme] {
     if !verdant_themes::THEMES.contains(&name.as_str()) {
@@ -259,7 +247,6 @@ fn validate_themes(config: &AppConfig) -> eyre::Result<()> {
 /// Config sources and the currently effective settings.
 pub(crate) struct Configuration {
   pub(crate) config: AppConfig,
-  pub(crate) gateway: Settings,
   path: PathBuf,
   files: Vec<PathBuf>,
   flags: <AppConfig as confique::Config>::Layer,
@@ -283,10 +270,9 @@ impl Configuration {
     let files = vec![path.clone()];
     let config = load(flags.clone(), &files)?;
     let home = path.parent().ok_or_else(|| eyre!("config path has no parent"))?.to_path_buf();
-    let gateway = settings(config.clone(), &home, |name| std::env::var_os(name))?;
+    validate_endpoint(&config.endpoint)?;
     Ok(Self {
       config,
-      gateway,
       path,
       files,
       flags,
@@ -300,7 +286,7 @@ impl Configuration {
 
     Appearance::parse(&config.appearance)?;
     validate_themes(&config)?;
-    settings(config.clone(), &self.home, |name| std::env::var_os(name))?;
+    validate_endpoint(&config.endpoint)?;
     let target = match std::fs::symlink_metadata(&self.path) {
       Ok(metadata) if metadata.file_type().is_symlink() => std::fs::canonicalize(&self.path)?,
       Ok(_) => self.path.clone(),
@@ -314,7 +300,7 @@ impl Configuration {
     };
     let mut document = contents.parse::<toml_edit::DocumentMut>()?;
     if config.endpoint != self.config.endpoint {
-      set_table_value(document.as_table_mut(), "endpoint", config.endpoint.as_ref().map(Url::as_str));
+      set_table_value(document.as_table_mut(), "endpoint", Some(config.endpoint.as_str()));
     }
     if config.appearance != self.config.appearance {
       set_table_value(document.as_table_mut(), "appearance", Some(&config.appearance));
@@ -326,13 +312,13 @@ impl Configuration {
       set_table_value(document.as_table_mut(), "dark_theme", Some(&config.dark_theme));
     }
     if config.accent_color != self.config.accent_color {
-      set_table_value(document.as_table_mut(), "accent_color", Some(config.accent_color.as_str()));
+      set_table_value(document.as_table_mut(), "accent_color", Some(&config.accent_color.to_string()));
     }
     if config.user_message_color != self.config.user_message_color {
       set_table_value(
         document.as_table_mut(),
         "user_message_color",
-        Some(config.user_message_color.as_str()),
+        Some(&config.user_message_color.to_string()),
       );
     }
     if config.terminal_font_family != self.config.terminal_font_family {
@@ -354,33 +340,6 @@ impl Configuration {
         document.remove("terminal_font_size");
       }
     }
-    if config.gateway.omp != self.config.gateway.omp
-      || config.gateway.model != self.config.gateway.model
-      || config.gateway.sessions_dir != self.config.gateway.sessions_dir
-    {
-      if !document.contains_key("gateway") {
-        document["gateway"] = toml_edit::Item::Table(toml_edit::Table::new());
-      }
-      let gateway = document["gateway"]
-        .as_table_like_mut()
-        .ok_or_else(|| eyre!("gateway must be a TOML table"))?;
-      if config.gateway.omp != self.config.gateway.omp {
-        let omp = config.gateway.omp.to_str().ok_or_else(|| eyre!("omp path is not valid UTF-8"))?;
-        set_table_value(gateway, "omp", Some(omp));
-      }
-      if config.gateway.model != self.config.gateway.model {
-        set_table_value(gateway, "model", config.gateway.model.as_deref());
-      }
-      if config.gateway.sessions_dir != self.config.gateway.sessions_dir {
-        let sessions = config
-          .gateway
-          .sessions_dir
-          .as_ref()
-          .map(|path| path.to_str().ok_or_else(|| eyre!("sessions directory is not valid UTF-8")))
-          .transpose()?;
-        set_table_value(gateway, "sessions_dir", sessions);
-      }
-    }
     let parent = target
       .parent()
       .filter(|path| !path.as_os_str().is_empty())
@@ -391,7 +350,7 @@ impl Configuration {
       std::process::id(),
       std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos()
     ));
-    let write_result = (|| -> eyre::Result<(AppConfig, Settings)> {
+    let write_result = (|| -> eyre::Result<AppConfig> {
       let mut options = std::fs::OpenOptions::new();
       options.write(true).create_new(true);
       #[cfg(unix)]
@@ -413,18 +372,16 @@ impl Configuration {
         .map(|path| if path == &self.path { temporary.clone() } else { path.clone() })
         .collect();
       let effective = load(self.flags.clone(), &files)?;
-      let gateway = settings(effective.clone(), &self.home, |name| std::env::var_os(name))?;
+      validate_endpoint(&effective.endpoint)?;
       Appearance::parse(&effective.appearance)?;
       validate_themes(&effective)?;
       std::fs::rename(&temporary, &target)?;
-      Ok((effective, gateway))
+      Ok(effective)
     })();
     if write_result.is_err() && temporary.exists() {
       std::fs::remove_file(&temporary)?;
     }
-    let (effective, gateway) = write_result?;
-    self.config = effective;
-    self.gateway = gateway;
+    self.config = write_result?;
     Ok(())
   }
 }
@@ -458,30 +415,11 @@ fn set_table_value(table: &mut dyn toml_edit::TableLike, key: &str, value: Optio
     }
   }
 }
-/// Converts the loaded config once. Only checks syntax: the endpoint is a WebSocket URL, and a remote endpoint is not
-/// combined with settings of an embedded gateway.
-fn settings(config: AppConfig, home: &Path, var: impl Fn(&str) -> Option<OsString>) -> eyre::Result<Settings> {
-  match config.endpoint {
-    Some(endpoint) => {
-      if !matches!(endpoint.scheme(), "ws" | "wss") {
-        bail!("`endpoint` must be a ws:// or wss:// URL, not {}://", endpoint.scheme());
-      }
-      if config.gateway.model.is_some() || config.gateway.sessions_dir.is_some() {
-        bail!(
-          "`endpoint` connects to a running gateway, which is configured where it runs; remove `gateway.model` and `gateway.sessions_dir`"
-        );
-      }
-      Ok(Settings::Remote(endpoint))
-    }
-    None => Ok(Settings::Embedded {
-      omp: config.gateway.omp,
-      model: config.gateway.model,
-      sessions_dir: config
-        .gateway
-        .sessions_dir
-        .unwrap_or_else(|| alvin_gateway::sessions_dir(var, home)),
-    }),
+fn validate_endpoint(endpoint: &Url) -> eyre::Result<()> {
+  if !matches!(endpoint.scheme(), "ws" | "wss") {
+    bail!("`endpoint` must be a ws:// or wss:// URL, not {}://", endpoint.scheme());
   }
+  Ok(())
 }
 
 #[cfg(test)]
@@ -518,23 +456,17 @@ mod tests {
     <AppConfig as confique::Config>::Layer::empty()
   }
 
-  fn no_env(_: &str) -> Option<OsString> {
-    None
-  }
-
   #[test]
   fn saving_preserves_comments_and_other_settings() {
     let tmp = Scratch::new();
     let path = tmp.file(
       "config.toml",
-      "# header\nappearance = 'system' # theme\n[gateway]\nomp = '/opt/omp' # executable\nmodel = 'provider/model'\n",
+      "# header\nappearance = 'system' # theme\nendpoint = 'ws://localhost:7410' # server\n",
     );
     let files = vec![path.clone()];
     let config = load(no_flags(), &files).unwrap();
-    let gateway = embedded(config.clone());
     let mut configuration = Configuration {
       config,
-      gateway,
       path: path.clone(),
       files,
       flags: no_flags(),
@@ -546,8 +478,7 @@ mod tests {
     let saved = std::fs::read_to_string(path).unwrap();
     assert!(saved.contains("# header"));
     assert!(saved.contains("# theme"));
-    assert!(saved.contains("omp = '/opt/omp' # executable"));
-    assert!(saved.contains("model = 'provider/model'"));
+    assert!(saved.contains("endpoint = 'ws://localhost:7410' # server"));
     assert_eq!(configuration.config.appearance, "dark");
   }
 
@@ -578,7 +509,7 @@ mod tests {
   #[test]
   fn color_choices_default_persist_reload_and_obey_flags() {
     for &choice in COLOR_CHOICES.iter().chain([&ColorChoice::ACCENT]) {
-      assert_eq!(choice.as_str().parse::<ColorChoice>().unwrap(), choice);
+      assert_eq!(choice.to_string().parse::<ColorChoice>().unwrap(), choice);
     }
     let tmp = Scratch::new();
     let path = tmp.file("config.toml", "# retained\n");
@@ -590,7 +521,7 @@ mod tests {
     next.user_message_color = ColorChoice::ACCENT;
     configuration.save(next).unwrap();
     let reloaded = Configuration::for_test(path.clone()).unwrap();
-    assert_eq!(reloaded.config.accent_color.as_str(), "function");
+    assert_eq!(reloaded.config.accent_color.to_string(), "function");
     assert_eq!(reloaded.config.user_message_color, ColorChoice::ACCENT);
     let mut flags = no_flags();
     flags.accent_color = Some(ColorChoice::MODULE);
@@ -600,15 +531,61 @@ mod tests {
   }
 
   #[test]
+  fn custom_colors_round_trip_and_reject_invalid_hex() {
+    for (input, expected) in [
+      ("#123AbC", "#123abc"),
+      ("#123abcff", "#123abc"),
+      ("#123ABC80", "#123abc80"),
+      ("#00000000", "#00000000"),
+    ] {
+      let choice: ColorChoice = input.parse().unwrap();
+      assert_eq!(choice.to_string(), expected);
+      assert_eq!(ColorChoice::from_color(choice.color().unwrap()), choice);
+      assert_eq!(choice.style_key(), None);
+      let json = serde_json::to_string(&choice).unwrap();
+      assert_eq!(serde_json::from_str::<ColorChoice>(&json).unwrap(), choice);
+    }
+    for input in ["#123", "#12345", "#1234567", "#123456789", "#12345g", "#+12345", "#é1234", "123456"] {
+      assert!(input.parse::<ColorChoice>().is_err(), "{input}");
+    }
+  }
+
+  #[test]
+  fn custom_colors_save_reload_and_preserve_flag_precedence() {
+    let tmp = Scratch::new();
+    let path = tmp.file("config.toml", "# retained\n");
+    let mut configuration = Configuration::for_test(path.clone()).unwrap();
+    let mut next = configuration.config.clone();
+    next.accent_color = "#123abc80".parse().unwrap();
+    next.user_message_color = "#fedcba00".parse().unwrap();
+    configuration.save(next).unwrap();
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains("#123abc80"));
+    assert!(saved.contains("#fedcba00"));
+    let reloaded = Configuration::for_test(path.clone()).unwrap();
+    assert_eq!(reloaded.config.accent_color.to_string(), "#123abc80");
+    assert_eq!(reloaded.config.user_message_color.to_string(), "#fedcba00");
+    let mut flags = no_flags();
+    flags.accent_color = Some("#aabbcc".parse().unwrap());
+    assert_eq!(
+      load(flags, std::slice::from_ref(&path)).unwrap().accent_color.to_string(),
+      "#aabbcc"
+    );
+
+    let mut invalid = configuration.config.clone();
+    invalid.accent_color = ColorChoice::ACCENT;
+    assert!(configuration.save(invalid).is_err());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), saved);
+  }
+
+  #[test]
   fn theme_preferences_persist_and_invalid_names_are_rejected() {
     let tmp = Scratch::new();
     let path = tmp.file("config.toml", "# retained\n");
     let files = vec![path.clone()];
     let config = load(no_flags(), &files).unwrap();
-    let gateway = embedded(config.clone());
     let mut configuration = Configuration {
       config,
-      gateway,
       path: path.clone(),
       files,
       flags: no_flags(),
@@ -635,53 +612,31 @@ mod tests {
     let path = tmp.file("config.toml", contents);
     let files = vec![path.clone()];
     let config = load(no_flags(), &files).unwrap();
-    let gateway = embedded(config.clone());
     let mut configuration = Configuration {
       config,
-      gateway,
       path: path.clone(),
       files,
       flags: no_flags(),
       home: tmp.0.clone(),
     };
     let mut next = configuration.config.clone();
-    next.endpoint = Some("https://example.com".parse().unwrap());
+    next.endpoint = "https://example.com".parse().unwrap();
     assert!(configuration.save(next).is_err());
     assert_eq!(std::fs::read_to_string(path).unwrap(), contents);
   }
 
-  fn embedded(config: AppConfig) -> Settings {
-    settings(config, Path::new("/home/me"), no_env).unwrap()
-  }
-
   #[test]
-  fn with_no_source_at_all_the_app_embeds_a_gateway_over_omps_default_sessions() {
+  fn default_endpoint_and_source_precedence() {
     let tmp = Scratch::new();
     let config = load(no_flags(), &[tmp.0.join("absent.toml")]).unwrap();
-    assert_eq!(
-      embedded(config),
-      Settings::Embedded {
-        omp: PathBuf::from("omp"),
-        model: None,
-        sessions_dir: PathBuf::from("/home/me/.omp/agent/sessions"),
-      }
-    );
-  }
-
-  #[test]
-  fn an_earlier_file_wins_over_a_later_one_and_flags_win_over_both() {
-    let tmp = Scratch::new();
-    let first = tmp.file("first.toml", "[gateway]\nmodel = \"zai/first\"\n");
-    let second = tmp.file("second.toml", "[gateway]\nmodel = \"zai/second\"\nomp = \"/opt/omp\"\n");
+    assert_eq!(config.endpoint.as_str(), "ws://127.0.0.1:7410/");
+    let first = tmp.file("first.toml", "endpoint = 'wss://first.example'\n");
+    let second = tmp.file("second.toml", "endpoint = 'ws://second.example'\n");
     let files = [first, second];
-
-    let config = load(no_flags(), &files).unwrap();
-    assert_eq!(config.gateway.model.as_deref(), Some("zai/first"));
-    assert_eq!(config.gateway.omp, PathBuf::from("/opt/omp"));
-
+    assert_eq!(load(no_flags(), &files).unwrap().endpoint.as_str(), "wss://first.example/");
     let mut flags = no_flags();
-    flags.gateway.model = Some("zai/flag".to_owned());
-    assert_eq!(load(flags, &files).unwrap().gateway.model.as_deref(), Some("zai/flag"));
+    flags.endpoint = Some("ws://flag.example".parse().unwrap());
+    assert_eq!(load(flags, &files).unwrap().endpoint.as_str(), "ws://flag.example/");
   }
 
   #[test]
@@ -707,67 +662,11 @@ mod tests {
   }
 
   #[test]
-  fn an_endpoint_selects_a_remote_gateway() {
+  fn endpoint_rejects_invalid_and_non_websocket_urls() {
     let tmp = Scratch::new();
-    let file = tmp.file("remote.toml", "endpoint = \"ws://127.0.0.1:7410\"\n");
-    let config = load(no_flags(), &[file]).unwrap();
-    assert_eq!(embedded(config), Settings::Remote("ws://127.0.0.1:7410".parse().unwrap()));
-  }
-
-  #[test]
-  fn an_endpoint_must_be_a_websocket_url() {
-    let tmp = Scratch::new();
-    let file = tmp.file("http.toml", "endpoint = \"http://127.0.0.1:7410\"\n");
-    let config = load(no_flags(), &[file]).unwrap();
-    let error = settings(config, Path::new("/home/me"), no_env).unwrap_err();
-    assert!(error.to_string().contains("ws://"), "{error}");
-  }
-
-  #[test]
-  fn an_endpoint_together_with_embedded_gateway_keys_is_an_error_naming_both() {
-    let tmp = Scratch::new();
-    for key in ["model = \"zai/x\"", "sessions_dir = \"/s\""] {
-      let file = tmp.file("conflict.toml", &format!("endpoint = \"ws://127.0.0.1:7410\"\n[gateway]\n{key}\n"));
-      let config = load(no_flags(), &[file]).unwrap();
-      let error = settings(config, Path::new("/home/me"), no_env).unwrap_err().to_string();
-      assert!(
-        error.contains("endpoint") && error.contains("gateway.model") && error.contains("gateway.sessions_dir"),
-        "{error}"
-      );
+    for value in ["http://example.com", "not a url"] {
+      let file = tmp.file("invalid.toml", &format!("endpoint = '{value}'\n"));
+      assert!(Configuration::for_test(file).is_err());
     }
-  }
-
-  #[test]
-  fn a_configured_sessions_directory_overrides_omps_rules() {
-    let tmp = Scratch::new();
-    let file = tmp.file("dir.toml", "[gateway]\nsessions_dir = \"/srv/sessions\"\n");
-    let config = load(no_flags(), &[file]).unwrap();
-    let vars = |name: &str| (name == "PI_CODING_AGENT_DIR").then(|| OsString::from("/srv/agent"));
-    assert_eq!(
-      settings(config, Path::new("/home/me"), vars).unwrap(),
-      Settings::Embedded {
-        omp: PathBuf::from("omp"),
-        model: None,
-        sessions_dir: PathBuf::from("/srv/sessions"),
-      }
-    );
-  }
-
-  #[test]
-  fn omps_environment_decides_the_sessions_directory_when_none_is_configured() {
-    let tmp = Scratch::new();
-    let config = load(no_flags(), &[tmp.0.join("absent.toml")]).unwrap();
-    let vars = |name: &str| (name == "PI_CODING_AGENT_DIR").then(|| OsString::from("/srv/agent"));
-    let Settings::Embedded { sessions_dir, .. } = settings(config, Path::new("/home/me"), vars).unwrap() else {
-      panic!("expected an embedded gateway");
-    };
-    assert_eq!(sessions_dir, PathBuf::from("/srv/agent/sessions"));
-  }
-
-  #[test]
-  fn an_embedded_gateway_gets_its_settings() {
-    let config = gateway_config(Path::new("/opt/omp"), Some("zai/x"), Path::new("/s"));
-    assert_eq!(config.sessions_dir, PathBuf::from("/s"));
-    assert_eq!(config.default_model.as_deref(), Some("zai/x"));
   }
 }

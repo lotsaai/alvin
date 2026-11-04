@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+#MISE description="Reject server dependencies in client production graphs"
+#MISE sources=["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml", ".config/hakari.toml", ".mise/tasks/check-boundaries"]
+
+set -euo pipefail
+
+for package in alvin-client alvin-conversation-ui alvin-app; do
+	dependencies=$(cargo tree --locked --quiet -p "$package" --target all --edges normal,build --prefix none)
+	if grep -E '^(alvin-gateway|alvin-omp-host|alvin-session-index|omp-rpc|jsonrpsee-server|code-workspace) v' <<<"$dependencies"; then
+		echo "$package must not depend on server implementation crates outside dev-dependencies" >&2
+		exit 1
+	fi
+done

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+#MISE description="Run checks, tests, and compatibility verification"
+#MISE depends=["check", "test", "check-boundaries"]
+
+set -euo pipefail
+
+mise run generate:omp-wire -- --check
+
+omp_version=$(bun -e 'console.log(JSON.parse(await Bun.file("package.json").text()).devDependencies["@oh-my-pi/pi-coding-agent"])')
+if ! grep -q "tag = \"v${omp_version}\"" crates/alvin-omp-host/Cargo.toml; then
+	echo "crates/alvin-omp-host/Cargo.toml: the omp-rpc tag must be v${omp_version}, the version pinned in package.json" >&2
+	exit 1
+fi

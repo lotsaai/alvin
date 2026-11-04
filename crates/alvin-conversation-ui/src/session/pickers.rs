@@ -7,7 +7,7 @@ use alvin_conversation::LiveView;
 use alvin_protocol::{LiveSessionId, ModelInfo, ThinkingLevel};
 use gpui_kit::component::searchable_list::SearchableListItem;
 use gpui_kit::component::select::{Select, SelectEvent, SelectState};
-use gpui_kit::component::{Sizable as _, h_flex};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex};
 use gpui_kit::{
   App, AppContext as _, Context, Entity, IntoElement, ParentElement as _, SharedString, Styled as _, Subscription, Window, div, rems,
 };
@@ -145,13 +145,14 @@ impl Pickers {
   }
 
   /// Compact model and thinking controls for the composer toolbar.
-  pub(crate) fn view(&self) -> impl IntoElement {
+  pub(crate) fn view(&self, cx: &App) -> impl IntoElement {
     h_flex()
       .flex_1()
-      .min_w(rems(10.))
+      .flex_wrap()
+      .min_w(rems(16.))
       .gap_1()
       .child(
-        div().flex_1().min_w_0().max_w(rems(16.)).child(
+        div().w(rems(16.)).flex_shrink_0().child(
           Select::new(&self.models)
             .id("model-picker")
             .accessibility_label("Model")
@@ -161,13 +162,19 @@ impl Pickers {
         ),
       )
       .child(
-        div().w(rems(7.)).min_w_0().child(
-          Select::new(&self.levels)
-            .id("thinking-picker")
-            .accessibility_label("Thinking level")
-            .xsmall()
-            .appearance(false),
-        ),
+        h_flex()
+          .flex_shrink_0()
+          .gap_1()
+          .child(div().text_sm().text_color(cx.theme().muted_foreground).child("Thinking"))
+          .child(
+            div().w(rems(7.)).flex_shrink_0().child(
+              Select::new(&self.levels)
+                .id("thinking-picker")
+                .accessibility_label("Thinking level")
+                .xsmall()
+                .appearance(false),
+            ),
+          ),
       )
   }
 }

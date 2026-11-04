@@ -1,0 +1,98 @@
+//! OpenTelemetry traces, metrics and logs exported over OTLP.
+//!
+//! The three SDK providers are built here, not by `init-tracing-opentelemetry`'s `Guard`, because its drop discards
+//! every flush error. [`Telemetry::shutdown`] flushes each provider and logs what fails.
+
+use std::io;
+
+use init_tracing_opentelemetry::Error;
+use init_tracing_opentelemetry::otlp::{logs, metrics, traces};
+use init_tracing_opentelemetry::resource::DetectResource;
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
+use opentelemetry_sdk::error::OTelSdkResult;
+use opentelemetry_sdk::logs::SdkLoggerProvider;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{EnvFilter, Layer};
+
+use crate::Result;
+
+/// Which binary is exporting: the face passes its own name and version.
+#[derive(Debug, Clone, Copy)]
+pub struct Service {
+  /// `service.name`, unless `OTEL_SERVICE_NAME` overrides it.
+  pub name: &'static str,
+  /// `service.version`.
+  pub version: &'static str,
+}
+
+/// The running telemetry pipeline. Call [`Telemetry::shutdown`] before the process exits.
+#[must_use = "telemetry is only flushed by calling shutdown"]
+#[derive(Debug)]
+pub struct Telemetry {
+  tracer: SdkTracerProvider,
+  meter: SdkMeterProvider,
+  logger: SdkLoggerProvider,
+}
+
+impl Telemetry {
+  /// Builds the exporters and installs the global `tracing` subscriber. The exporter endpoint, protocol and sampling come
+  /// from the standard `OTEL_*` variables; the log filter from `ALVIN_LOG`, then `RUST_LOG`, else `info`. Call it outside
+  /// an async runtime: the OTLP HTTP exporter builds a blocking client.
+  ///
+  /// # Errors
+  /// Returns an error if an exporter, propagator, log filter, or global subscriber cannot be initialized.
+  pub fn init(service: &Service) -> Result<Self> {
+    let resource = DetectResource::default()
+      .with_fallback_service_name(service.name)
+      .with_fallback_service_version(service.version)
+      .build();
+    let tracer = traces::init_tracerprovider(resource.clone(), traces::identity).map_err(Error::from)?;
+    let meter = metrics::init_meterprovider(resource.clone(), metrics::identity).map_err(Error::from)?;
+    let logger = logs::init_loggerprovider(resource, logs::identity).map_err(Error::from)?;
+    init_tracing_opentelemetry::init_propagator()?;
+    opentelemetry::global::set_tracer_provider(tracer.clone());
+    opentelemetry::global::set_meter_provider(meter.clone());
+
+    let spec = std::env::var("ALVIN_LOG")
+      .or_else(|_| std::env::var("RUST_LOG"))
+      .unwrap_or_else(|_| "info".to_owned());
+    let filter = EnvFilter::try_new(spec)?;
+    let text = if cfg!(debug_assertions) {
+      tracing_subscriber::fmt::layer().pretty().with_writer(io::stderr).boxed()
+    } else {
+      tracing_subscriber::fmt::layer().json().with_writer(io::stderr).boxed()
+    };
+    let subscriber = tracing_subscriber::registry()
+      .with(filter)
+      .with(text)
+      .with(
+        tracing_opentelemetry::layer()
+          .with_error_records_to_exceptions(true)
+          .with_tracer(tracer.tracer(service.name)),
+      )
+      .with(OpenTelemetryTracingBridge::new(&logger));
+    tracing::subscriber::set_global_default(subscriber).map_err(Error::from)?;
+
+    Ok(Self { tracer, meter, logger })
+  }
+
+  /// Flushes and shuts down traces, metrics, then logs. A failure is logged and does not stop the remaining providers.
+  pub fn shutdown(self) {
+    report("traces", "flush", self.tracer.force_flush());
+    report("traces", "shutdown", self.tracer.shutdown());
+    report("metrics", "flush", self.meter.force_flush());
+    report("metrics", "shutdown", self.meter.shutdown());
+    // Logs go last so the failures above still reach the log exporter.
+    report("logs", "flush", self.logger.force_flush());
+    report("logs", "shutdown", self.logger.shutdown());
+  }
+}
+
+fn report(signal: &'static str, step: &'static str, result: OTelSdkResult) {
+  if let Err(error) = result {
+    tracing::error!(signal, step, %error, "telemetry {step} failed");
+  }
+}

@@ -7,7 +7,7 @@ fnox-env = "https://github.com/jdx/mise-env-fnox"
 experimental = true
 lockfile = true
 env_shell_expand = true
-npm.package_manager = "pnpm"
+npm.package_manager = "bun"
 idiomatic_version_file_enable_tools = ["rust"]
 # rust.cargo_home =".cache/native/cargo"
 # rust.rustup_home = ".cache/native/rustup"
@@ -30,6 +30,27 @@ rust = { version = "latest", profile = "default", components = "llvm-tools,rust-
 uv = "latest"
 python = "3.14"
 yamllint = "latest"
+watchexec = "latest"
+
+[daemons.gateway]
+task = "gateway"
+ready_port = 7410
+watch = [
+  "Cargo.toml",
+  "Cargo.lock",
+  "crates/alvin-gateway/**/*.rs",
+  "crates/alvin-gateway/Cargo.toml",
+  "crates/alvin-omp-host/**/*.rs",
+  "crates/alvin-omp-host/Cargo.toml",
+  "crates/alvin-session-index/**/*.rs",
+  "crates/alvin-session-index/Cargo.toml",
+  "crates/alvin-protocol/**/*.rs",
+  "crates/alvin-protocol/Cargo.toml",
+  "crates/alvin-telemetry/**/*.rs",
+  "crates/alvin-telemetry/Cargo.toml",
+  "crates/alvin-workspace-hack/Cargo.toml",
+  ".mise/tasks/gateway",
+]
 
 [env]
 _.file = ".env"

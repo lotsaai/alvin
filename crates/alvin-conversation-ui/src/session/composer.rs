@@ -1,4 +1,4 @@
-//! The composer: Enter sends, Shift+Enter inserts a newline.
+//! One retained markdown editor, compact for chat or expanded for long drafts.
 //!
 //! What the user types goes to omp unchanged, except a leading `!`, which runs the rest as a shell command. omp expands `/`
 //! commands, skills, templates and `^model` itself; nothing here parses them. The text is edited as markdown.
@@ -8,7 +8,7 @@ use std::rc::Rc;
 use alvin_protocol::{AvailableSlashCommand, LiveSessionId};
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::input::{CompletionProvider, Editor, EditorState, InputEvent, Rope};
-use gpui_kit::{App, AppContext as _, Context, Entity, Pixels, Result, Task, Window, rems};
+use gpui_kit::{App, AppContext as _, Context, Entity, Pixels, Result, Task, Window, relative, rems};
 use lsp_types::{CompletionContext, CompletionItem, CompletionResponse, CompletionTextEdit, Position, Range, TextEdit};
 
 use super::markdown;
@@ -20,6 +20,14 @@ const MAX_ROWS: usize = 8;
 
 /// An editor leads its rows at this multiple of its font size.
 const LINE_HEIGHT: f32 = 1.5;
+
+/// The editor's local layout. Changing it never replaces its editing state.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum Layout {
+  #[default]
+  Compact,
+  Expanded,
+}
 
 /// The composer's editor: soft-wrapped markdown without a gutter, where Enter submits and a leading `/` offers the session's
 /// slash commands.
@@ -108,11 +116,10 @@ pub(crate) struct Submission {
   pub(crate) follow_up: bool,
 }
 
-/// What the user asked for when the composer reported an event: Enter, with or without the secondary key, on something other
-/// than whitespace. Shift+Enter inserts a newline and sends nothing.
-pub(crate) fn submitted(event: &InputEvent, state: &Entity<EditorState>, cx: &App) -> Option<Submission> {
+/// Expanded editing sends only with the secondary key. Shift+Enter never sends.
+pub(crate) fn submitted(event: &InputEvent, state: &Entity<EditorState>, layout: Layout, cx: &App) -> Option<Submission> {
   match event {
-    InputEvent::PressEnter { shift: false, secondary } => {
+    InputEvent::PressEnter { shift: false, secondary } if layout == Layout::Compact || *secondary => {
       let text = state.read(cx).value();
       let text = text.trim_end();
       (!text.trim().is_empty()).then(|| Submission {
@@ -124,18 +131,19 @@ pub(crate) fn submitted(event: &InputEvent, state: &Entity<EditorState>, cx: &Ap
   }
 }
 
-/// The element for the composer's state. An editor has no auto-grow, so its height follows the wrapped rows the last layout
-/// counted, between [`MIN_ROWS`] and [`MAX_ROWS`].
-pub(crate) fn view(state: &Entity<EditorState>, window: &Window, cx: &App) -> Editor {
-  let rows = state.read(cx).display_map().wrap_row_count().clamp(MIN_ROWS, MAX_ROWS);
-  let row: Pixels = cx.theme().mono_font_size * LINE_HEIGHT;
-  // The editor's own vertical padding on top of its rows.
-  let padding = rems(1.).to_pixels(window.rem_size());
-  Editor::new(state)
-    .h(row * rows as f32 + padding)
-    .appearance(false)
-    .bordered(false)
-    .aria_label("Message")
+/// The same editor grows to the content viewport or follows its wrapped rows in compact mode.
+pub(crate) fn view(state: &Entity<EditorState>, layout: Layout, window: &Window, cx: &App) -> Editor {
+  let editor = Editor::new(state);
+  let editor = if layout == Layout::Expanded {
+    editor.h(relative(1.))
+  } else {
+    let rows = state.read(cx).display_map().wrap_row_count().clamp(MIN_ROWS, MAX_ROWS);
+    let row: Pixels = cx.theme().mono_font_size * LINE_HEIGHT;
+    // Match the native editor's vertical padding.
+    let padding = rems(1.).to_pixels(window.rem_size());
+    editor.h(row * rows as f32 + padding)
+  };
+  editor.appearance(false).bordered(false).aria_label("Message")
 }
 
 #[cfg(test)]

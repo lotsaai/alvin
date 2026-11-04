@@ -4,9 +4,7 @@ resolver = "2"
 
 platforms = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
 
-# alvin-protocol, alvin-client and alvin-conversation are the wasm32 boundary; alvin-conversation-ui stays out too, so
-# the gateway's native features are not unified into the views. The hack crate unifies the gateway's native features
-# (tokio `net` pulls in mio, which does not build for wasm32; jsonrpsee `server`), so these stay out of its
-# graph and never depend on it.
+# Client-facing crates stay outside gateway feature unification.
+# The shared telemetry pipeline must not pull the server feature graph into the desktop.
 [traversal-excludes]
-workspace-members = ["alvin-protocol", "alvin-client", "alvin-conversation", "alvin-conversation-ui"]
+workspace-members = ["alvin-protocol", "alvin-client", "alvin-conversation", "alvin-conversation-ui", "alvin-app", "alvin-telemetry"]

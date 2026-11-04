@@ -6,16 +6,21 @@ mod composer;
 mod dialogs;
 mod history_tree;
 mod markdown;
+mod message_chrome;
 mod pickers;
 mod queue;
 mod status;
+mod timeline;
 mod tool_card;
 mod transcript;
 
 pub use markdown::refresh_markdown_theme;
+pub(crate) use timeline::init as init_timeline;
 pub use transcript::UserMessageColors;
 
 use std::cell::Cell;
+use std::rc::Rc;
+use std::time::Duration;
 
 use alvin_protocol::{LiveSessionId, WidgetPlacement};
 use gpui_kit::base::StyledExt as _;
@@ -23,14 +28,15 @@ use gpui_kit::base::TestSupportExt as _;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::dialog::{DialogFooter, DialogHeader, DialogTitle};
-use gpui_kit::component::input::{EditorState, Input, InputEvent, InputState};
+use gpui_kit::component::input::{EditorState, Enter, Escape, Input, InputEvent, InputState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::message_scroller::MessageScrollerState;
+use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, IconName, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-  AnyElement, App, AppContext as _, Context, ElementId, Entity, Focusable as _, InteractiveElement as _, IntoElement, ParentElement as _,
-  Render, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div,
+  Anchor, AnyElement, App, AppContext as _, Context, ElementId, Entity, FocusHandle, Focusable as _, InteractiveElement as _, IntoElement,
+  ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, canvas, div,
 };
 
 use crate::actions::{Abort, SESSION_CONTEXT};
@@ -39,6 +45,10 @@ use dialogs::Dialogs;
 use history_tree::HistoryTreeView;
 use pickers::Pickers;
 use status::Banner;
+use timeline::ConversationTimeline;
+
+/// Keep the transcript's comfortable text lane when history is shown alongside it.
+const HISTORY_INLINE_MIN_WIDTH_REM: f32 = 80.;
 
 /// A live session's view. Holds only local view state: scroll position, the composer and how many rows the scroller was
 /// last told about. Everything else is read from the model.
@@ -47,15 +57,18 @@ pub(crate) struct SessionView {
   model: Entity<Model>,
   scroller: Entity<MessageScrollerState>,
   composer: Entity<EditorState>,
+  composer_layout: composer::Layout,
+  timeline: Entity<ConversationTimeline>,
   pickers: Pickers,
   dialogs: Dialogs,
   /// The history panel, whether it is open.
   history: Entity<HistoryTreeView>,
   history_open: bool,
-  context_open: bool,
+  history_inline: bool,
+  history_focus: FocusHandle,
   /// The name typed into the rename dialog.
   name: Entity<InputState>,
-  rows: usize,
+  rows: Rc<Vec<transcript::Row>>,
   _subscriptions: Vec<Subscription>,
 }
 
@@ -63,6 +76,18 @@ impl SessionView {
   /// An element id of this session: the same control in two tabs never shares one.
   fn id(&self, part: &str) -> ElementId {
     ElementId::from(SharedString::from(format!("{part}-{}", self.live.as_uuid())))
+  }
+
+  fn toggle_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    self.composer_layout = match self.composer_layout {
+      composer::Layout::Compact => composer::Layout::Expanded,
+      composer::Layout::Expanded => composer::Layout::Compact,
+    };
+    self.composer.update(cx, |state, cx| {
+      state.set_submit_on_enter(self.composer_layout == composer::Layout::Compact, cx);
+      state.focus(window, cx);
+    });
+    cx.notify();
   }
 
   /// While a turn runs, a button aborts it and sends what the composer holds in its place.
@@ -177,12 +202,14 @@ impl SessionView {
   pub(crate) fn new(model: Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut Context<Self>) -> Self {
     let composer = composer::state(&model, live, window, cx);
     let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
+    let timeline = cx.new(|cx| ConversationTimeline::new(scroller.clone(), window, cx));
     let pickers = Pickers::new(&model, live, window, cx);
     let dialogs = Dialogs::new();
     let history = cx.new(|cx| HistoryTreeView::new(model.clone(), live, window, cx));
     let name = cx.new(|cx| InputState::new(window, cx).placeholder("Session name"));
     let subscriptions = vec![
       cx.observe(&scroller, |_, _, cx| cx.notify()),
+      cx.observe(&timeline, |_, _, cx| cx.notify()),
       cx.subscribe_in(&model, window, |this, model, change: &ModelChange, window, cx| {
         if matches!(change, ModelChange::Session(live) if *live == this.live) {
           this.sync_rows(cx);
@@ -204,7 +231,7 @@ impl SessionView {
         if matches!(event, InputEvent::Change) {
           cx.notify();
         }
-        if let Some(submission) = composer::submitted(event, state, cx) {
+        if let Some(submission) = composer::submitted(event, state, this.composer_layout, cx) {
           this
             .model
             .update(cx, |model, cx| model.send(this.live, &submission.text, submission.follow_up, cx))
@@ -218,13 +245,16 @@ impl SessionView {
       model,
       scroller,
       composer,
+      composer_layout: composer::Layout::Compact,
+      timeline,
       pickers,
       dialogs,
       history,
       history_open: false,
-      context_open: true,
+      history_inline: false,
+      history_focus: cx.focus_handle().tab_stop(true),
       name,
-      rows: 0,
+      rows: Rc::new(Vec::new()),
       _subscriptions: subscriptions,
     };
     view.sync_rows(cx);
@@ -239,17 +269,21 @@ impl SessionView {
     let Some(view) = self.model.read(cx).conversation().live(self.live) else {
       return;
     };
-    let rows = transcript::row_count(view);
-    let previous = self.rows;
+    let rows = Rc::new(transcript::rows(view));
+    let previous = self.rows.len();
+    let count = rows.len();
     self.rows = rows;
+    self
+      .timeline
+      .update(cx, |timeline, cx| timeline.sync(self.live, &self.model, &self.rows, cx));
     self.scroller.update(cx, |scroller, cx| {
-      if rows > previous {
-        scroller.append(rows - previous, cx);
-      } else if rows < previous {
-        scroller.reset(rows, cx);
+      if count > previous {
+        scroller.append(count - previous, cx);
+      } else if count < previous {
+        scroller.reset(count, cx);
       }
-      if let Some(last) = rows.checked_sub(1) {
-        scroller.remeasure_items(last..rows, cx);
+      if count > 0 {
+        scroller.remeasure_items(previous.saturating_sub(1).min(count - 1)..count, cx);
       }
     });
   }
@@ -299,69 +333,77 @@ impl SessionView {
     )
   }
 
-  /// The session status and inspector controls.
+  /// The session status, including extension-provided entries.
   fn status_row(&self, cx: &Context<Self>) -> impl IntoElement {
     let (text, highlights) = ansi::parse(&self.status_line(cx));
     let line = SharedString::from(text);
-    let toggle_view = cx.entity();
+    h_flex().px_4().gap_2().child(
+      div()
+        .id(self.id("session-status"))
+        .test_support()
+        .flex_1()
+        .min_w_0()
+        .overflow_hidden()
+        .text_sm()
+        .text_color(cx.theme().muted_foreground)
+        .role(gpui_kit::Role::Status)
+        .aria_label(line.clone())
+        .child(gpui_kit::StyledText::new(line).with_highlights(highlights)),
+    )
+  }
+
+  fn session_header(&self, cx: &Context<Self>) -> impl IntoElement {
+    let history = self.history.clone();
     h_flex()
       .px_4()
       .gap_2()
+      .justify_end()
+      .when(self.composer_layout == composer::Layout::Compact, |header| {
+        header.children(self.timeline.read(cx).compact_menu(&self.timeline))
+      })
       .child(
-        div()
-          .id(self.id("session-status"))
-          .test_support()
-          .flex_1()
-          .min_w_0()
-          .overflow_hidden()
-          .text_sm()
-          .text_color(cx.theme().muted_foreground)
-          .role(gpui_kit::Role::Status)
-          .aria_label(line.clone())
-          .child(gpui_kit::StyledText::new(line).with_highlights(highlights)),
-      )
-      .child(
-        Button::new(self.id("history-toggle"))
-          .small()
-          .ghost()
-          .label("History")
-          .selected(self.history_open)
-          .on_click(move |_, _, cx| {
-            toggle_view.update(cx, |view, cx| {
-              view.history_open = !view.history_open;
-              cx.notify();
-            });
-          }),
-      )
-      .child(
-        Button::new(self.id("context-toggle"))
-          .small()
-          .ghost()
-          .label("Context")
-          .selected(self.context_open && !self.history_open)
-          .on_click(cx.listener(|this, _, _, cx| {
-            this.context_open = this.history_open || !this.context_open;
-            this.history_open = false;
+        Popover::new(self.id("history-popover"))
+          .anchor(Anchor::TopRight)
+          // Keep the same native popup state across width changes so it closes cleanly.
+          .open(self.history_open && !self.history_inline)
+          .trigger(
+            Button::new(self.id("history-toggle"))
+              .xsmall()
+              .ghost()
+              .label("History")
+              .selected(self.history_open)
+              .track_focus(&self.history_focus),
+          )
+          .on_open_change(cx.listener(|this, open, window, cx| {
+            this.history_open = if this.history_inline { !this.history_open } else { *open };
+            if this.history_inline || !*open {
+              this.history_focus.focus(window, cx);
+            }
             cx.notify();
-          })),
+          }))
+          .content(move |_, _, _| {
+            div()
+              .id("history-overlay")
+              .test_support()
+              .w(gpui_kit::rems(20.))
+              .h(gpui_kit::rems(28.))
+              .child(history.clone())
+          }),
       )
   }
 
   /// Session context alongside the transcript, derived from the same live state as the controls.
-  fn context_panel(&self, cx: &App) -> impl IntoElement {
+  fn context_panel(&self, cx: &App) -> impl IntoElement + use<> {
     let model = self.model.read(cx);
     let view = model.conversation().live(self.live);
     let mut panel = v_flex()
       .id(self.id("session-context"))
       .test_support()
-      .w(gpui_kit::rems(16.))
+      .w(gpui_kit::rems(18.))
+      .max_h(gpui_kit::rems(24.))
+      .overflow_y_scroll()
       .min_w_0()
-      .h_full()
-      .border_l_1()
-      .border_color(cx.theme().border)
-      .p_4()
       .gap_4()
-      .text_sm()
       .child(div().font_semibold().child("Session"));
     if let Some(view) = view {
       panel = panel.child(
@@ -388,6 +430,17 @@ impl SessionView {
           .gap_1()
           .child(div().text_color(cx.theme().muted_foreground).child("Messages"))
           .child(div().child(SharedString::from(view.total_messages.to_string()))),
+      );
+    }
+    if let Some(usage) = model.stats(self.live).and_then(|stats| stats.context_usage.as_ref()) {
+      panel = panel.child(
+        v_flex()
+          .gap_1()
+          .child(div().text_color(cx.theme().muted_foreground).child("Last reported context"))
+          .child(div().child(SharedString::from(format!(
+            "{} of {} tokens · {:.1}%",
+            usage.tokens, usage.context_window, usage.percent
+          )))),
       );
     }
     if let Some(stats) = model.stats(self.live) {
@@ -461,9 +514,48 @@ impl Render for SessionView {
         .and_then(|view| status::widgets(view, placement, cx))
     };
     let new_session = self.model.read(cx).is_new_session(live);
+    let expanded = self.composer_layout == composer::Layout::Expanded;
+    let context_label = self
+      .model
+      .read(cx)
+      .conversation()
+      .live(live)
+      .and_then(|view| view.model.as_ref())
+      .and_then(|model| model.context_window)
+      .filter(|window| *window > 0)
+      .map_or_else(|| "Context window unavailable".to_owned(), |window| format!("{window} tokens"));
+    let mut trigger_style = div().w_full();
+    let model = self.model.clone();
+    let view = cx.entity();
+    let context = Popover::new(self.id("context-popover"))
+      .anchor(Anchor::BottomLeft)
+      .trigger_style(trigger_style.style().clone())
+      .trigger(
+        Button::new(self.id("context-toggle"))
+          .small()
+          .ghost()
+          .w_full()
+          .accessibility_label("Show session context")
+          .child(
+            h_flex()
+              .w_full()
+              .justify_between()
+              .text_color(cx.theme().muted_foreground)
+              .child("Context")
+              .child(SharedString::from(context_label)),
+          ),
+      )
+      .on_open_change(move |open, _, cx| {
+        if *open {
+          model.update(cx, |model, cx| model.refresh_stats(live, cx)).detach();
+        }
+      })
+      .content(move |_, _, cx| view.read(cx).context_panel(cx).into_any_element());
     let dock = v_flex()
       .w_full()
-      .min_w_0()
+      .max_w(gpui_kit::rems(42.))
+      .min_h_0()
+      .when(expanded, |dock| dock.flex_1())
       .children(
         self
           .model
@@ -472,19 +564,39 @@ impl Render for SessionView {
           .live(live)
           .and_then(|view| queue::view(&self.model, live, &view.queue, cx)),
       )
-      .child(self.status_row(cx))
       .children(widgets(WidgetPlacement::AboveEditor))
       .child(
         v_flex()
-          .mx_2()
           .mb_2()
           .min_w_0()
           .gap_2()
+          .min_h_0()
+          .when(expanded, |editor| editor.flex_1())
           .rounded(cx.theme().radius)
           .border_1()
           .border_color(cx.theme().border)
-          .bg(cx.theme().background)
-          .child(composer::view(&self.composer, window, cx))
+          .bg(cx.theme().muted)
+          .child(context)
+          .child(
+            div()
+              .min_h_0()
+              .when(expanded, |editor| editor.flex_1())
+              .capture_action(cx.listener(|this, enter: &Enter, _, cx| {
+                // Native Enter still owns completion acceptance and newline insertion.
+                this.composer.update(cx, |state, cx| {
+                  state.set_submit_on_enter(this.composer_layout == composer::Layout::Compact || enter.secondary, cx);
+                });
+                cx.propagate();
+              }))
+              .on_action(cx.listener(|this, _: &Escape, window, cx| {
+                if this.composer_layout == composer::Layout::Expanded {
+                  this.toggle_composer(window, cx);
+                } else {
+                  cx.propagate();
+                }
+              }))
+              .child(composer::view(&self.composer, self.composer_layout, window, cx)),
+          )
           .child(
             h_flex()
               .flex_wrap()
@@ -492,13 +604,46 @@ impl Render for SessionView {
               .pb_2()
               .gap_2()
               .min_w_0()
-              .child(self.pickers.view())
+              .child(self.pickers.view(cx))
               .children(self.interrupt_button(cx))
+              .when(expanded, |toolbar| {
+                toolbar.child(
+                  div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(if cfg!(target_os = "macos") {
+                      "⌘Enter to send"
+                    } else {
+                      "Ctrl+Enter to send"
+                    }),
+                )
+              })
+              .child(div().flex_1())
+              .child(
+                Button::new(self.id("composer-expand"))
+                  .small()
+                  .ghost()
+                  .label(if expanded { "Collapse" } else { "Expand" })
+                  .accessibility_label(if expanded { "Collapse editor" } else { "Expand editor" })
+                  .on_click(cx.listener(|this, _, window, cx| this.toggle_composer(window, cx))),
+              )
               .child(self.send_button(cx)),
           ),
       )
-      .children(widgets(WidgetPlacement::BelowEditor));
-    let content = if new_session {
+      .children(widgets(WidgetPlacement::BelowEditor))
+      .child(self.status_row(cx));
+    let content = if expanded {
+      h_flex()
+        .items_stretch()
+        .flex_1()
+        .min_h_0()
+        .w_full()
+        .justify_center()
+        .px_4()
+        .pt_2()
+        .child(dock)
+        .into_any_element()
+    } else if new_session {
       v_flex()
         .flex_1()
         .min_h_0()
@@ -520,22 +665,89 @@ impl Render for SessionView {
       v_flex()
         .flex_1()
         .min_h_0()
-        .child(transcript::transcript(&self.model, live, &self.scroller))
-        .child(dock)
+        .child(
+          div()
+            .id(self.id("transcript-content"))
+            .test_support()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .child(transcript::transcript(&self.model, live, &self.scroller, self.rows.clone()))
+            .child(self.timeline.clone()),
+        )
+        .child(h_flex().w_full().justify_center().px_4().child(dock))
         .into_any_element()
     };
-    let column = v_flex().flex_1().min_w_0().h_full().children(self.banner(cx)).child(content);
+    let column = v_flex()
+      .id(self.id("session-main"))
+      .test_support()
+      .flex_1()
+      .min_w_0()
+      .h_full()
+      .child(self.session_header(cx))
+      .children(self.banner(cx))
+      .child(content);
+    let history_width = gpui_kit::base::motion::transition(
+      self.id("history-motion"),
+      if self.history_open && self.history_inline {
+        1.0_f32
+      } else {
+        0.0_f32
+      },
+      gpui_kit::base::motion::Transition::new(Duration::from_millis(180)),
+      window,
+      cx,
+    );
+    let history_width = if self.history_inline { history_width } else { 0. };
+    let owner = cx.entity();
+    let inline = self.history_inline;
+    let measure = canvas(
+      move |bounds, window, _| {
+        let next = bounds.size.width >= window.rem_size() * HISTORY_INLINE_MIN_WIDTH_REM;
+        if next != inline {
+          window.on_next_frame(move |window, cx| {
+            owner.update(cx, |this, cx| {
+              if this.history_inline != next {
+                this.history_inline = next;
+                if this.history_open {
+                  this.history_focus.focus(window, cx);
+                }
+                cx.notify();
+              }
+            });
+          });
+        }
+      },
+      |_, (), _, _| {},
+    )
+    .absolute()
+    .size_full();
     h_flex()
       .id(self.id("session"))
+      .relative()
       .key_context(SESSION_CONTEXT)
-      .on_action(cx.listener(move |this, _: &Abort, _, cx| {
-        this.model.update(cx, |model, cx| model.abort(live, cx)).detach();
+      .on_action(cx.listener(move |this, _: &Abort, window, cx| {
+        if this.composer_layout == composer::Layout::Expanded {
+          this.toggle_composer(window, cx);
+        } else {
+          this.model.update(cx, |model, cx| model.abort(live, cx)).detach();
+        }
       }))
       .items_stretch()
       .size_full()
       .child(column)
-      .children((self.context_open && !self.history_open).then(|| self.context_panel(cx)))
-      .children(self.history_open.then(|| self.history.clone()))
+      .child(measure)
+      .when(history_width > 0., |this| {
+        this.child(
+          div()
+            .w(gpui_kit::rems(20. * history_width))
+            .id("history-inline")
+            .test_support()
+            .h_full()
+            .overflow_hidden()
+            .child(self.history.clone()),
+        )
+      })
   }
 }
 
@@ -554,11 +766,23 @@ mod tests {
 
   use alvin_protocol::LiveSessionSummary;
   use gpui_kit::test::{TestAppContextExt as _, TestEventExt as _, TestQueryExt as _, TestWindowExt as _};
-  use gpui_kit::{AppContext as _, TestAppContext};
+  use gpui_kit::{AnyWindowHandle, AppContext as _, TestAppContext};
 
   use crate::test_support::{Opened, event, live_session, open_workspace};
 
   const BUDGET: Duration = Duration::from_secs(1);
+
+  /// Headless draws do not deliver native frame callbacks; drain their actual queue, including nested layout changes.
+  fn render_layout_frames(cx: &mut TestAppContext, handle: AnyWindowHandle) {
+    while cx
+      .update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.simulate_next_frame(cx)
+      })
+      .unwrap()
+      > 0
+    {}
+  }
 
   /// An open session in a window, over a gateway that answers nothing: a command the view sends is never answered.
   async fn opened_session(cx: &mut TestAppContext) -> (Opened, LiveSessionSummary) {
@@ -583,6 +807,269 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
+  async fn expanding_the_editor_preserves_editing_state_and_escape_keeps_the_turn_running(cx: &mut TestAppContext) {
+    use std::path::PathBuf;
+
+    use alvin_client::{ChannelPair, Client, Endpoint};
+    use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
+    use gpui_kit::{Bounds, Focusable as _, WindowBounds, WindowOptions, px, size};
+
+    use super::SessionView;
+    use crate::model::Model;
+
+    cx.update(gpui_kit::init);
+    cx.update(crate::init);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let directory = std::env::temp_dir().join(format!("alvin-composer-{}", alvin_protocol::EventId::new().as_uuid()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let gateway = Gateway::new(
+      GatewayConfig::builder()
+        .sessions_dir(directory.clone())
+        .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
+        .build(),
+    );
+    let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
+      .await
+      .unwrap();
+    let session = live_session(directory.to_str().unwrap());
+    let (handle, view, model) = cx.update(|cx| {
+      let model = cx.new(|cx| {
+        let mut model = Model::new(client, cx);
+        model.seed_open(&session, cx);
+        model
+      });
+      let (handle, view) = gpui_kit::open_window(
+        WindowOptions {
+          window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1100.), px(700.))))),
+          ..Default::default()
+        },
+        cx,
+        |window, cx| cx.new(|cx| SessionView::new(model.clone(), session.live, window, cx)),
+      )
+      .unwrap();
+      (handle, view, model)
+    });
+    let id = session.live.as_uuid();
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      let editor = window.find_by_label("Message").bounds();
+      window.pointer_down(editor.center(), gpui_kit::MouseButton::Left, cx);
+      window.pointer_up(editor.center(), gpui_kit::MouseButton::Left, cx);
+      window.input("# Plan", cx);
+      window.press("shift-left", cx);
+      let state = view.read(cx).composer.clone();
+      let selection = state.read(cx).selected_range();
+      window.click(format!("composer-expand-{id}"), cx);
+      assert_eq!(view.read(cx).composer, state);
+      assert_eq!(state.read(cx).selected_range(), selection);
+      assert!(state.focus_handle(cx).is_focused(window));
+      assert!(window.find_by_label("Message").bounds().size.height > editor.size.height);
+      assert!(window.find("model-picker").visible());
+      assert_eq!(window.find("model-picker").bounds().size.width, window.rem_size() * 16.);
+      assert_eq!(window.find("thinking-picker").bounds().size.width, window.rem_size() * 7.);
+      assert!(window.find(format!("session-send-{id}")).visible());
+      window.input("N", cx);
+      window.press("enter", cx);
+      window.input("second line", cx);
+      assert_eq!(state.read(cx).value().as_ref(), "# PlaN\nsecond line");
+      window.click(format!("composer-expand-{id}"), cx);
+      assert_eq!(state.read(cx).value().as_ref(), "# PlaN\nsecond line");
+      assert!(state.focus_handle(cx).is_focused(window));
+      window.press("secondary-z", cx);
+      assert_ne!(state.read(cx).value().as_ref(), "# PlaN\nsecond line");
+      window.press("secondary-shift-z", cx);
+      assert_eq!(state.read(cx).value().as_ref(), "# PlaN\nsecond line");
+      window.press("shift-enter", cx);
+      assert_eq!(state.read(cx).value().as_ref(), "# PlaN\nsecond line\n");
+      window.click(format!("composer-expand-{id}"), cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+      model.update(cx, |model, cx| {
+        model.seed_event(
+          &event(
+            session.live,
+            serde_json::json!({ "kind": "agent", "frame": { "type": "agent_start" } }),
+          ),
+          cx,
+        );
+      });
+    });
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      assert_eq!(window.find(format!("session-status-{id}")).label(), Some("working"));
+      window.press("escape", cx);
+      assert_eq!(window.find(format!("composer-expand-{id}")).label(), Some("Expand editor"));
+      assert_eq!(view.read(cx).composer_text(cx), "# PlaN\nsecond line\n");
+      assert_eq!(
+        model.read(cx).conversation().live(session.live).unwrap().run,
+        alvin_conversation::Run::Running,
+      );
+      assert!(view.read(cx).composer.focus_handle(cx).is_focused(window));
+    })
+    .unwrap();
+    let (history, composer, selection) = cx.update(|cx| {
+      let view = view.read(cx);
+      (view.history.clone(), view.composer.clone(), view.composer.read(cx).selected_range())
+    });
+    cx.update_window(handle, |_, window, cx| {
+      let width = window.find(format!("session-main-{id}")).bounds().size.width;
+      window.click(format!("history-toggle-{id}"), cx);
+      assert!(window.find("history-overlay").visible());
+      assert!(gpui_kit::base::GlobalState::is_in_deferred_context(cx));
+      assert!(window.try_find("history-inline").is_none());
+      assert_eq!(window.find(format!("session-main-{id}")).bounds().size.width, width);
+    })
+    .unwrap();
+    cx.simulate_window_resize(handle, size(px(1500.), px(700.)));
+    render_layout_frames(cx, handle);
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      assert!(window.find("history-inline").visible());
+      assert!(window.try_find("history-overlay").is_none());
+      assert!(!gpui_kit::base::GlobalState::is_in_deferred_context(cx));
+      assert_eq!(view.read(cx).history, history);
+      assert_eq!(view.read(cx).composer, composer);
+      assert_eq!(composer.read(cx).selected_range(), selection);
+      assert_eq!(composer.read(cx).value().as_ref(), "# PlaN\nsecond line\n");
+      assert!(view.read(cx).history_focus.is_focused(window));
+      let main = window.find(format!("session-main-{id}")).bounds();
+      let history = window.find("history-inline").bounds();
+      assert_eq!(history.size.width, window.rem_size() * 20.);
+      assert_eq!(main.size.width + history.size.width, window.viewport_size().width);
+      assert!(main.size.width >= window.rem_size() * 60.);
+      assert!(main.right() <= history.left());
+    })
+    .unwrap();
+    cx.simulate_window_resize(handle, size(px(900.), px(700.)));
+    render_layout_frames(cx, handle);
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      assert!(window.find("history-overlay").visible());
+      assert!(gpui_kit::base::GlobalState::is_in_deferred_context(cx));
+      assert!(window.try_find("history-inline").is_none());
+      assert_eq!(view.read(cx).history, history);
+      assert_eq!(view.read(cx).composer, composer);
+      assert_eq!(composer.read(cx).selected_range(), selection);
+      assert_eq!(composer.read(cx).value().as_ref(), "# PlaN\nsecond line\n");
+      assert_eq!(
+        window.find(format!("session-main-{id}")).bounds().size.width,
+        window.viewport_size().width,
+      );
+      let overlay = window.find("history-overlay").bounds();
+      assert_eq!(overlay.size.width, window.rem_size() * 20.);
+      assert!(overlay.left() >= gpui_kit::px(0.));
+      assert!(overlay.right() <= window.viewport_size().width);
+      window.press("escape", cx);
+      assert!(window.try_find("history-overlay").is_none());
+      assert!(!view.read(cx).history_open);
+      assert!(!gpui_kit::base::GlobalState::is_in_deferred_context(cx));
+      assert!(view.read(cx).history_focus.is_focused(window));
+      assert_eq!(
+        model.read(cx).conversation().live(session.live).unwrap().run,
+        alvin_conversation::Run::Running,
+      );
+    })
+    .unwrap();
+    cx.simulate_window_resize(handle, size(px(480.), px(700.)));
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      window.click(format!("composer-expand-{id}"), cx);
+      assert_eq!(view.read(cx).composer, composer);
+      assert_eq!(composer.read(cx).selected_range(), selection);
+      assert_eq!(composer.read(cx).value().as_ref(), "# PlaN\nsecond line\n");
+      assert!(composer.focus_handle(cx).is_focused(window));
+      assert_eq!(window.find("model-picker").bounds().size.width, window.rem_size() * 16.);
+      assert_eq!(window.find("thinking-picker").bounds().size.width, window.rem_size() * 7.);
+      let main = window.find(format!("session-main-{id}")).bounds();
+      for control in [
+        "model-picker".to_owned(),
+        "thinking-picker".to_owned(),
+        format!("session-interrupt-{id}"),
+        format!("composer-expand-{id}"),
+        format!("session-send-{id}"),
+      ] {
+        let control = window.find(control);
+        assert!(control.visible());
+        assert!(control.bounds().left() >= main.left());
+        assert!(control.bounds().right() <= main.right());
+        assert!(control.bounds().bottom() <= main.bottom());
+      }
+    })
+    .unwrap();
+    cx.update(|cx| {
+      model.update(cx, |model, cx| {
+        model.seed_messages(
+          session.live,
+          serde_json::from_str(include_str!("../fixtures/tools_turn.messages.json")).unwrap(),
+          cx,
+        );
+      });
+    });
+    cx.simulate_window_resize(handle, size(px(760.), px(800.)));
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      window.click(format!("composer-expand-{id}"), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    render_layout_frames(cx, handle);
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      let content = window.find(format!("transcript-content-{id}")).bounds();
+      let rem = window.rem_size();
+      assert_eq!(
+        content.size.width,
+        window.viewport_size().width,
+        "narrow content {content:?}, rem {rem:?}"
+      );
+      assert!(content.size.width < rem * 54., "narrow content {content:?}, rem {rem:?}");
+      assert!(window.try_find("conversation-timeline").is_none());
+      window.click("conversation-timeline-menu", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      let query = window.find_all_by_role(gpui_kit::Role::MenuItem).into_iter().next().unwrap();
+      window.pointer_down(query.bounds().center(), gpui_kit::MouseButton::Left, cx);
+      window.pointer_up(query.bounds().center(), gpui_kit::MouseButton::Left, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    render_layout_frames(cx, handle);
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      let queries = window.find("conversation-timeline-menu").bounds();
+      let transcript = window.find(format!("transcript-content-{id}")).bounds();
+      let first_message = window.within(format!("message-{id}-0")).find_by_label("Copy message").bounds();
+      assert!(queries.bottom() <= transcript.top());
+      assert!(queries.bottom() <= first_message.top());
+      assert!(first_message.top() >= transcript.top());
+    })
+    .unwrap();
+    cx.simulate_window_resize(handle, size(px(1100.), px(800.)));
+    render_layout_frames(cx, handle);
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      let content = window.find(format!("transcript-content-{id}")).bounds();
+      let rem = window.rem_size();
+      assert_eq!(
+        content.size.width,
+        window.viewport_size().width,
+        "wide content {content:?}, rem {rem:?}"
+      );
+      assert!(content.size.width >= rem * 54., "wide content {content:?}, rem {rem:?}");
+      assert!(window.find("conversation-timeline").visible());
+      assert!(window.try_find("conversation-timeline-menu").is_none());
+    })
+    .unwrap();
+    gateway.shutdown().await.unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[gpui_kit::test]
   async fn the_status_line_follows_the_run_and_the_session_shows_a_send_button(cx: &mut TestAppContext) {
     let executor = cx.foreground_executor().clone();
     executor.block_test(async {
@@ -591,7 +1078,7 @@ mod tests {
       cx.update_window(opened.handle, |_, window, _| {
         assert_eq!(window.find(format!("session-status-{id}")).label(), Some("idle"));
         assert_eq!(window.find(format!("session-send-{id}")).label(), Some("Send"));
-        assert!(window.find(format!("session-context-{id}")).visible());
+        assert!(window.try_find(format!("session-context-{id}")).is_none());
         let editor = window.find_by_label("Message").bounds();
         let model = window.find("model-picker").bounds();
         let send = window.find(format!("session-send-{id}")).bounds();
@@ -609,9 +1096,9 @@ mod tests {
         window.render_frame(cx);
         assert_eq!(window.find(format!("session-stop-{id}")).label(), Some("Stop"));
         window.click(format!("context-toggle-{id}"), cx);
-        assert!(window.try_find(format!("session-context-{id}")).is_none());
-        window.click(format!("context-toggle-{id}"), cx);
         assert!(window.find(format!("session-context-{id}")).visible());
+        window.press("escape", cx);
+        assert!(window.try_find(format!("session-context-{id}")).is_none());
         let editor = window.find_by_label("Message").bounds().center();
         window.pointer_down(editor, gpui_kit::MouseButton::Left, cx);
         window.pointer_up(editor, gpui_kit::MouseButton::Left, cx);
@@ -682,6 +1169,7 @@ mod tests {
     let executor = cx.foreground_executor().clone();
     executor.block_test(async {
       let (opened, session) = opened_session(cx).await;
+      cx.update(|cx| cx.set_reduce_motion(true));
       let id = session.live.as_uuid();
       cx.update_window(opened.handle, |_, window, cx| {
         assert!(window.try_find("history-tree").is_none());
@@ -698,10 +1186,6 @@ mod tests {
       .unwrap();
       cx.wait_for(opened.handle, BUDGET, |window, _| window.try_find("history-tree").is_none())
         .await;
-      cx.update_window(opened.handle, |_, window, _| {
-        assert!(window.find(format!("session-context-{id}")).visible());
-      })
-      .unwrap();
     });
   }
 

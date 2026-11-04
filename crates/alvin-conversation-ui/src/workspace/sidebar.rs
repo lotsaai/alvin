@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use alvin_conversation::{Run, SessionsKey, Workspace};
-use alvin_protocol::{CheckoutId, ProjectId, SessionCursor, SessionId};
+use alvin_protocol::{CheckoutId, LiveSessionId, ProjectId, SessionCursor, SessionId};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{StyledExt as _, TestSupportExt as _};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -52,14 +52,26 @@ enum Node {
     modified: i64,
     pinned: bool,
   },
+  Live {
+    live: LiveSessionId,
+    path: std::path::PathBuf,
+    session: Option<SessionId>,
+    project: String,
+    pinned: bool,
+  },
   /// Loads the next page of a checkout's sessions.
   More { key: SessionsKey, after: SessionCursor },
 }
 
 impl Node {
   fn is_active(&self, active: Option<&(Option<SessionId>, std::path::PathBuf)>) -> bool {
-    matches!(self, Self::Session { id, path, .. }
-      if active.is_some_and(|(session, file)| session.as_ref().map_or(path == file, |session| session == id)))
+    match self {
+      Self::Session { id, path, .. } => {
+        active.is_some_and(|(session, file)| session.as_ref().map_or(path == file, |session| session == id))
+      }
+      Self::Live { path, .. } => active.is_some_and(|(_, file)| path == file),
+      _ => false,
+    }
   }
 }
 
@@ -69,6 +81,7 @@ pub(crate) struct ProjectTree {
   tree: Entity<TreeState>,
   nodes: Rc<BTreeMap<SharedString, Node>>,
   active: Option<(Option<SessionId>, std::path::PathBuf)>,
+  active_live: Option<LiveSessionId>,
   preferences: ProjectPreferences,
   search: Entity<InputState>,
   search_trigger: FocusHandle,
@@ -88,6 +101,7 @@ enum Grouping {
 }
 
 impl EventEmitter<ProjectPreferences> for ProjectTree {}
+impl EventEmitter<LiveSessionId> for ProjectTree {}
 
 impl ProjectTree {
   pub(crate) fn new(model: Entity<Model>, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -96,7 +110,10 @@ impl ProjectTree {
     let subscriptions = vec![
       cx.subscribe(&model, |this, _, change: &ModelChange, cx| match change {
         ModelChange::Workspace => this.sync(cx),
-        ModelChange::SessionMetadata(_) => cx.notify(),
+        ModelChange::SessionMetadata(_) => {
+          this.built_from = None;
+          this.sync(cx);
+        }
         ModelChange::Connection | ModelChange::Session(_) => {}
       }),
       cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
@@ -111,6 +128,7 @@ impl ProjectTree {
       tree,
       nodes: Rc::default(),
       active: None,
+      active_live: None,
       preferences: ProjectPreferences::new(),
       search,
       search_trigger: cx.focus_handle().tab_stop(true),
@@ -140,10 +158,39 @@ impl ProjectTree {
       });
     let changed = self.built_from.as_ref() != Some(workspace);
     if changed {
-      let (items, nodes) = items(workspace, &self.preferences, &query, self.grouping);
+      let (mut items, mut nodes) = items(workspace, &self.preferences, &query, self.grouping);
+      merge_live_sessions(
+        self.model.read(cx),
+        &self.preferences,
+        &query,
+        self.grouping,
+        &mut items,
+        &mut nodes,
+      );
       self.built_from = Some(workspace.clone());
       self.nodes = Rc::new(nodes);
       self.tree.update(cx, |tree, cx| {
+        fn remember(item: &TreeItem, expanded: &mut BTreeMap<SharedString, bool>) {
+          expanded.insert(item.id.clone(), item.is_expanded());
+          for child in &item.children {
+            remember(child, expanded);
+          }
+        }
+        fn restore(items: &mut [TreeItem], expanded: &BTreeMap<SharedString, bool>) {
+          for item in items {
+            if let Some(value) = expanded.get(&item.id) {
+              *item = item.clone().expanded(*value);
+            }
+            restore(&mut item.children, expanded);
+          }
+        }
+        let mut expanded = BTreeMap::new();
+        for entry in (0..).map_while(|ix| tree.entry(ix)) {
+          if entry.is_root() {
+            remember(entry.item(), &mut expanded);
+          }
+        }
+        restore(&mut items, &expanded);
         let selected = tree.selected_item().cloned();
         tree.set_items(items, cx);
         tree.set_selected_item(selected.as_ref(), cx);
@@ -165,8 +212,14 @@ impl ProjectTree {
     cx.notify();
   }
 
-  pub(crate) fn set_active(&mut self, active: Option<(Option<SessionId>, std::path::PathBuf)>, cx: &mut Context<Self>) {
-    if self.active != active {
+  pub(crate) fn set_active(
+    &mut self,
+    live: Option<LiveSessionId>,
+    active: Option<(Option<SessionId>, std::path::PathBuf)>,
+    cx: &mut Context<Self>,
+  ) {
+    if self.active != active || self.active_live != live {
+      self.active_live = live;
       self.active = active;
       cx.notify();
     }
@@ -318,6 +371,138 @@ fn items(
     projects.extend(more);
   }
   (projects, nodes)
+}
+
+fn merge_live_sessions(
+  model: &Model,
+  preferences: &ProjectPreferences,
+  query: &str,
+  grouping: Grouping,
+  items: &mut Vec<TreeItem>,
+  nodes: &mut BTreeMap<SharedString, Node>,
+) {
+  for live in model.conversation().live_sessions() {
+    let Some((project, checkout)) = model.session_checkout(live.live) else {
+      continue;
+    };
+    let Some(summary) = model.conversation().workspace().projects().iter().find(|item| item.id == *project) else {
+      continue;
+    };
+    let Some(scope) = summary.checkouts.iter().find(|item| item.id == *checkout) else {
+      continue;
+    };
+    let preference = preferences.get(project.as_str());
+    if preference.is_some_and(|pref| pref.hidden) {
+      continue;
+    }
+    let session = model.session_id(live.live);
+    if session.is_some_and(|id| preference.is_some_and(|pref| pref.hidden_sessions.contains(id.as_str()))) {
+      continue;
+    }
+    let title = live.title.clone().unwrap_or_else(|| {
+      live
+        .cwd
+        .file_name()
+        .map_or_else(|| "session".to_owned(), |name| name.to_string_lossy().into_owned())
+    });
+    let indexed = nodes.iter().find_map(|(item_id, node)| match node {
+      Node::Session { id, path, .. } if session == Some(id) || (!live.file.as_os_str().is_empty() && *path == live.file) => {
+        Some(item_id.clone())
+      }
+      _ => None,
+    });
+    if let Some(id) = indexed {
+      fn update(items: &mut [TreeItem], id: &SharedString, title: &str) {
+        for item in items {
+          if item.id == *id {
+            item.label = SharedString::from(title.to_owned());
+          } else {
+            update(&mut item.children, id, title);
+          }
+        }
+      }
+      if let Some(title) = &live.title {
+        if !query.is_empty() && !title.to_lowercase().contains(query) {
+          fn remove(items: &mut Vec<TreeItem>, id: &SharedString) {
+            items.retain(|item| item.id != *id);
+            for item in items {
+              remove(&mut item.children, id);
+            }
+          }
+          remove(items, &id);
+          nodes.remove(&id);
+        } else {
+          update(items, &id, title);
+        }
+      }
+      continue;
+    }
+    if !query.is_empty() && !title.to_lowercase().contains(query) {
+      continue;
+    }
+    let id = item_id("live", &live.live.as_uuid().to_string());
+    let pinned = session.is_some_and(|id| preference.is_some_and(|pref| pref.pinned_sessions.contains(id.as_str())));
+    nodes.insert(
+      id.clone(),
+      Node::Live {
+        live: live.live,
+        path: live.file.clone(),
+        session: session.cloned(),
+        project: project.as_str().to_owned(),
+        pinned,
+      },
+    );
+    let item = TreeItem::new(id, title);
+    if grouping == Grouping::Recent {
+      items.insert(0, item);
+    } else {
+      let project_id = item_id("project", project.as_str());
+      if !items.iter().any(|item| item.id == project_id) {
+        let name = preference.and_then(|pref| pref.alias.clone()).unwrap_or_else(|| {
+          summary
+            .root
+            .file_name()
+            .map_or_else(|| summary.root.display().to_string(), |name| name.to_string_lossy().into_owned())
+        });
+        nodes.insert(
+          project_id.clone(),
+          Node::Project {
+            id: project.as_str().to_owned(),
+            path: summary.root.display().to_string().into(),
+            pinned: preference.is_some_and(|pref| pref.pinned),
+            checkout: (summary.checkouts.len() == 1 && scope.root == summary.root).then(|| checkout.clone()),
+          },
+        );
+        items.push(TreeItem::new(project_id.clone(), name).expanded(true));
+      }
+      if let Some(project_item) = items.iter_mut().find(|item| item.id == project_id) {
+        if summary.checkouts.len() == 1 && scope.root == summary.root {
+          project_item.children.insert(0, item);
+        } else {
+          let checkout_id = item_id("checkout", checkout.as_str());
+          if !project_item.children.iter().any(|item| item.id == checkout_id) {
+            let path = scope.root.display().to_string();
+            let name = scope
+              .root
+              .file_name()
+              .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+            nodes.insert(
+              checkout_id.clone(),
+              Node::Checkout {
+                path: path.into(),
+                project: project.clone(),
+                checkout: checkout.clone(),
+              },
+            );
+            project_item.children.push(TreeItem::new(checkout_id.clone(), name).expanded(true));
+          }
+          if let Some(checkout_item) = project_item.children.iter_mut().find(|item| item.id == checkout_id) {
+            checkout_item.children.insert(0, item);
+          }
+        }
+      }
+    }
+  }
 }
 
 fn open_alias(view: &Entity<ProjectTree>, id: String, window: &mut Window, cx: &mut App) {
@@ -549,6 +734,7 @@ impl Render for ProjectTree {
     let model = self.model.clone();
     let nodes = self.nodes.clone();
     let active_session = self.active.clone();
+    let active_live = self.active_live;
     let open_menu = self.open_menu.clone();
     let complete_results = grouping == Grouping::Recent || !self.search.read(cx).value().is_empty();
     let blocked = complete_results && (self.loading_all || self.load_failed);
@@ -646,7 +832,13 @@ impl Render for ProjectTree {
         )
       })
       .when(
-        !blocked && (self.nodes.is_empty() || (complete_results && !self.nodes.values().any(|node| matches!(node, Node::Session { .. })))),
+        !blocked
+          && (self.nodes.is_empty()
+            || (complete_results
+              && !self
+                .nodes
+                .values()
+                .any(|node| matches!(node, Node::Session { .. } | Node::Live { .. })))),
         |sidebar| {
           sidebar.child(div().px_3().pt_3().text_sm().text_color(cx.theme().muted_foreground).child(
             if !self.search.read(cx).value().is_empty() {
@@ -682,6 +874,10 @@ impl Render for ProjectTree {
                     .detach();
                   cx.stop_propagation();
                 }
+                Some(Node::Live { live, .. }) => {
+                  cx.emit(live);
+                  cx.stop_propagation();
+                }
                 Some(Node::More { key, after }) => {
                   this
                     .model
@@ -697,7 +893,7 @@ impl Render for ProjectTree {
               let node = nodes.get(&item.id);
               let scope = matches!(node, Some(Node::Project { .. } | Node::Checkout { .. }));
               let icon = match node {
-                Some(Node::Session { .. }) => IconName::Ellipsis,
+                Some(Node::Session { .. } | Node::Live { .. }) => IconName::Ellipsis,
                 Some(Node::More { .. }) => IconName::Ellipsis,
                 Some(Node::Checkout { .. }) => IconName::GitFork,
                 Some(Node::Project { .. }) | None if entry.is_expanded() => IconName::FolderOpen,
@@ -723,12 +919,20 @@ impl Render for ProjectTree {
                   .conversation()
                   .live_sessions()
                   .any(|live| &live.file == path && !live.exited && live.run == Run::Running),
+                Some(Node::Live { live, .. }) => model
+                  .read(cx)
+                  .conversation()
+                  .live(*live)
+                  .is_some_and(|view| !view.exited && view.run == Run::Running),
                 _ => false,
               };
-              let active = node.is_some_and(|node| node.is_active(active_session.as_ref()));
+              let active = match node {
+                Some(Node::Live { live, .. }) => active_live == Some(*live),
+                _ => node.is_some_and(|node| node.is_active(active_session.as_ref())),
+              };
               let row = ListItem::new(item.id.clone())
                 .group("scope-row")
-                .selected(active)
+                .when(active, |row| row.bg(cx.theme().accent))
                 .when(selected, |row| row.border_1().border_color(cx.theme().border))
                 .text_sm()
                 .px_2()
@@ -741,7 +945,7 @@ impl Render for ProjectTree {
                     .min_w_0()
                     .gap_1()
                     .pl(rems(0.75) * entry.depth() as f32)
-                    .when(!matches!(node, Some(Node::Session { .. })), |row| {
+                    .when(!matches!(node, Some(Node::Session { .. } | Node::Live { .. })), |row| {
                       row.child(Icon::new(icon).small())
                     })
                     .child(
@@ -753,9 +957,10 @@ impl Render for ProjectTree {
                         .child(item.label.clone()),
                     )
                     .when(matches!(node, Some(Node::Project { pinned: true, .. })), |row| row.child("Pinned"))
-                    .when(matches!(node, Some(Node::Session { pinned: true, .. })), |row| {
-                      row.child(Icon::new(IconName::Star).xsmall())
-                    })
+                    .when(
+                      matches!(node, Some(Node::Session { pinned: true, .. } | Node::Live { pinned: true, .. })),
+                      |row| row.child(Icon::new(IconName::Star).xsmall()),
+                    )
                     .when_some(
                       match node {
                         Some(Node::Session { modified, .. }) => Some(relative_age(*modified, now)),
@@ -767,6 +972,12 @@ impl Render for ProjectTree {
                     .when_some(
                       match node {
                         Some(Node::Session { id, project, pinned, .. }) => Some((id.as_str().to_owned(), project.clone(), *pinned)),
+                        Some(Node::Live {
+                          session: Some(id),
+                          project,
+                          pinned,
+                          ..
+                        }) => Some((id.as_str().to_owned(), project.clone(), *pinned)),
                         _ => None,
                       },
                       |row, (id, project, pinned)| row.child(session_actions(view.clone(), project, id, item.label.clone(), pinned)),
@@ -817,6 +1028,10 @@ impl Render for ProjectTree {
                     })
                     .detach();
                 }),
+                Some(Node::Live { live, .. }) => {
+                  let view = view.clone();
+                  row.on_click(move |_, _, cx| view.update(cx, |_, cx| cx.emit(live)))
+                }
                 Some(Node::More { key, after }) => row.on_click(move |_, _, cx| {
                   model
                     .update(cx, |model, cx| model.load_sessions(key.clone(), Some(after.clone()), cx))

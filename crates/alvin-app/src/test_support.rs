@@ -1,13 +1,13 @@
 //! Helpers for the app's startup test: a real git repository and a gateway config that starts real omp in isolation.
 
 use std::ffi::OsString;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use alvin_gateway::{GatewayConfig, HostConfig};
+use alvin_gateway::{Gateway, GatewayConfig, HostConfig, WsServer};
 use alvin_protocol::EventId;
+use test_context::AsyncTestContext;
+use url::Url;
 
 /// The model the test runs against.
 const MODEL: &str = "openrouter/inclusionai/ling-3.0-flash";
@@ -25,7 +25,41 @@ pub(crate) struct Fixture {
   session_dir: PathBuf,
 }
 
+pub(crate) struct ServerFixture {
+  pub(crate) project: Fixture,
+  pub(crate) gateway: Gateway,
+  pub(crate) server: Option<WsServer>,
+  pub(crate) endpoint: Url,
+}
+
+impl AsyncTestContext for ServerFixture {
+  async fn setup() -> Self {
+    let project = Fixture::new();
+    let gateway = Gateway::new(project.config());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let server = gateway.serve_ws(listener).await.unwrap();
+    let endpoint = format!("ws://{}", server.local_addr()).parse().unwrap();
+    Self {
+      project,
+      gateway,
+      server: Some(server),
+      endpoint,
+    }
+  }
+
+  async fn teardown(mut self) {
+    if let Some(server) = self.server.take() {
+      server.shutdown().await.unwrap();
+    }
+    self.gateway.shutdown().await.unwrap();
+  }
+}
+
 impl Fixture {
+  pub(crate) fn base(&self) -> &Path {
+    &self.base
+  }
+
   pub(crate) fn new() -> Self {
     let base = std::env::temp_dir().join(format!("alvin-app-{}", EventId::new().as_uuid()));
     std::fs::create_dir_all(&base).unwrap();
@@ -92,53 +126,5 @@ impl Drop for Fixture {
   fn drop(&mut self) {
     // Best effort: a leftover temporary directory must not fail an otherwise passing test.
     drop(std::fs::remove_dir_all(&self.base));
-  }
-}
-
-/// A shell command that reports its pid through the fifo at `fifo`, then becomes `/bin/sleep 600` still holding the
-/// fifo's write end, so reading the fifo reaches end-of-file exactly when the process is gone.
-pub(crate) fn sleeper(fifo: &Path) -> String {
-  format!("/bin/sh -c 'exec 3> {}; echo $$ >&3; exec /bin/sleep 600'", fifo.display())
-}
-
-impl Fixture {
-  /// Creates the fifo a [`sleeper`] reports through.
-  pub(crate) fn make_fifo(&self) -> PathBuf {
-    let fifo = self.base.join("child.fifo");
-    let status = Command::new("mkfifo").arg(&fifo).status().unwrap();
-    assert!(status.success());
-    fifo
-  }
-}
-
-/// A [`sleeper`] that has reported in.
-pub(crate) struct Child {
-  reader: BufReader<File>,
-}
-
-impl Child {
-  /// Waits for the sleeper to report through `fifo`. The fifo is read with blocking calls on the blocking pool: kqueue
-  /// does not report end-of-file on a fifo, so tokio's pipe types cannot tell when the writer died.
-  pub(crate) async fn report(fifo: &Path) -> Self {
-    let fifo = fifo.to_owned();
-    tokio::task::spawn_blocking(move || {
-      // Opening the read end blocks until the sleeper opens the write end.
-      let mut reader = BufReader::new(File::open(fifo).unwrap());
-      let mut line = String::new();
-      reader.read_line(&mut line).unwrap();
-      Self { reader }
-    })
-    .await
-    .unwrap()
-  }
-
-  /// Resolves once the sleeper has died: its write end of the fifo closes with it.
-  pub(crate) async fn died(mut self) {
-    tokio::task::spawn_blocking(move || {
-      let mut rest = Vec::new();
-      self.reader.read_to_end(&mut rest).unwrap();
-    })
-    .await
-    .unwrap();
   }
 }

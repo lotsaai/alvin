@@ -23,7 +23,7 @@ Out: all other crates. Each module spec creates its own crate, its row in `AGENT
 
 - Root `Cargo.toml`: `[workspace]`, `resolver = "3"`, `members = ["crates/*"]`, `[workspace.package]` edition 2024, `[workspace.dependencies]` for shared crates.
 - Only member at this stage: `alvin-workspace-hack`. Hakari at two or more crates; the first real crate (`alvin-protocol`) makes it required. Create the hack crate now so the task is proven.
-- `.config/hakari.toml`: `hakari-package = "alvin-workspace-hack"`, `dep-format-version = "4"`, `resolver = "2"`, platforms: aarch64-apple-darwin, x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu. `alvin-protocol` and `alvin-client` are the wasm32 boundary: they are `[traversal-excludes] workspace-members`, so they never depend on the hack crate. Unifying the gateway's native features (tokio `net` pulls in `mio`, jsonrpsee `server`) into them would break their `wasm32-unknown-unknown` build. No `wasm32` hakari platform.
+- `.config/hakari.toml` excludes `alvin-protocol`, `alvin-client`, `alvin-conversation`, `alvin-conversation-ui`, `alvin-app`, and `alvin-telemetry` from traversal. Client-facing crates must not inherit the gateway's native or jsonrpsee server features. No `wasm32` hakari platform.
 - `rustfmt.toml` unchanged (2 spaces, 140 columns).
 
 ## Task Set
@@ -40,6 +40,7 @@ Keep, rewritten for alvin:
 | `test` (`_default`) | `cargo nextest run --workspace` through `test/rust`; drop the OS fan-out. `sources`: the build sources plus `crates/*/tests/**/*.rs` and `crates/*/fixtures/**` |
 | `test/rust` | unchanged |
 | `dev` | runs `alvin-app` (`cargo run -p alvin-app`); created by the `app` module, not here |
+| `check-boundaries` | rejects gateway, omp host, session index, omp wire, workspace reader, and jsonrpsee server dependencies in client-facing normal and build graphs; runs in `check` and the `hk` checks behind `format` |
 
 Delete: `nsh/prep`, `generate/sql/heydayd`, `test/server.sh`, `test/{macos,linux,windows,web,ios,android}`, `dev/{desktop,web,ios,android,api}`, `dist/*`.
 

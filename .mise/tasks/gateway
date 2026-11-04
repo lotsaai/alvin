@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+#MISE description="Run the standalone WebSocket gateway"
+#MISE depends=["build:debug"]
+
+set -euo pipefail
+
+exec target/debug/alvind "$@"

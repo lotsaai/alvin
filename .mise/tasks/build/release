@@ -9,3 +9,4 @@ cd "$proj_dir" || exit 1
 set -euo pipefail
 
 cargo build --quiet --release --workspace "$@"
+cargo build --quiet --release --workspace --target wasm32-unknown-unknown --exclude alvin-app --exclude alvin-conversation-ui --exclude alvin-gateway --exclude alvin-omp-host --exclude alvin-session-index --exclude alvin-telemetry --exclude alvin-workspace-hack "$@"

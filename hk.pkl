@@ -2,6 +2,13 @@ amends "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Config.pk
 import "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Builtins.pkl"
 
 local linters = new Mapping<String, Step> {
+  ["client-boundaries"] = new Step {
+    glob = List("**/Cargo.toml", "Cargo.lock", ".config/hakari.toml", ".mise/tasks/check-boundaries")
+    check = "mise run check-boundaries"
+    fix = "mise run check-boundaries"
+    check_first = true
+    depends = "cargo-sort"
+  }
   ["cargo-check"] = (Builtins.cargo_check) {
     check = "cargo check --quiet --workspace --all-targets"
     fix = "cargo check --quiet --workspace --all-targets"

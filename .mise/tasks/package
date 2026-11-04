@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 
 #MISE description="Build the macOS application bundle"
+#MISE depends=["build:debug"]
 
 set -euo pipefail
 
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir"
-
-cargo build --quiet -p alvin-app
 
 bundle="$proj_dir/target/debug/Alvin.app/Contents"
 iconset=$(mktemp -d "${TMPDIR:-/tmp}/alvin.XXXXXX")
@@ -33,3 +32,6 @@ cat >"$bundle/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+
+codesign --force --sign - "$proj_dir/target/debug/Alvin.app"
+codesign --verify --strict "$proj_dir/target/debug/Alvin.app"

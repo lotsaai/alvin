@@ -23,11 +23,12 @@ Success means:
 | `protocol` | `alvin-protocol` | jsonrpsee `#[rpc]` traits and wire types: projects, session history, live sessions, commands, events, error codes. UUIDv7 id newtypes. Client half by default, `server` feature for the server half. Builds for wasm32 | `scaffold` |
 | `session-index` | `alvin-session-index` | Read-only scan of omp JSONL session files. Groups by repository and worktree/workspace through `code-workspace` | `protocol` |
 | `omp-host` | `alvin-omp-host` | One supervised `omp-rpc` client per live session, bridged into async. Translates omp frames into protocol events. Windows Job Object for teardown | `protocol` |
+| `telemetry` | `alvin-telemetry` | Shared OTLP provider initialization and explicit shutdown for both faces. No server or protocol dependency | `scaffold` |
 | `gateway` | `alvin-gateway` | Implements the protocol server traits over `session-index` and `omp-host`. Mounts the same `Methods` on the channel transport and on a WebSocket listener. Ships the `alvind` binary serving `ws(s)://` | `session-index`, `omp-host` |
 | `client` | `alvin-client` | The one typed client. Transport is an implementation detail chosen by endpoint | `protocol` |
 | `conversation` | `alvin-conversation` | Pure UI state: projects, sessions, live turns, queue, history tree | `protocol` |
 | `conversation-ui` | `alvin-conversation-ui` | gpui-kit views | `conversation`, `client` |
-| `app` | `alvin-app` | Desktop face. Parses config and arguments, embeds the gateway and connects over the channel transport, or connects to a ws(s) URL | `conversation-ui`, `client`, `gateway` |
+| `app` | `alvin-app` | Desktop face. Parses client configuration and connects to a separately running gateway over WebSocket | `conversation-ui`, `client`, `telemetry` |
 
 Build order: `scaffold → protocol → session-index, omp-host → gateway, client, conversation → conversation-ui → app`.
 
@@ -38,10 +39,10 @@ Build order: `scaffold → protocol → session-index, omp-host → gateway, cli
 - **Session history:** read omp's JSONL session files. alvin never writes, renames, or deletes them.
 - **Project grouping:** `code-workspace` (crates.io, latest stable; jj and worktree linking arrived in 0.2.0) finds roots, including jj, and links git worktrees and jj workspaces to their repository.
 - **Gateway API:** our own jsonrpsee `#[rpc]` traits, in the tin and heyday style. Not shaped like ACP.
-- **Transports:** one typed client. v1 implements the channel transport (in-memory, jsonrpsee `TransportSenderT`/`TransportReceiverT` over mpsc, as in tin `rpc/memory.rs`) and `ws://`/`wss://`. Later: `stdio://`, `tcp://`, `tcp+tls://`, `http(s)://`, iroh.
+- **Transports:** desktop production connections use `ws://` or `wss://`. Channel support remains in the client and gateway libraries for explicit consumers and dual-transport acceptance tests. In-process desktop mode is deferred.
 - **Ids and resume:** ids the gateway mints (live sessions, events) are UUIDv7. Session ids come from omp (UUIDv7 in current omp). Project and checkout ids are blake3 hashes of the canonical root path. Event subscriptions take an optional "after event id" and replay from there. No sequence counters.
 - **Event log:** each live session's event log lives in gateway memory only. Opening a session starts omp on it; its transcript comes from that omp (`get_messages_page`), during a run and after a restart alike. alvin never parses session content itself.
-- **Binaries:** `alvin-app` (desktop) and `alvind` (standalone gateway serving `ws(s)://`).
+- **Binaries:** `alvin-app` is a network-only desktop client. `alvind` independently owns agent processes and serves WebSocket. Closing the desktop does not close server agent sessions.
 - **Errors:** one `Error` and `Result` per crate in `error.rs`. Gateway errors map to JSON-RPC errors with a stable code from `alvin-protocol`; the client surfaces code and message as a typed error and never flattens them to strings.
 - **Composer:** support only what omp-rpc supports. `!cmd` maps to the `bash` command. `prompt` expands `/` commands, skills, templates, and `^model` server-side. No invented conventions.
 - **Method names:** `<area>/<camelCaseVerb>`, for example `sessions/list`, `live/prompt`. New gateway methods go in the `#[rpc]` trait, the gateway, the pinned method list, and a round-trip test over both transports.
@@ -87,6 +88,7 @@ crates/alvin-client/          → typed client
 crates/alvin-conversation/    → UI state
 crates/alvin-conversation-ui/ → gpui-kit views
 crates/alvin-app/             → desktop binary
+crates/alvin-telemetry/       → shared OTLP setup and shutdown
 crates/alvin-workspace-hack/  → hakari, build-only
 .mise/tasks/                  → task scripts
 SPEC.md, SPEC-<module-id>.md  → specs
@@ -129,7 +131,7 @@ pub enum Error {
 - `session-index`: tests over real JSONL session files written by omp in a temporary project, plus git worktree and jj workspace layouts.
 - `gateway` and `client`: every API method round-tripped over both the channel transport and a WebSocket on `127.0.0.1:0`. A test pins the declared method list.
 - `conversation`: plain `#[test]` on the state model.
-- `conversation-ui` and `app`: headless `#[gpui_kit::test]` with real views against an embedded gateway. Assert structure and state, not pixels. Never `use gpui_kit::*` in test modules.
+- `conversation-ui` and `app`: headless `#[gpui_kit::test]` with real views and gateway fixtures. App tests connect through WebSocket and verify that desktop quit leaves server sessions live. Assert structure and state, not pixels. Never `use gpui_kit::*` in test modules.
 
 ## Boundaries
 
