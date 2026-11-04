@@ -226,6 +226,7 @@ dependencies = [
  "ghostty-vt",
  "gpui-kit",
  "lsp-types",
+ "palate",
  "serde_json",
  "tokio",
  "tracing",

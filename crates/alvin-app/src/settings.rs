@@ -118,11 +118,11 @@ impl AppView {
     let names: Vec<String> = verdant_themes::THEMES.iter().map(|name| (*name).to_owned()).collect();
     let light = current
       .map(|config| config.light_theme.as_str())
-      .unwrap_or("github::light")
+      .unwrap_or("catppuccin::latte")
       .to_owned();
     let dark = current
       .map(|config| config.dark_theme.as_str())
-      .unwrap_or("github::dark")
+      .unwrap_or("catppuccin::mocha")
       .to_owned();
     let light_theme = cx.new(|cx| {
       let mut state = SelectState::new(SearchableVec::new(names.clone()), None, window, cx).searchable(true);
@@ -340,13 +340,13 @@ impl AppView {
       .read(cx)
       .selected_value()
       .cloned()
-      .unwrap_or_else(|| "github::light".into());
+      .unwrap_or_else(|| "catppuccin::latte".into());
     let dark = self
       .dark_theme
       .read(cx)
       .selected_value()
       .cloned()
-      .unwrap_or_else(|| "github::dark".into());
+      .unwrap_or_else(|| "catppuccin::mocha".into());
     let accent = self
       .config
       .as_ref()
@@ -518,6 +518,7 @@ fn contrast(a: gpui_kit::Hsla, b: gpui_kit::Hsla) -> f32 {
 }
 
 fn contrasting(color: gpui_kit::Hsla, background: gpui_kit::Hsla, foreground: gpui_kit::Hsla) -> gpui_kit::Hsla {
+  let color = background.blend(color);
   let chosen = if contrast(color, foreground) > contrast(color, background) {
     foreground
   } else {
@@ -548,6 +549,11 @@ fn apply_appearance(
   }
   let name = if cx.theme().mode == ThemeMode::Dark { dark } else { light };
   if let Some(theme) = verdant_themes::from_str(name) {
+    let catppuccin = match name {
+      "catppuccin::latte" => Some((0xe6e9ef, 0xccd0da, 0xbcc0cc, 0x5c5f77, 0xd20f39, 0x40a02b, 0xdf8e1d, 0x1e66f5)),
+      "catppuccin::mocha" => Some((0x181825, 0x313244, 0x45475a, 0xbac2de, 0xf38ba8, 0xa6e3a1, 0xf9e2af, 0x89b4fa)),
+      _ => None,
+    };
     let convert = convert_color;
     let resolved = |key: &str| {
       theme.find_style(key).map(|style| {
@@ -693,6 +699,46 @@ fn apply_appearance(
         colors.sidebar_accent_foreground = foreground;
         colors.tab_bar_segmented = subtle;
       }
+      if let Some((mantle, surface, border, subtext, _, _, _, _)) = catppuccin {
+        let mantle = gpui_kit::Hsla::from(rgb(mantle));
+        let surface = gpui_kit::Hsla::from(rgb(surface));
+        let border = gpui_kit::Hsla::from(rgb(border));
+        colors.sidebar = mantle;
+        colors.title_bar = mantle;
+        colors.status_bar = mantle;
+        colors.tab_bar = mantle;
+        colors.tab = mantle;
+        colors.scrollbar = mantle;
+        colors.popover = colors.background;
+        colors.accordion = surface;
+        colors.table_head = surface;
+        colors.table_foot = surface;
+        colors.muted = surface;
+        let subtext = gpui_kit::Hsla::from(rgb(subtext));
+        colors.muted_foreground = if contrast(subtext, surface) >= 4.5 {
+          subtext
+        } else {
+          colors.foreground
+        };
+        colors.secondary = surface;
+        colors.button = surface;
+        colors.button_secondary = surface;
+        colors.skeleton = surface;
+        colors.description_list_label = surface;
+        colors.list_head = surface;
+        colors.tab_bar_segmented = surface;
+        colors.border = border;
+        colors.input = border;
+        colors.sidebar_border = border;
+        colors.title_bar_border = border;
+        colors.status_bar_border = border;
+        colors.table_row_border = border;
+        colors.window_border = border;
+        colors.scrollbar_thumb = border;
+        colors.switch = border;
+        colors.slider_bar = border;
+        colors.chart_grid = border;
+      }
       if let Some(accent) = accent.color().or_else(|| accent.style_key().and_then(resolved)) {
         let background = colors.background;
         let foreground = colors.foreground;
@@ -722,10 +768,14 @@ fn apply_appearance(
         colors.slider_thumb = accent;
         colors.switch_thumb = accent;
       }
-      if let Some(style) = theme.get("diff.minus") {
-        let color = style.color();
-        colors.danger = convert(color.red, color.green, color.blue);
-        colors.danger_foreground = colors.background;
+      if let Some(color) = catppuccin.map(|palette| gpui_kit::Hsla::from(rgb(palette.4))).or_else(|| {
+        theme.get("diff.minus").map(|style| {
+          let color = style.color();
+          convert(color.red, color.green, color.blue)
+        })
+      }) {
+        colors.danger = color;
+        colors.danger_foreground = contrasting(colors.danger, colors.background, colors.foreground);
         colors.danger_hover = colors.danger.blend(colors.foreground.alpha(0.12));
         colors.danger_active = colors.danger.blend(colors.foreground.alpha(0.2));
         colors.button_danger = colors.danger;
@@ -733,10 +783,14 @@ fn apply_appearance(
         colors.button_danger_hover = colors.danger_hover;
         colors.button_danger_active = colors.danger_active;
       }
-      if let Some(style) = theme.get("diff.plus") {
-        let color = style.color();
-        colors.success = convert(color.red, color.green, color.blue);
-        colors.success_foreground = colors.background;
+      if let Some(color) = catppuccin.map(|palette| gpui_kit::Hsla::from(rgb(palette.5))).or_else(|| {
+        theme.get("diff.plus").map(|style| {
+          let color = style.color();
+          convert(color.red, color.green, color.blue)
+        })
+      }) {
+        colors.success = color;
+        colors.success_foreground = contrasting(colors.success, colors.background, colors.foreground);
         colors.success_hover = colors.success.blend(colors.foreground.alpha(0.12));
         colors.success_active = colors.success.blend(colors.foreground.alpha(0.2));
         colors.button_success = colors.success;
@@ -744,12 +798,14 @@ fn apply_appearance(
         colors.button_success_hover = colors.success_hover;
         colors.button_success_active = colors.success_active;
       }
-      if let Some(color) = theme
-        .get("comment.warning")
-        .map(|style| style.bg().unwrap_or_else(|| style.color()))
-      {
-        colors.warning = convert(color.red, color.green, color.blue);
-        colors.warning_foreground = colors.background;
+      if let Some(color) = catppuccin.map(|palette| gpui_kit::Hsla::from(rgb(palette.6))).or_else(|| {
+        theme.get("comment.warning").map(|style| {
+          let color = style.bg().unwrap_or_else(|| style.color());
+          convert(color.red, color.green, color.blue)
+        })
+      }) {
+        colors.warning = color;
+        colors.warning_foreground = contrasting(colors.warning, colors.background, colors.foreground);
         colors.warning_hover = colors.warning.blend(colors.foreground.alpha(0.12));
         colors.warning_active = colors.warning.blend(colors.foreground.alpha(0.2));
         colors.button_warning = colors.warning;
@@ -757,9 +813,14 @@ fn apply_appearance(
         colors.button_warning_hover = colors.warning_hover;
         colors.button_warning_active = colors.warning_active;
       }
-      if let Some(color) = theme.get("comment.note").map(|style| style.bg().unwrap_or_else(|| style.color())) {
-        colors.info = convert(color.red, color.green, color.blue);
-        colors.info_foreground = colors.background;
+      if let Some(color) = catppuccin.map(|palette| gpui_kit::Hsla::from(rgb(palette.7))).or_else(|| {
+        theme.get("comment.note").map(|style| {
+          let color = style.bg().unwrap_or_else(|| style.color());
+          convert(color.red, color.green, color.blue)
+        })
+      }) {
+        colors.info = color;
+        colors.info_foreground = contrasting(colors.info, colors.background, colors.foreground);
         colors.info_hover = colors.info.blend(colors.foreground.alpha(0.12));
         colors.info_active = colors.info.blend(colors.foreground.alpha(0.2));
         colors.button_info = colors.info;
@@ -1436,15 +1497,46 @@ mod tests {
             assert_eq!(user.background(), cx.theme().primary);
             assert!(contrast(user.background(), user.foreground()) >= 4.5, "{name}: {choice}");
           }
-          if let Some(style) = theme.get("diff.plus") {
-            assert_eq!(cx.theme().success, convert!(style.color()));
+          for color in [
+            gpui_kit::Hsla::from(gpui_kit::rgb(0)).alpha(0.),
+            gpui_kit::Hsla::from(gpui_kit::rgb(0xffffff)).alpha(0.),
+            gpui_kit::Hsla::from(gpui_kit::rgb(0x123abc)).alpha(0.25),
+          ] {
+            let choice = ColorChoice::from_color(color);
+            apply_appearance(appearance, light, dark, choice, ColorChoice::ACCENT, window, cx);
+            let user = cx.global::<UserMessageColors>();
+            let surface = cx.theme().background.blend(user.background());
+            assert!(contrast(surface, user.foreground()) >= 4.5, "{name}: {choice}");
+            assert!(contrast(cx.theme().background.blend(cx.theme().primary), cx.theme().primary_foreground) >= 4.5);
           }
-          if let Some(style) = theme.get("diff.minus") {
-            assert_eq!(cx.theme().danger, convert!(style.color()));
-          }
-          for (key, actual) in [("comment.warning", cx.theme().warning), ("comment.note", cx.theme().info)] {
-            if let Some(style) = theme.get(key) {
-              assert_eq!(actual, convert!(style.bg().unwrap_or_else(|| style.color())));
+          if name.starts_with("catppuccin::") {
+            let colors = cx.theme();
+            assert_ne!(colors.sidebar, colors.background);
+            assert_ne!(colors.muted, colors.background);
+            assert_ne!(colors.border, colors.background);
+            assert!(contrast(colors.foreground, colors.background) >= 4.5);
+            assert!(contrast(colors.muted_foreground, colors.muted) >= 4.5);
+            for (color, foreground) in [
+              (colors.danger, colors.danger_foreground),
+              (colors.success, colors.success_foreground),
+              (colors.warning, colors.warning_foreground),
+              (colors.info, colors.info_foreground),
+            ] {
+              assert!(contrast(color, foreground) >= 4.5, "{name}");
+            }
+            assert_ne!(colors.info, colors.success);
+            assert_ne!(colors.success, colors.danger);
+          } else {
+            if let Some(style) = theme.get("diff.plus") {
+              assert_eq!(cx.theme().success, convert!(style.color()));
+            }
+            if let Some(style) = theme.get("diff.minus") {
+              assert_eq!(cx.theme().danger, convert!(style.color()));
+            }
+            for (key, actual) in [("comment.warning", cx.theme().warning), ("comment.note", cx.theme().info)] {
+              if let Some(style) = theme.get(key) {
+                assert_eq!(actual, convert!(style.bg().unwrap_or_else(|| style.color())));
+              }
             }
           }
           if name == "catppuccin::latte" {

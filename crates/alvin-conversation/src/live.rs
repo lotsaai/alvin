@@ -105,6 +105,10 @@ pub struct LiveView {
   pub file: PathBuf,
   /// Committed messages, oldest first: loaded from `live/messages`, extended by `message_end`.
   pub transcript: Vec<AgentMessage>,
+  /// Process-scoped message IDs for committed live events, aligned with the transcript.
+  pub message_ids: Vec<Option<String>>,
+  /// Changes whenever a historical snapshot replaces the transcript.
+  pub snapshot_generation: u64,
   /// How many messages the session has, as `live/messages` last reported.
   pub total_messages: usize,
   /// The assistant message being built.
@@ -158,6 +162,8 @@ impl LiveView {
       cwd: summary.cwd.clone(),
       file: summary.file.clone(),
       transcript: Vec::new(),
+      message_ids: Vec::new(),
+      snapshot_generation: 0,
       total_messages: 0,
       streaming: None,
       tools: Tools::default(),
@@ -208,6 +214,8 @@ impl LiveView {
   pub(crate) fn load_page(&mut self, page: MessagesPage) {
     self.total_messages = usize::try_from(page.total_messages).unwrap_or(0);
     self.transcript = page.messages;
+    self.message_ids = vec![None; self.transcript.len()];
+    self.snapshot_generation = self.snapshot_generation.saturating_add(1);
     self.reload_needed = false;
   }
 
@@ -226,6 +234,8 @@ impl LiveView {
   /// Drops what a gap makes untrustworthy and marks the session for reloading. Notices, title, commands and the rest stay.
   pub(crate) fn resync(&mut self) {
     self.transcript.clear();
+    self.message_ids.clear();
+    self.snapshot_generation = self.snapshot_generation.saturating_add(1);
     self.total_messages = 0;
     self.streaming = None;
     self.tools.clear();
@@ -378,7 +388,10 @@ impl LiveView {
   fn message_update(&mut self, update: &MessageUpdateEvent) {
     // omp sends the message so far with every update, so the update replaces the snapshot. An update for a message this
     // view never saw start (it subscribed mid-message) starts the snapshot.
-    let message_id = self.streaming.as_ref().and_then(|streaming| streaming.message_id.clone());
+    let message_id = update
+      .message_id
+      .clone()
+      .or_else(|| self.streaming.as_ref().and_then(|streaming| streaming.message_id.clone()));
     self.streaming = Some(Streaming {
       message_id,
       message: update.message.clone(),
@@ -386,6 +399,13 @@ impl LiveView {
   }
 
   fn message_end(&mut self, end: &MessageEndEvent) {
+    self.message_ids.resize(self.transcript.len(), None);
+    self.message_ids.push(
+      end
+        .message_id
+        .clone()
+        .or_else(|| self.streaming.as_ref().and_then(|streaming| streaming.message_id.clone())),
+    );
     self.transcript.push(end.message.clone());
     self.total_messages = self.total_messages.saturating_add(1);
     self.streaming = None;

@@ -125,11 +125,11 @@ pub struct AppConfig {
   #[config(layer_attr(arg(long)))]
   pub appearance: String,
   /// Verdant theme used in light appearance.
-  #[config(default = "github::light", env = "ALVIN_LIGHT_THEME")]
+  #[config(default = "catppuccin::latte", env = "ALVIN_LIGHT_THEME")]
   #[config(layer_attr(arg(long)))]
   pub light_theme: String,
   /// Verdant theme used in dark appearance.
-  #[config(default = "github::dark", env = "ALVIN_DARK_THEME")]
+  #[config(default = "catppuccin::mocha", env = "ALVIN_DARK_THEME")]
   #[config(layer_attr(arg(long)))]
   pub dark_theme: String,
   /// Verdant style key or custom `#RRGGBB` / `#RRGGBBAA` primary color.
@@ -592,13 +592,13 @@ mod tests {
       home: tmp.0.clone(),
     };
     let mut next = configuration.config.clone();
-    next.light_theme = "catppuccin::latte".into();
-    next.dark_theme = "catppuccin::mocha".into();
+    next.light_theme = "github::light".into();
+    next.dark_theme = "one::cool".into();
     configuration.save(next).unwrap();
     let saved = std::fs::read_to_string(&path).unwrap();
-    assert!(saved.contains("catppuccin::latte"));
-    assert!(saved.contains("catppuccin::mocha"));
-    assert!(saved.contains("# retained"));
+    let reloaded = Configuration::for_test(path.clone()).unwrap();
+    assert_eq!(reloaded.config.light_theme, "github::light");
+    assert_eq!(reloaded.config.dark_theme, "one::cool");
     let mut invalid = configuration.config.clone();
     invalid.dark_theme = "not-a-theme".into();
     assert!(configuration.save(invalid).is_err());

@@ -31,6 +31,7 @@ uv = "latest"
 python = "3.14"
 yamllint = "latest"
 watchexec = "latest"
+pitchfork = { version = "latest", workflow = "release.yml@refs/heads/main" }
 
 [daemons.gateway]
 task = "gateway"

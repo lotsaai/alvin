@@ -42,7 +42,7 @@ Sources, highest precedence first (confique's builder: earlier sources win):
 Missing files are skipped, as confique and crumbs do. No project-local file: alvin is not scoped to one repository. No secrets file: the app holds no credentials.
 
 Settings provide independent `light_theme` and `dark_theme` selections from the Verdant catalog. Their defaults are
-`github::light` and `github::dark`. `appearance` selects `system`, `light`, or `dark`; system mode switches between the
+`catppuccin::latte` and `catppuccin::mocha`. `appearance` selects `system`, `light`, or `dark`; system mode switches between the
 two selections when the window appearance changes. The corresponding command-line flags and environment variables
 are `--light-theme` / `ALVIN_LIGHT_THEME`, `--dark-theme` / `ALVIN_DARK_THEME`, and `--appearance` /
 `ALVIN_APPEARANCE`. `accent_color` defaults to `module`; `user_message_color` defaults to `operator` and may be
@@ -81,16 +81,15 @@ preferences. They are stored in `projects.json` beside the writable `config.toml
 change omp files. A missing preferences file starts empty; older entries without session lists start with empty lists.
 Malformed or unreadable preferences stop startup; save errors appear in the window and the unsaved change is reverted.
 
-Verdant's `_normal` supplies base foreground and background. Exact `comment`, `markup.list.unchecked`,
-`ibl.indent.char.1`, and `ibl.whitespace.char.1` provide muted text, borders, and control surfaces when available;
-missing interface shades are derived from base colors. Secondary panes are derived away from the foreground, and
-selection blends the muted text into the background at 25%. Theme-derived accent and user-message colors resolve
-through Verdant's `find_style`: exact key, dotted parent, then theme foreground. Custom colors use their saved RGBA values.
-The user-message foreground chooses the higher-contrast
-theme foreground or background, falling back to black or white when needed for 4.5:1 contrast. Links resolve from
-`function`, the caret from `markup.link.url`, and status colors from `diff.plus`, `diff.minus`, `comment.warning`,
-and `comment.note`. Missing status styles retain GPUI Kit's mode defaults. Mapping is independent of theme name.
-
+Verdant supplies the base foreground, background and syntax colors. Catppuccin Latte and Mocha map mantle,
+surface0, surface1 and subtext1 to secondary panes, muted surfaces, borders and supporting text, following
+their shadcn palettes. Supporting text uses the main foreground if subtext1 cannot meet 4.5:1 against surface0.
+Other themes derive interface shades from their base foreground and background. Theme-derived accent and
+user-message colors resolve through Verdant's `find_style`. Custom colors retain their saved RGBA values.
+Foreground selection uses the actual color composited over the theme background, then chooses contrasting
+theme text or black or white. Catppuccin red, green, yellow and blue supply status roles; other themes use
+`diff.plus`, `diff.minus`, `comment.warning` and `comment.note` when present. Links resolve from `function`
+and the caret from `markup.link.url`. Explicit theme and color selections remain authoritative.
 The endpoint parses as a URL and must use `ws` or `wss`. Desktop configuration has no `gateway` table or
 `--omp`, `--model`, or `--sessions-dir` flags. Server configuration belongs to `alvind.toml` or `alvind` arguments.
 Existing desktop files containing `[gateway]` fail explicitly. Move those settings to `alvind` and remove the table.

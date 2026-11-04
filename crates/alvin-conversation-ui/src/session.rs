@@ -11,7 +11,6 @@ mod pickers;
 mod queue;
 mod status;
 mod timeline;
-mod tool_card;
 mod transcript;
 
 pub use markdown::refresh_markdown_theme;
@@ -50,6 +49,21 @@ use timeline::ConversationTimeline;
 /// Keep the transcript's comfortable text lane when history is shown alongside it.
 const HISTORY_INLINE_MIN_WIDTH_REM: f32 = 80.;
 
+// LobeHub's 960px lane at Alvin's 14px default font, scaled with application zoom.
+const READING_WIDTH_REM: f32 = 960. / 14.;
+
+#[derive(Default)]
+struct WideScreen(bool);
+
+impl gpui_kit::Global for WideScreen {}
+
+fn reading_lane(wide: bool) -> gpui_kit::Div {
+  div()
+    .w_full()
+    .min_w_0()
+    .when(!wide, |lane| lane.max_w(gpui_kit::rems(READING_WIDTH_REM)))
+}
+
 /// A live session's view. Holds only local view state: scroll position, the composer and how many rows the scroller was
 /// last told about. Everything else is read from the model.
 pub(crate) struct SessionView {
@@ -69,6 +83,7 @@ pub(crate) struct SessionView {
   /// The name typed into the rename dialog.
   name: Entity<InputState>,
   rows: Rc<Vec<transcript::Row>>,
+  transcript: transcript::Transcript,
   _subscriptions: Vec<Subscription>,
 }
 
@@ -208,11 +223,15 @@ impl SessionView {
     let history = cx.new(|cx| HistoryTreeView::new(model.clone(), live, window, cx));
     let name = cx.new(|cx| InputState::new(window, cx).placeholder("Session name"));
     let subscriptions = vec![
+      cx.observe_global::<WideScreen>(|this, cx| {
+        this.scroller.update(cx, |scroller, cx| scroller.remeasure(cx));
+        cx.notify();
+      }),
       cx.observe(&scroller, |_, _, cx| cx.notify()),
       cx.observe(&timeline, |_, _, cx| cx.notify()),
       cx.subscribe_in(&model, window, |this, model, change: &ModelChange, window, cx| {
         if matches!(change, ModelChange::Session(live) if *live == this.live) {
-          this.sync_rows(cx);
+          this.sync_rows(window, cx);
           this.pickers.sync(model, this.live, window, cx);
           this.dialogs.sync(model, this.live, window, cx);
           cx.notify();
@@ -255,9 +274,10 @@ impl SessionView {
       history_focus: cx.focus_handle().tab_stop(true),
       name,
       rows: Rc::new(Vec::new()),
+      transcript: transcript::Transcript::default(),
       _subscriptions: subscriptions,
     };
-    view.sync_rows(cx);
+    view.sync_rows(window, cx);
     view.pickers.sync(&view.model, live, window, cx);
     view.dialogs.sync(&view.model, live, window, cx);
     view
@@ -265,27 +285,38 @@ impl SessionView {
 
   /// Tells the scroller how the transcript changed since it last looked: rows appended, transcript replaced, or the
   /// streaming row grew taller.
-  fn sync_rows(&mut self, cx: &mut Context<Self>) {
+  fn sync_rows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     let Some(view) = self.model.read(cx).conversation().live(self.live) else {
+      self.transcript = transcript::Transcript::default();
+      self.rows = Rc::new(Vec::new());
+      self.scroller.update(cx, |scroller, cx| scroller.reset(0, cx));
       return;
     };
     let rows = Rc::new(transcript::rows(view));
+    let reset = self.transcript.generation() != view.snapshot_generation;
+    let prepared = self.transcript.prepare(view);
+    let changed = prepared.changed();
+    self.transcript.apply(prepared, &self.composer, &self.scroller, window, cx);
     let previous = self.rows.len();
     let count = rows.len();
     self.rows = rows;
     self
       .timeline
       .update(cx, |timeline, cx| timeline.sync(self.live, &self.model, &self.rows, cx));
-    self.scroller.update(cx, |scroller, cx| {
-      if count > previous {
-        scroller.append(count - previous, cx);
-      } else if count < previous {
-        scroller.reset(count, cx);
-      }
-      if count > 0 {
-        scroller.remeasure_items(previous.saturating_sub(1).min(count - 1)..count, cx);
-      }
-    });
+    if reset || count != previous || changed {
+      self.scroller.update(cx, |scroller, cx| {
+        if reset {
+          scroller.reset(count, cx);
+        } else if count > previous {
+          scroller.append(count - previous, cx);
+        } else if count < previous {
+          scroller.reset(count, cx);
+        }
+        if count > 0 && changed {
+          scroller.remeasure(cx);
+        }
+      });
+    }
   }
 
   /// One line describing what the session is doing, with the statuses extensions set.
@@ -358,6 +389,19 @@ impl SessionView {
       .px_4()
       .gap_2()
       .justify_end()
+      .child(
+        Button::new(self.id("widescreen-toggle"))
+          .xsmall()
+          .ghost()
+          .label("Widescreen")
+          .selected(cx.try_global::<WideScreen>().is_some_and(|wide| wide.0))
+          .toggled(cx.try_global::<WideScreen>().is_some_and(|wide| wide.0))
+          .on_click(cx.listener(|_, _, _, cx| {
+            let wide = !cx.try_global::<WideScreen>().is_some_and(|wide| wide.0);
+            cx.set_global(WideScreen(wide));
+            cx.refresh_windows();
+          })),
+      )
       .when(self.composer_layout == composer::Layout::Compact, |header| {
         header.children(self.timeline.read(cx).compact_menu(&self.timeline))
       })
@@ -515,6 +559,7 @@ impl Render for SessionView {
     };
     let new_session = self.model.read(cx).is_new_session(live);
     let expanded = self.composer_layout == composer::Layout::Expanded;
+    let wide = cx.try_global::<WideScreen>().is_some_and(|wide| wide.0);
     let context_label = self
       .model
       .read(cx)
@@ -551,9 +596,11 @@ impl Render for SessionView {
         }
       })
       .content(move |_, _, cx| view.read(cx).context_panel(cx).into_any_element());
-    let dock = v_flex()
-      .w_full()
-      .max_w(gpui_kit::rems(42.))
+    let dock = reading_lane(wide)
+      .id(self.id("composer-lane"))
+      .test_support()
+      .flex()
+      .flex_col()
       .min_h_0()
       .when(expanded, |dock| dock.flex_1())
       .children(
@@ -652,12 +699,11 @@ impl Render for SessionView {
         .justify_center()
         .items_center()
         .child(
-          v_flex()
-            .w_full()
-            .max_w(gpui_kit::rems(42.))
-            .min_w_0()
+          reading_lane(wide)
+            .flex()
+            .flex_col()
             .gap_4()
-            .child(div().px_4().text_color(cx.theme().muted_foreground).child("Start a conversation"))
+            .child(div().text_color(cx.theme().muted_foreground).child("Start a conversation"))
             .child(dock),
         )
         .into_any_element()
@@ -672,7 +718,13 @@ impl Render for SessionView {
             .relative()
             .flex_1()
             .min_h_0()
-            .child(transcript::transcript(&self.model, live, &self.scroller, self.rows.clone()))
+            .child(transcript::transcript(
+              live,
+              &self.scroller,
+              self.rows.clone(),
+              &self.transcript,
+              wide,
+            ))
             .child(self.timeline.clone()),
         )
         .child(h_flex().w_full().justify_center().px_4().child(dock))
@@ -807,7 +859,7 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
-  async fn expanding_the_editor_preserves_editing_state_and_escape_keeps_the_turn_running(cx: &mut TestAppContext) {
+  async fn editor_and_reading_width_remain_aligned_across_layout_changes(cx: &mut TestAppContext) {
     use std::path::PathBuf;
 
     use alvin_client::{ChannelPair, Client, Endpoint};
@@ -1042,7 +1094,8 @@ mod tests {
       window.render_frame(cx);
       let queries = window.find("conversation-timeline-menu").bounds();
       let transcript = window.find(format!("transcript-content-{id}")).bounds();
-      let first_message = window.within(format!("message-{id}-0")).find_by_label("Copy message").bounds();
+      let first_id = super::transcript::message_id(model.read(cx).conversation().live(session.live).unwrap(), 0);
+      let first_message = window.within(first_id).find_by_label("Copy message").bounds();
       assert!(queries.bottom() <= transcript.top());
       assert!(queries.bottom() <= first_message.top());
       assert!(first_message.top() >= transcript.top());
@@ -1062,6 +1115,45 @@ mod tests {
       assert!(content.size.width >= rem * 54., "wide content {content:?}, rem {rem:?}");
       assert!(window.find("conversation-timeline").visible());
       assert!(window.try_find("conversation-timeline-menu").is_none());
+    })
+    .unwrap();
+    cx.simulate_window_resize(handle, size(px(1500.), px(800.)));
+    render_layout_frames(cx, handle);
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      let normal = window.find(format!("composer-lane-{id}")).bounds();
+      let first_id = super::transcript::message_id(model.read(cx).conversation().live(session.live).unwrap(), 0);
+      let lane_id = format!("{first_id}-reading-lane");
+      let row = window.find(lane_id.clone()).bounds();
+      assert_eq!(normal.size.width, (window.rem_size() * super::READING_WIDTH_REM).round());
+      assert_eq!(normal.left(), row.left());
+      assert_eq!(normal.size.width, row.size.width);
+      window.click(format!("widescreen-toggle-{id}"), cx);
+      let wide = window.find(format!("composer-lane-{id}")).bounds();
+      let row = window.find(lane_id).bounds();
+      assert!(wide.size.width > normal.size.width);
+      assert_eq!(wide.left(), row.left());
+      assert_eq!(wide.size.width, row.size.width);
+      assert_eq!(window.find(format!("widescreen-toggle-{id}")).checked(), Some(true));
+    })
+    .unwrap();
+    cx.simulate_window_resize(handle, size(px(480.), px(800.)));
+    render_layout_frames(cx, handle);
+    cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      let wide = window.find(format!("composer-lane-{id}")).bounds();
+      let first_id = super::transcript::message_id(model.read(cx).conversation().live(session.live).unwrap(), 0);
+      let lane_id = format!("{first_id}-reading-lane");
+      let row = window.find(lane_id.clone()).bounds();
+      assert_eq!(wide.left(), row.left());
+      assert_eq!(wide.size.width, row.size.width);
+      window.click(format!("widescreen-toggle-{id}"), cx);
+      let normal = window.find(format!("composer-lane-{id}")).bounds();
+      let row = window.find(lane_id).bounds();
+      assert_eq!(normal.left(), row.left());
+      assert_eq!(normal.size.width, row.size.width);
+      assert_eq!(wide, normal);
+      assert_eq!(window.find(format!("widescreen-toggle-{id}")).checked(), Some(false));
     })
     .unwrap();
     gateway.shutdown().await.unwrap();

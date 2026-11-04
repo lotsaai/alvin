@@ -6,9 +6,11 @@
 
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::base::TextViewDefaults;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::component::input::{
   EditorState, FoldRange, HighlightStyleResolver, InputEdit, InputHighlighter, InputHighlighterFactory, Rope,
 };
@@ -70,7 +72,21 @@ fn highlight_language(text: &str, language: &str) -> verdant::Result<Highlights>
     static SET: LanguageSetImpl = LanguageSetImpl::new();
   }
   SET.with(|set| {
-    let language = Lang::for_name(language, set)?;
+    let raw = language.split_whitespace().next().unwrap_or_default();
+    if raw.is_empty() {
+      return Err(verdant::Error::UnsupportedLanguage(String::new()));
+    }
+    let name = palate::try_detect(format!("file.{raw}"), text)
+      .map(|file_type| file_type.to_string())
+      .unwrap_or_else(|| raw.to_owned())
+      .to_ascii_lowercase();
+    let language = match Lang::for_name(&name, set) {
+      Ok(language) => language,
+      Err(verdant::Error::UnsupportedLanguage(_)) => {
+        Lang::for_injection(&name, set).ok_or_else(|| verdant::Error::UnsupportedLanguage(name.clone()))?
+      }
+      Err(error) => return Err(error),
+    };
     let lines = Processor::process_once(text, language, set)?;
     let base = text.as_ptr() as usize;
     Ok(
@@ -85,6 +101,21 @@ fn highlight_language(text: &str, language: &str) -> verdant::Result<Highlights>
         .collect(),
     )
   })
+}
+
+pub(super) fn syntax_highlighter(theme: Arc<HighlightTheme>) -> impl Fn(&str, &str) -> Vec<(Range<usize>, HighlightStyle)> + Send + Sync {
+  move |language, text| {
+    highlight_language(text, language)
+      .unwrap_or_else(|error| {
+        if !matches!(error, verdant::Error::UnsupportedLanguage(_)) {
+          tracing::warn!(%error, %language, "diff highlighting failed");
+        }
+        Vec::new()
+      })
+      .into_iter()
+      .filter_map(|(range, key)| theme.style(theme_name(key)).map(|style| (range, style)))
+      .collect()
+  }
 }
 
 /// The name gpui-kit's syntax theme knows for a verdant key. Keys it has no markup entry for fall through unchanged and are
@@ -150,12 +181,22 @@ mod tests {
 
   #[test]
   fn code_fences_use_language_grammars() {
-    let code = "fn main() { let n = 42; }\n";
+    let code = "static VALUE: i32 = 42;\n";
     let highlights = highlight_language(code, "rust").unwrap();
-    assert!(key_of(code, &highlights, "fn").is_some());
+    assert!(key_of(code, &highlights, "static").is_some());
     assert!(key_of(code, &highlights, "42").is_some());
+    assert_eq!(highlight_language(code, "RUST ignore").unwrap(), highlights);
+    assert_eq!(highlight_language(code, "rs").unwrap(), highlights);
+
+    let header = "namespace example { int value; }\n";
+    assert!(key_of(header, &highlight_language(header, "h linenos").unwrap(), "namespace").is_some());
+
+    let detected = "fn main() { let n = 42; }\n";
+    let highlights = highlight_language(detected, "not-a-language").unwrap();
+    assert!(key_of(detected, &highlights, "fn").is_some());
+    assert!(key_of(detected, &highlights, "42").is_some());
     assert!(matches!(
-      highlight_language(code, "not-a-language"),
+      highlight_language("A quiet afternoon.\n", "not-a-language"),
       Err(verdant::Error::UnsupportedLanguage(_))
     ));
   }

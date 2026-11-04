@@ -434,6 +434,47 @@ url = "https://nodejs.org/dist/v24.22.2/node-v24.22.2-win-x64.zip"
 checksum = "sha256:ca1bff5d8ead13c9f2ea404a176db46bd430704d5b5113734049fa365e7799e2"
 url = "https://nodejs.org/dist/v24.22.2/node-v24.22.2-win-x64.zip"
 
+[[tools.pitchfork]]
+version = "2.33.0"
+backend = "packslip:github.com/jdx/pitchfork"
+specifiers = ["latest"]
+
+[tools.pitchfork."platforms.linux-arm64"]
+checksum = "sha256:c1fbba24580a7ea662b9b13cf2958f7943586cba2efc3bca2ba44d333e4d2d6a"
+url = "https://github.com/jdx/pitchfork/releases/download/v2.33.0/pitchfork-aarch64-unknown-linux-gnu.tar.gz"
+signer = "sigstore-oidc:https://github.com/jdx/pitchfork/.github/workflows/release.yml"
+repository_ids = { repository = "899500793" }
+
+[tools.pitchfork."platforms.linux-x64"]
+checksum = "sha256:a82f3daa0a0cdfb05629e5d7e18e1bbac757d17e57d80edb0179eb167555b99c"
+url = "https://github.com/jdx/pitchfork/releases/download/v2.33.0/pitchfork-x86_64-unknown-linux-gnu.tar.gz"
+signer = "sigstore-oidc:https://github.com/jdx/pitchfork/.github/workflows/release.yml"
+repository_ids = { repository = "899500793" }
+
+[tools.pitchfork."platforms.linux-x64-baseline"]
+checksum = "sha256:a82f3daa0a0cdfb05629e5d7e18e1bbac757d17e57d80edb0179eb167555b99c"
+url = "https://github.com/jdx/pitchfork/releases/download/v2.33.0/pitchfork-x86_64-unknown-linux-gnu.tar.gz"
+signer = "sigstore-oidc:https://github.com/jdx/pitchfork/.github/workflows/release.yml"
+repository_ids = { repository = "899500793" }
+
+[tools.pitchfork."platforms.macos-arm64"]
+checksum = "sha256:eeb71381cf6e2b87575cc3bc06a98a2f1c5ab741acd1e5522cde7ad3727f9d32"
+url = "https://github.com/jdx/pitchfork/releases/download/v2.33.0/pitchfork-aarch64-apple-darwin.tar.gz"
+signer = "sigstore-oidc:https://github.com/jdx/pitchfork/.github/workflows/release.yml"
+repository_ids = { repository = "899500793" }
+
+[tools.pitchfork."platforms.windows-x64"]
+checksum = "sha256:803d14a32eedc4264d82db711ca31eb257244d870fe915c96b63c62efbc7e450"
+url = "https://github.com/jdx/pitchfork/releases/download/v2.33.0/pitchfork-x86_64-pc-windows-msvc.zip"
+signer = "sigstore-oidc:https://github.com/jdx/pitchfork/.github/workflows/release.yml"
+repository_ids = { repository = "899500793" }
+
+[tools.pitchfork."platforms.windows-x64-baseline"]
+checksum = "sha256:803d14a32eedc4264d82db711ca31eb257244d870fe915c96b63c62efbc7e450"
+url = "https://github.com/jdx/pitchfork/releases/download/v2.33.0/pitchfork-x86_64-pc-windows-msvc.zip"
+signer = "sigstore-oidc:https://github.com/jdx/pitchfork/.github/workflows/release.yml"
+repository_ids = { repository = "899500793" }
+
 [[tools.pkl]]
 version = "0.32.2"
 backend = "aqua:apple/pkl"

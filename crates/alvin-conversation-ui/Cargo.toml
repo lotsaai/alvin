@@ -13,6 +13,7 @@ anstyle-parse = "1.0.0"
 ghostty-vt = "0.8.0"
 gpui-kit = "0.9.0"
 lsp-types = "0.97.0"
+palate = "0.3.9"
 serde_json = "1.0.154"
 tracing = "0.1.44"
 verdant = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3" }

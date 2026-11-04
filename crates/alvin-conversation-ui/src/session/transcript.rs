@@ -1,25 +1,33 @@
 //! The transcript: committed messages plus the one streaming, in a `MessageScroller`.
+mod content;
+mod events;
+mod owner;
+mod tool;
 
+pub(super) use owner::Transcript;
+
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
 use alvin_conversation::LiveView;
 use alvin_protocol::{AgentMessage, AssistantContent, LiveSessionId, MessageContent, UserContent};
-use gpui_kit::base::motion::{MotionReveal, spring};
-use gpui_kit::component::bubble::{Bubble, BubbleContent, BubbleVariant};
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::base::TestSupportExt as _;
+use gpui_kit::component::bubble::{Bubble, BubbleVariant};
 use gpui_kit::component::marker::{Marker, MarkerContent, MarkerLoadingStyle, MarkerVariant};
-use gpui_kit::component::message::{Message, MessageAlignment, MessageContent as MessageBody, MessageHeader};
+use gpui_kit::component::message::{Message, MessageContent as MessageBody, MessageHeader};
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::text::TextView;
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
 use gpui_kit::{
-  AnyElement, App, ElementId, Entity, Global, Hsla, InteractiveElement as _, IntoElement as _, ParentElement as _, RenderOnce,
-  SharedString, Styled as _, Window, div, prelude::FluentBuilder as _,
+  AnyElement, App, ElementId, Entity, Global, Hsla, InteractiveElement as _, IntoElement as _, ParentElement as _, SharedString,
+  Styled as _, Window, div,
 };
-use serde_json::Value;
 
-use super::tool_card::{ToolCard, fenced};
-use crate::model::Model;
+fn fenced(text: &str) -> String {
+  let longest = text.split(|c| c != '`').map(str::len).max().unwrap_or_default();
+  let fence = "`".repeat(longest.max(2).saturating_add(1));
+  format!("{fence}\n{text}\n{fence}")
+}
 
 /// Application-provided colors for user message bubbles.
 ///
@@ -68,6 +76,14 @@ fn message_at(view: &LiveView, index: usize) -> Option<(&AgentMessage, bool)> {
       .then(|| view.streaming.as_ref().map(|streaming| (&streaming.message, true)))
       .flatten()
   })
+}
+
+pub(super) fn message_id(view: &LiveView, index: usize) -> SharedString {
+  SharedString::from(format!(
+    "message-{}-snapshot-{}-{index}",
+    view.live.as_uuid(),
+    view.snapshot_generation
+  ))
 }
 
 fn ancillary(message: &AgentMessage) -> bool {
@@ -122,495 +138,100 @@ pub(crate) fn rows(view: &LiveView) -> Vec<Row> {
   rows
 }
 
-/// The scroller of one live session. Rows are read from the model when the list asks for them, so no transcript is cloned.
+#[derive(Default)]
+struct ToolResults {
+  calls: HashMap<(usize, usize), usize>,
+  results: HashMap<usize, (usize, usize)>,
+}
+
+impl ToolResults {
+  fn new(view: &LiveView) -> Self {
+    let mut pending: HashMap<&str, VecDeque<(usize, usize)>> = HashMap::new();
+    let mut paired = Self::default();
+    for index in 0..view.transcript.len() + usize::from(view.streaming.is_some()) {
+      match message_at(view, index).map(|(message, _)| message) {
+        Some(AgentMessage::User(_)) => pending.clear(),
+        Some(AgentMessage::Assistant(message)) => {
+          for (position, block) in message.content.iter().flatten().enumerate() {
+            if let AssistantContent::ToolCall(call) = block
+              && let Some(id) = call.id.as_deref().filter(|id| !id.is_empty())
+            {
+              pending.entry(id).or_default().push_back((index, position));
+            }
+          }
+        }
+        Some(AgentMessage::ToolResult(result)) => {
+          if let Some(call) = result
+            .tool_call_id
+            .as_deref()
+            .and_then(|id| pending.get_mut(id))
+            .and_then(VecDeque::pop_front)
+          {
+            paired.calls.insert(call, index);
+            paired.results.insert(index, call);
+          }
+        }
+        _ => {}
+      }
+    }
+    paired
+  }
+}
+
 pub(crate) fn transcript(
-  model: &Entity<Model>,
   live: LiveSessionId,
   scroller: &Entity<MessageScrollerState>,
   rows: Rc<Vec<Row>>,
+  transcript: &owner::Transcript,
+  wide: bool,
 ) -> MessageScroller {
-  let model = model.clone();
+  let blocks = transcript.blocks();
+  let transcript_generation = transcript.generation();
   MessageScroller::new(
     ElementId::from(SharedString::from(format!("transcript-{}", live.as_uuid()))),
     scroller.clone(),
-    move |index, _: &mut Window, cx: &mut App| row(&model, live, rows.get(index), cx),
-  )
-  .w_full()
-  .flex_1()
-}
-
-fn row(model: &Entity<Model>, live: LiveSessionId, row: Option<&Row>, cx: &App) -> AnyElement {
-  let Some(view) = model.read(cx).conversation().live(live) else {
-    return div().into_any_element();
-  };
-  let Some(row) = row else {
-    return div().into_any_element();
-  };
-  let (index, message, streaming) = match row {
-    Row::Message(index) => {
-      let Some((message, streaming)) = message_at(view, *index) else {
+    move |index, _: &mut Window, _: &mut App| {
+      let Some(row) = rows.get(index) else {
         return div().into_any_element();
       };
-      (*index, Some(message), streaming)
-    }
-    Row::Response { start, .. } => (*start, None, false),
-  };
-  let id = SharedString::from(format!("message-{}-{index}", live.as_uuid()));
-  let body = match (row, message) {
-    (Row::Response { start, end }, _) => response(&id, model, live, view, *start, *end, cx),
-    (_, Some(message)) => message_row(&id, message, view, streaming, cx),
-    _ => return div().into_any_element(),
-  };
-  let body = if !streaming {
-    body
-  } else {
-    v_flex()
-      .w_full()
-      .child(body)
-      .child(
-        Marker::new()
-          .id(SharedString::from(format!("{id}-working")))
-          .loading(true)
-          .with_loading_style(MarkerLoadingStyle::Shimmer)
-          .content(MarkerContent::new().text("Working")),
-      )
-      .into_any_element()
-  };
-  h_flex()
-    .group("message-actions")
-    .w_full()
-    .justify_center()
-    .px_1()
-    .child(div().w_full().max_w(gpui_kit::rems(42.)).min_w_0().child(body))
-    .into_any_element()
-}
-
-fn final_block(view: &LiveView, end: usize) -> Option<(usize, usize)> {
-  for index in (0..end).rev() {
-    let (message, _) = message_at(view, index)?;
-    if ancillary(message) {
-      continue;
-    }
-    let AgentMessage::Assistant(assistant) = message else {
-      return None;
-    };
-    let blocks = assistant.content.as_ref()?;
-    let position = blocks.len().checked_sub(1)?;
-    return matches!(blocks.get(position), Some(AssistantContent::Text(_))).then_some((index, position));
-  }
-  None
-}
-
-fn process_children(id: &SharedString, view: &LiveView, start: usize, end: usize, cx: &App) -> Vec<AnyElement> {
-  let final_block = final_block(view, end);
-  let mut process = Vec::new();
-  let mut calls = std::collections::HashSet::new();
-  for index in start..end {
-    let Some((message, is_streaming)) = message_at(view, index) else {
-      continue;
-    };
-    let message_id = SharedString::from(format!("{id}-{index}"));
-    match message {
-      AgentMessage::Assistant(assistant) => {
-        if let Some(error) = &assistant.error_message {
-          process.push(
-            div()
-              .text_color(cx.theme().danger)
-              .child(SharedString::from(error.clone()))
-              .into_any_element(),
-          );
-        }
-        for (position, block) in assistant.content.iter().flatten().enumerate() {
-          if final_block == Some((index, position)) {
-            continue;
+      let range = match row {
+        Row::Message(index) => *index..index.saturating_add(1),
+        Row::Response { start, end } => *start..*end,
+      };
+      let mut body = v_flex().w_full().gap_2();
+      for index in range.clone() {
+        if let Some((block, streaming)) = blocks.get(index) {
+          if let Some(block) = block {
+            body = body.child(block.view());
           }
-          match block {
-            AssistantContent::Thinking(thinking) => {
-              process.push(
-                div()
-                  .text_sm()
-                  .text_color(cx.theme().muted_foreground)
-                  .child(SharedString::from(thinking.thinking.clone().unwrap_or_default()))
-                  .into_any_element(),
-              );
-            }
-            AssistantContent::ToolCall(call) => {
-              let call_id = call.id.as_deref().unwrap_or_default();
-              let result = if call_id.is_empty() {
-                None
-              } else {
-                (index + 1..end).find_map(|next| match message_at(view, next) {
-                  Some((AgentMessage::ToolResult(result), _)) if result.tool_call_id.as_deref() == Some(call_id) => Some(result),
-                  _ => None,
-                })
-              };
-              if result.is_some() {
-                calls.insert(call_id.to_owned());
-              }
-              let card_id = if call_id.is_empty() {
-                format!("{message_id}-{position}")
-              } else {
-                call_id.to_owned()
-              };
-              let mut card = ToolCard::of_call(
-                &card_id,
-                call.name.as_deref().unwrap_or("tool"),
-                call.intent.as_deref(),
-                call.arguments.clone().map(Value::Object),
-                view.tools.get(call_id),
-              );
-              card.expanded = true;
-              if let Some(result) = result {
-                card.result = Some(serde_json::json!({ "content": result.content, "details": result.details }));
-                card.running = false;
-                card.failed |= result.is_error.unwrap_or(false);
-              }
-              process.push(card.into_any_element());
-            }
-            _ => process.push(assistant_block(&message_id, position, block, view, is_streaming)),
+          if *streaming {
+            body = body.child(
+              Marker::new()
+                .loading(true)
+                .with_loading_style(MarkerLoadingStyle::Shimmer)
+                .content(MarkerContent::new().text("Working")),
+            );
           }
         }
       }
-      AgentMessage::ToolResult(result) => {
-        if !result.tool_call_id.as_ref().is_some_and(|call| calls.remove(call)) {
-          process.push(message_row(&message_id, message, view, is_streaming, cx));
-        }
-      }
-      _ => process.push(message_row(&message_id, message, view, is_streaming, cx)),
-    }
-  }
-  process
-}
-
-fn response(
-  id: &SharedString,
-  model: &Entity<Model>,
-  live: LiveSessionId,
-  view: &LiveView,
-  start: usize,
-  end: usize,
-  cx: &App,
-) -> AnyElement {
-  let final_block = final_block(view, end);
-  let mut steps = 0usize;
-  let mut failed = false;
-  let mut has_process = false;
-  let mut streaming = false;
-  for index in start..end {
-    let Some((message, is_streaming)) = message_at(view, index) else {
-      continue;
-    };
-    streaming |= is_streaming;
-    match message {
-      AgentMessage::Assistant(assistant) => {
-        failed |= assistant.error_message.is_some();
-        has_process |= assistant.error_message.is_some();
-        for (position, block) in assistant.content.iter().flatten().enumerate() {
-          if final_block != Some((index, position)) {
-            has_process = true;
-          }
-          if let AssistantContent::ToolCall(call) = block {
-            steps += 1;
-            failed |= call
-              .id
-              .as_deref()
-              .and_then(|id| view.tools.get(id))
-              .is_some_and(|execution| execution.outcome.as_ref().is_some_and(|outcome| outcome.is_error));
-          }
-        }
-      }
-      AgentMessage::ToolResult(result) => {
-        has_process = true;
-        failed |= result.is_error.unwrap_or(false);
-      }
-      _ => has_process = true,
-    }
-  }
-  let answer = final_block.and_then(|(index, position)| {
-    let (message @ AgentMessage::Assistant(assistant), is_streaming) = message_at(view, index)? else {
-      return None;
-    };
-    let block = assistant.content.as_ref()?.get(position)?;
-    let message_id = SharedString::from(format!("{id}-{index}"));
-    let content = assistant_block(&message_id, position, block, view, is_streaming);
-    Some(
-      Message::new()
-        .id(ElementId::from(message_id.clone()))
-        .content(MessageBody::new().bubble(Bubble::new().with_variant(BubbleVariant::Ghost).child(content)))
-        .footer(super::message_chrome::message_footer(message_id, message, cx)),
-    )
-  });
-  let mut body = v_flex().w_full().gap_2();
-  if has_process {
-    body = body.child(Process {
-      id: id.clone(),
-      model: model.clone(),
-      live,
-      start,
-      end,
-      steps,
-      failed,
-      initially_open: answer.is_none(),
-    });
-  }
-  if let Some(answer) = answer {
-    body = body.child(answer);
-  }
-  if streaming {
-    body = body.child(
-      Marker::new()
-        .id(SharedString::from(format!("{id}-working")))
-        .loading(true)
-        .with_loading_style(MarkerLoadingStyle::Shimmer)
-        .content(MarkerContent::new().text("Working")),
-    );
-  }
-  body.into_any_element()
-}
-
-#[derive(gpui_kit::IntoElement)]
-struct Process {
-  id: SharedString,
-  model: Entity<Model>,
-  live: LiveSessionId,
-  start: usize,
-  end: usize,
-  steps: usize,
-  failed: bool,
-  initially_open: bool,
-}
-
-impl RenderOnce for Process {
-  fn render(self, window: &mut Window, cx: &mut App) -> impl gpui_kit::IntoElement {
-    let open = window.use_keyed_state(ElementId::from(SharedString::from(format!("{}-process", self.id))), cx, |_, _| {
-      self.initially_open
-    });
-    let is_open = *open.read(cx);
-    let label = if self.steps == 0 {
-      "Process".to_owned()
-    } else if self.steps == 1 {
-      "Ran 1 step".to_owned()
-    } else {
-      format!("Ran {} steps", self.steps)
-    };
-    let label = if self.failed { format!("{label} · failed") } else { label };
-    let toggle = Button::new(SharedString::from(format!("{}-process-toggle", self.id)))
-      .ghost()
-      .xsmall()
-      .label(label)
-      .accessibility_label(if is_open { "Hide process" } else { "Show process" })
-      .on_click(move |_, _, cx| {
-        open.update(cx, |open, cx| {
-          *open = !*open;
-          cx.notify();
-        })
-      });
-    let progress = spring(
-      (ElementId::from(self.id.clone()), "process-reveal"),
-      if is_open { 1. } else { 0. },
-      cx.theme().motion_tokens().spring_control,
-      window,
-      cx,
-    );
-    let children = (is_open || progress > 0.).then(|| {
-      self
-        .model
-        .read(cx)
-        .conversation()
-        .live(self.live)
-        .map(|view| process_children(&self.id, view, self.start, self.end, cx))
-        .unwrap_or_default()
-    });
-    v_flex()
-      .w_full()
-      .gap_2()
-      .child(h_flex().child(toggle))
-      .when_some(children, |this, children| {
-        this.child(MotionReveal::new(
-          ElementId::from(SharedString::from(format!("{}-process-reveal", self.id))),
-          progress,
-          v_flex().gap_2().children(children).into_any_element(),
-        ))
-      })
-  }
-}
-
-fn message_row(id: &SharedString, message: &AgentMessage, view: &LiveView, streaming: bool, cx: &App) -> AnyElement {
-  let row = Message::new().id(ElementId::from(id.clone()));
-  match message {
-    AgentMessage::User(user) => {
-      let text = user.content.as_ref().map(content_text).unwrap_or_default();
-      let colors = UserMessageColors::current(cx);
-      row
-        .alignment(MessageAlignment::End)
-        .content(
-          MessageBody::new().bubble(
-            Bubble::new()
-              .with_variant(BubbleVariant::Filled)
-              .content(BubbleContent::new().bg(colors.background()).text_color(colors.foreground()))
-              .child(TextView::markdown(SharedString::from(format!("{id}-text")), text)),
-          ),
-        )
-        .footer(super::message_chrome::message_footer(id.clone(), message, cx))
-        .into_any_element()
-    }
-    AgentMessage::Assistant(assistant) => {
-      let blocks = assistant
-        .content
-        .iter()
-        .flatten()
-        .enumerate()
-        .map(|(position, block)| assistant_block(id, position, block, view, streaming))
-        .collect::<Vec<_>>();
-      row
-        .content(
-          MessageBody::new().bubble(
-            Bubble::new()
-              .with_variant(BubbleVariant::Ghost)
-              .child(v_flex().gap_2().children(blocks)),
-          ),
-        )
-        .when(
-          matches!(
-            assistant.content.as_ref().and_then(|blocks| blocks.last()),
-            Some(AssistantContent::Text(_))
-          ),
-          |row| row.footer(super::message_chrome::message_footer(id.clone(), message, cx)),
+      let id = format!("message-{}-snapshot-{}-{}", live.as_uuid(), transcript_generation, range.start);
+      h_flex()
+        .group("message-actions")
+        .w_full()
+        .justify_center()
+        .px_4()
+        .child(
+          super::reading_lane(wide)
+            .id(SharedString::from(format!("{id}-reading-lane")))
+            .test_support()
+            .child(body),
         )
         .into_any_element()
-    }
-    AgentMessage::ToolResult(result) => {
-      let text = result
-        .content
-        .iter()
-        .flatten()
-        .map(user_content_text)
-        .collect::<Vec<_>>()
-        .join("\n");
-      let name = result.tool_name.clone().unwrap_or_else(|| "tool".to_owned());
-      note(row, id, &format!("{name} result"), &text)
-    }
-    AgentMessage::BashExecution(bash) => {
-      let command = bash.command.clone().unwrap_or_default();
-      let output = bash.output.clone().unwrap_or_default();
-      note(row, id, &format!("$ {command}"), &output)
-    }
-    AgentMessage::BranchSummary(summary) => boundary(row, id, "Branch summary", summary.summary.as_deref().unwrap_or_default()),
-    AgentMessage::CompactionSummary(summary) => boundary(row, id, "Compaction summary", summary.summary.as_deref().unwrap_or_default()),
-    AgentMessage::Custom(custom) => note(
-      row,
-      id,
-      custom.custom_type.as_deref().unwrap_or("custom"),
-      &custom.content.as_ref().map(content_text).unwrap_or_default(),
-    ),
-    AgentMessage::Developer(developer) => note(
-      row,
-      id,
-      "Developer",
-      &developer.content.as_ref().map(content_text).unwrap_or_default(),
-    ),
-    AgentMessage::PythonExecution(python) => note(
-      row,
-      id,
-      &format!("python {}", python.code.as_deref().unwrap_or_default()),
-      python.output.as_deref().unwrap_or_default(),
-    ),
-    AgentMessage::HookMessage(hook) => note(
-      row,
-      id,
-      hook.custom_type.as_deref().unwrap_or("hook"),
-      &hook.content.as_ref().map(content_text).unwrap_or_default(),
-    ),
-    AgentMessage::FileMention(mention) => note(
-      row,
-      id,
-      "Files",
-      &mention
-        .files
-        .iter()
-        .flatten()
-        .filter_map(|file| file.path.as_deref())
-        .collect::<Vec<_>>()
-        .join("\n"),
-    ),
-  }
-}
-
-/// One block of an assistant message.
-fn assistant_block(row: &SharedString, position: usize, block: &AssistantContent, view: &LiveView, streaming: bool) -> AnyElement {
-  let part = SharedString::from(format!("{row}-{position}"));
-  let marker = |part: SharedString, text: &'static str| Marker::new().id(part).content(MarkerContent::new().text(text)).into_any_element();
-  match block {
-    AssistantContent::Text(text) => TextView::markdown(part, text.text.clone().unwrap_or_default())
-      .stream_fade(streaming)
-      .into_any_element(),
-    AssistantContent::Thinking(thinking) => Reasoning {
-      id: part,
-      text: thinking.thinking.clone().unwrap_or_default(),
-    }
-    .into_any_element(),
-    AssistantContent::RedactedThinking(_) => marker(part, "Reasoning hidden by the provider"),
-    AssistantContent::ToolCall(call) => {
-      let call_id = call.id.as_deref().unwrap_or_default();
-      // A call without an id is still one card of its own, named by its place in the message.
-      let card_id = if call_id.is_empty() { part.to_string() } else { call_id.to_owned() };
-      ToolCard::of_call(
-        &card_id,
-        call.name.as_deref().unwrap_or("tool"),
-        call.intent.as_deref(),
-        call.arguments.clone().map(Value::Object),
-        view.tools.get(call_id),
-      )
-      .into_any_element()
-    }
-    AssistantContent::Image(_) => marker(part, "Image"),
-    AssistantContent::Fallback(_) => marker(part, "Fallback provider block"),
-    AssistantContent::AnthropicServerTool(_) => marker(part, "Server tool block"),
-  }
-}
-
-#[derive(gpui_kit::IntoElement)]
-struct Reasoning {
-  id: SharedString,
-  text: String,
-}
-
-impl RenderOnce for Reasoning {
-  fn render(self, window: &mut Window, cx: &mut App) -> impl gpui_kit::IntoElement {
-    let open = window.use_keyed_state(ElementId::from(self.id.clone()), cx, |_, _| false);
-    let is_open = *open.read(cx);
-    let toggle = Button::new(SharedString::from(format!("{}-toggle", self.id)))
-      .ghost()
-      .xsmall()
-      .label(if is_open { "Hide reasoning" } else { "Show reasoning" })
-      .on_click(move |_, _, cx| {
-        open.update(cx, |open, cx| {
-          *open = !*open;
-          cx.notify();
-        })
-      });
-    let progress = spring(
-      (ElementId::from(self.id.clone()), "reasoning-reveal"),
-      if is_open { 1. } else { 0. },
-      cx.theme().motion_tokens().spring_control,
-      window,
-      cx,
-    );
-    v_flex()
-      .w_full()
-      .child(h_flex().child(toggle))
-      .when(is_open || progress > 0., |this| {
-        this.child(MotionReveal::new(
-          ElementId::from(SharedString::from(format!("{}-reveal", self.id))),
-          progress,
-          div()
-            .text_sm()
-            .text_color(cx.theme().muted_foreground)
-            .child(SharedString::from(self.text))
-            .into_any_element(),
-        ))
-      })
-  }
+    },
+  )
+  .with_row_style(gpui_kit::StyleRefinement::default().px_0())
+  .w_full()
+  .flex_1()
 }
 
 /// A titled block of text that is not the user's and not the assistant's: output, results, custom messages.
@@ -665,21 +286,49 @@ fn user_content_text(content: &UserContent) -> String {
 
 #[cfg(test)]
 mod tests {
-  use std::time::Duration;
 
   use alvin_conversation::{Conversation, Streaming};
   use alvin_protocol::{AgentMessage, MessagesPage};
   use gpui_kit::component::ActiveTheme as _;
-  use gpui_kit::test::{TestAppContextExt as _, TestEventExt as _, TestQueryExt as _};
-  use gpui_kit::{AppContext as _, MouseButton, TestAppContext};
+  use gpui_kit::{AppContext as _, TestAppContext};
 
-  use super::{Row, UserMessageColors, final_block, rows};
-  use crate::test_support::{live_session, open_workspace};
-
-  const BUDGET: Duration = Duration::from_secs(1);
+  use super::{Row, UserMessageColors, rows};
+  use crate::test_support::live_session;
 
   /// An omp turn that called every built-in tool once, as omp recorded it.
   const TOOLS_TURN: &str = include_str!("../../fixtures/tools_turn.messages.json");
+
+  #[gpui_kit::test]
+  fn live_message_identity_survives_commit_and_snapshot_replaces_it(_cx: &mut TestAppContext) {
+    let events: Vec<alvin_protocol::Event> =
+      serde_json::from_str(include_str!("../../../alvin-conversation/fixtures/plain_turn.events.json")).unwrap();
+    let mut session = live_session("/work/api");
+    session.live = events[0].live;
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut committed = 0;
+    for event in &events {
+      let before = conversation.live(session.live).unwrap();
+      let pending = before
+        .streaming
+        .as_ref()
+        .map(|_| (before.transcript.len(), super::message_id(before, before.transcript.len())));
+      conversation.apply(event);
+      let after = conversation.live(session.live).unwrap();
+      if let Some((index, id)) = pending
+        && after.streaming.is_none()
+        && after.transcript.len() == index + 1
+      {
+        assert_eq!(id, super::message_id(after, index));
+        committed += 1;
+      }
+    }
+    assert!(committed > 0);
+    let before = super::message_id(conversation.live(session.live).unwrap(), 0);
+    let page: MessagesPage = serde_json::from_str(include_str!("../../../alvin-conversation/fixtures/plain_turn.messages.json")).unwrap();
+    conversation.load_page(session.live, page);
+    assert_ne!(before, super::message_id(conversation.live(session.live).unwrap(), 0));
+  }
 
   #[gpui_kit::test]
   fn injected_context_stays_with_response_and_final_answer(_cx: &mut TestAppContext) {
@@ -711,8 +360,6 @@ mod tests {
         Row::Response { start: 7, end: 9 },
       ]
     );
-    assert_eq!(final_block(&view, 6), Some((4, 0)));
-    assert_eq!(final_block(&view, 9), Some((8, 0)));
     assert!(matches!(view.transcript.get(1), Some(AgentMessage::Custom(_))));
     assert!(matches!(view.transcript.get(3), Some(AgentMessage::ToolResult(_))));
     assert!(matches!(view.transcript.get(5), Some(AgentMessage::HookMessage(_))));
@@ -731,7 +378,6 @@ mod tests {
     view.transcript = page.messages;
     let end = view.transcript.len();
     assert_eq!(rows(&view), vec![Row::Message(0), Row::Response { start: 1, end }]);
-    assert!(final_block(&view, end).is_some());
     let user: AgentMessage = serde_json::from_value(serde_json::json!({"role": "user", "content": "next"})).unwrap();
     let assistant: AgentMessage = serde_json::from_value(serde_json::json!({
       "role": "assistant", "content": [{"type": "thinking", "thinking": "working"}]
@@ -754,16 +400,36 @@ mod tests {
         },
       ]
     );
-    assert_eq!(final_block(&view, end + 2), None);
     view.streaming.as_mut().unwrap().message = serde_json::from_value(serde_json::json!({
       "role": "assistant", "content": [
         {"type": "thinking", "thinking": "working"}, {"type": "text", "text": "answer"}
       ]
     }))
     .unwrap();
-    assert_eq!(final_block(&view, end + 2), Some((end + 1, 1)));
     view.transcript.remove(0);
     assert_eq!(rows(&view).first(), Some(&Row::Message(0)));
+  }
+
+  #[gpui_kit::test]
+  fn repeated_tool_ids_pair_in_order_and_orphans_stay_unpaired(_cx: &mut TestAppContext) {
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.transcript = serde_json::from_value(serde_json::json!([
+      {"role":"toolResult","toolCallId":"same","content":[{"type":"text","text":"orphan"}]},
+      {"role":"assistant","content":[
+        {"type":"toolCall","id":"same","name":"read","arguments":{"path":"first"}},
+        {"type":"toolCall","id":"same","name":"read","arguments":{"path":"second"}}
+      ]},
+      {"role":"toolResult","toolCallId":"same","content":[{"type":"text","text":"first result"}]},
+      {"role":"toolResult","toolCallId":"same","isError":true,"content":[{"type":"text","text":"second result"}]}
+    ]))
+    .unwrap();
+    let results = super::ToolResults::new(&view);
+    assert_eq!(results.results.get(&0), None);
+    assert_eq!(results.results.get(&2), Some(&(1, 0)));
+    assert_eq!(results.results.get(&3), Some(&(1, 1)));
   }
 
   #[gpui_kit::test]
@@ -783,43 +449,310 @@ mod tests {
     });
   }
 
-  #[tokio::test(flavor = "multi_thread")]
+  struct CaptureTranscript {
+    transcript: super::owner::Transcript,
+    composer: gpui_kit::Entity<gpui_kit::component::input::EditorState>,
+    scroller: gpui_kit::Entity<gpui_kit::component::message_scroller::MessageScrollerState>,
+  }
+
+  impl CaptureTranscript {
+    fn new(view: alvin_conversation::LiveView, window: &mut gpui_kit::Window, cx: &mut gpui_kit::Context<Self>) -> Self {
+      let composer = cx.new(|cx| gpui_kit::component::input::EditorState::new(window, cx));
+      let scroller = cx.new(|cx| gpui_kit::component::message_scroller::MessageScrollerState::new(0, cx));
+      let mut transcript = super::owner::Transcript::default();
+      let prepared = transcript.prepare(&view);
+      transcript.apply(prepared, &composer, &scroller, window, cx);
+      Self {
+        transcript,
+        composer,
+        scroller,
+      }
+    }
+
+    fn sync(&mut self, view: &alvin_conversation::LiveView, window: &mut gpui_kit::Window, cx: &mut gpui_kit::Context<Self>) {
+      let prepared = self.transcript.prepare(view);
+      self.transcript.apply(prepared, &self.composer, &self.scroller, window, cx);
+      cx.notify();
+    }
+  }
+
+  impl gpui_kit::Render for CaptureTranscript {
+    fn render(&mut self, _: &mut gpui_kit::Window, cx: &mut gpui_kit::Context<Self>) -> impl gpui_kit::IntoElement {
+      use gpui_kit::{ParentElement as _, Styled as _};
+      gpui_kit::component::v_flex()
+        .size_full()
+        .bg(cx.theme().background)
+        .p_4()
+        .gap_2()
+        .children(
+          self
+            .transcript
+            .blocks()
+            .iter()
+            .filter_map(|(block, _)| block.as_ref().map(|block| block.view())),
+        )
+    }
+  }
+
+  struct VirtualTranscript {
+    fixture: gpui_kit::Entity<CaptureTranscript>,
+    live: alvin_protocol::LiveSessionId,
+    rows: std::rc::Rc<Vec<super::Row>>,
+  }
+
+  impl gpui_kit::Render for VirtualTranscript {
+    fn render(&mut self, _: &mut gpui_kit::Window, cx: &mut gpui_kit::Context<Self>) -> impl gpui_kit::IntoElement {
+      use gpui_kit::{ParentElement as _, Styled as _};
+      let fixture = self.fixture.read(cx);
+      gpui_kit::div().size_full().flex().flex_col().child(super::transcript(
+        self.live,
+        &fixture.scroller,
+        self.rows.clone(),
+        &fixture.transcript,
+        true,
+      ))
+    }
+  }
+
   #[gpui_kit::test]
-  async fn process_discloses_all_tool_cards_together(cx: &mut TestAppContext) {
-    let executor = cx.foreground_executor().clone();
-    executor.block_test(async {
-      let opened = open_workspace(cx).await;
-      let session = live_session("/work/api");
-      let page: MessagesPage = serde_json::from_str(TOOLS_TURN).unwrap();
-      cx.update(|cx| {
-        opened.model.update(cx, |model, cx| {
-          model.seed_open(&session, cx);
-          model.seed_messages(session.live, page, cx);
-        });
-      });
-      cx.wait_for(opened.handle, BUDGET, |window, _| {
-        !window.find_all_by_label("Show process").is_empty()
-      })
-      .await;
+  fn tool_state_survives_virtual_row_eviction(cx: &mut TestAppContext) {
+    use gpui_kit::test::TestWindowExt as _;
+    use gpui_kit::{Bounds, WindowBounds, WindowOptions, px, size};
 
-      cx.update_window(opened.handle, |_, window, cx| {
-        assert_eq!(window.find_all_by_label("Show process").len(), 1);
-        assert!(window.find_all_by_label("Show tool details").is_empty());
-        let toggle = window.find_all_by_label("Show process")[0].bounds().center();
-        window.pointer_down(toggle, MouseButton::Left, cx);
-        window.pointer_up(toggle, MouseButton::Left, cx);
-      })
-      .unwrap();
-      cx.wait_for(opened.handle, BUDGET, |window, _| {
-        !window.find_all_by_label("Hide process").is_empty()
-      })
-      .await;
-
-      cx.update_window(opened.handle, |_, window, _| {
-        assert_eq!(window.find_all_by_label("Hide process").len(), 1);
-        assert!(window.find_all_by_label("Show tool details").is_empty());
-      })
-      .unwrap();
+    cx.update(gpui_kit::init);
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.transcript.push(
+      serde_json::from_value(serde_json::json!({
+        "role":"assistant","content":[{"type":"toolCall","id":"a","name":"read","arguments":{"path":"a"}}]
+      }))
+      .unwrap(),
+    );
+    for index in 0..100 {
+      view
+        .transcript
+        .push(serde_json::from_value(serde_json::json!({"role":"user","content":format!("Message {index}")})).unwrap());
+    }
+    let id = super::message_id(&view, 0);
+    let rows = std::rc::Rc::new(super::rows(&view));
+    let count = rows.len();
+    let (window, virtual_view) = cx.update(|cx| {
+      gpui_kit::open_window(
+        WindowOptions {
+          window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(800.), px(500.))))),
+          ..Default::default()
+        },
+        cx,
+        |window, cx| {
+          let fixture = cx.new(|cx| CaptureTranscript::new(view, window, cx));
+          let scroller = fixture.read(cx).scroller.clone();
+          scroller.update(cx, |scroller, cx| scroller.reset(count, cx));
+          cx.new(|_| VirtualTranscript {
+            fixture,
+            live: session.live,
+            rows,
+          })
+        },
+      )
+      .unwrap()
     });
+    cx.update_window(window, |_, window, cx| {
+      let scroller = virtual_view.read(cx).fixture.read(cx).scroller.clone();
+      scroller.update(cx, |scroller, cx| {
+        assert!(scroller.scroll_to_item(0, cx));
+      });
+      window.render_frame(cx);
+      let toggle = format!("{id}-part-0-toggle");
+      window.click(toggle.clone(), cx);
+      assert_eq!(window.find(toggle.clone()).checked(), Some(false));
+      scroller.update(cx, |scroller, cx| {
+        assert!(scroller.scroll_to_item(count - 1, cx));
+      });
+      window.render_frame(cx);
+      assert!(window.try_find(toggle.clone()).is_none());
+      scroller.update(cx, |scroller, cx| {
+        assert!(scroller.scroll_to_item(0, cx));
+      });
+      window.render_frame(cx);
+      assert_eq!(window.find(toggle).checked(), Some(false));
+    })
+    .unwrap();
+  }
+
+  #[gpui_kit::test]
+  fn tool_state_survives_late_id_and_commit_but_resets_with_snapshot(cx: &mut TestAppContext) {
+    use gpui_kit::WindowOptions;
+    use gpui_kit::test::TestWindowExt as _;
+
+    cx.update(gpui_kit::init);
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.streaming = Some(Streaming {
+      message_id: None,
+      message: serde_json::from_value(serde_json::json!({
+        "role":"assistant","content":[{"type":"toolCall","name":"read","arguments":{"path":"a"}}]
+      }))
+      .unwrap(),
+    });
+    let id = super::message_id(&view, 0);
+    let (window, fixture) = cx.update(|cx| {
+      gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+        cx.new(|cx| CaptureTranscript::new(view.clone(), window, cx))
+      })
+      .unwrap()
+    });
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      let toggle = format!("{id}-part-0-toggle");
+      window.click(toggle.clone(), cx);
+      assert_eq!(window.find(toggle.clone()).checked(), Some(false));
+      let streaming = view.streaming.as_mut().unwrap();
+      streaming.message_id = Some("message-id".into());
+      if let AgentMessage::Assistant(message) = &mut streaming.message
+        && let Some(alvin_protocol::AssistantContent::ToolCall(call)) = message.content.as_mut().and_then(|parts| parts.first_mut())
+      {
+        call.id = Some("call-id".into());
+      }
+      fixture.update(cx, |fixture, cx| fixture.sync(&view, window, cx));
+      window.render_frame(cx);
+      assert_eq!(window.find(toggle.clone()).checked(), Some(false));
+      let streaming = view.streaming.take().unwrap();
+      view.transcript.push(streaming.message);
+      view.message_ids.push(streaming.message_id);
+      fixture.update(cx, |fixture, cx| fixture.sync(&view, window, cx));
+      window.render_frame(cx);
+      assert_eq!(window.find(toggle).checked(), Some(false));
+      view.snapshot_generation += 1;
+      fixture.update(cx, |fixture, cx| fixture.sync(&view, window, cx));
+      window.render_frame(cx);
+      let reset_id = super::message_id(&view, 0);
+      assert_eq!(window.find(format!("{reset_id}-part-0-toggle")).checked(), Some(true));
+    })
+    .unwrap();
+  }
+
+  #[gpui_kit::test]
+  fn concurrent_results_update_calls_in_call_order(cx: &mut TestAppContext) {
+    use gpui_kit::test::{TestQueryExt as _, TestWindowExt as _};
+    use gpui_kit::{Bounds, WindowBounds, WindowOptions, px, size};
+
+    cx.update(gpui_kit::init);
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.transcript = serde_json::from_value(serde_json::json!([
+      {"role":"toolResult","toolCallId":"orphan","toolName":"read","content":[{"type":"text","text":"orphan"}]},
+      {"role":"assistant","content":[
+        {"type":"toolCall","id":"a","name":"read","arguments":{"path":"a"}},
+        {"type":"toolCall","id":"b","name":"read","arguments":{"path":"b"}}
+      ]},
+      {"role":"toolResult","toolCallId":"b","toolName":"read","content":[{"type":"text","text":"B"}]},
+      {"role":"toolResult","toolCallId":"a","toolName":"read","content":[{"type":"text","text":"A"}]}
+    ]))
+    .unwrap();
+    let orphan_id = super::message_id(&view, 0);
+    let id = super::message_id(&view, 1);
+    let (window, _) = cx
+      .update(|cx| {
+        gpui_kit::open_window(
+          WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1000.), px(1800.))))),
+            ..Default::default()
+          },
+          cx,
+          |window, cx| cx.new(|cx| CaptureTranscript::new(view, window, cx)),
+        )
+      })
+      .unwrap();
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      let a = window.find(format!("{id}-part-0-toggle")).bounds().top();
+      let b = window.find(format!("{id}-part-1-toggle")).bounds().top();
+      assert!(window.find(format!("{orphan_id}-toggle")).bounds().top() < a);
+      assert!(a < b);
+      assert_eq!(window.find_all_by_label("Collapse tool card").len(), 3);
+    })
+    .unwrap();
+  }
+
+  #[gpui_kit::test]
+  fn reasoning_and_edit_disclosures_reopen_below_their_headers(cx: &mut TestAppContext) {
+    use gpui_kit::test::{TestQueryExt as _, TestWindowExt as _};
+    use gpui_kit::{Bounds, WindowBounds, WindowOptions, px, size};
+
+    cx.update(|cx| {
+      gpui_kit::init(cx);
+      cx.set_reduce_motion(true);
+    });
+    let session = live_session("/work/api");
+    let mut conversation = Conversation::default();
+    conversation.open(&session);
+    let mut view = conversation.live(session.live).unwrap().clone();
+    view.transcript = serde_json::from_value(serde_json::json!([
+      {"role":"assistant","content":[
+        {"type":"thinking","thinking":"Consider this change"},
+        {"type":"toolCall","id":"edit-1","name":"edit","arguments":{"path":"main.rs"}}
+      ]},
+      {"role":"toolResult","toolCallId":"edit-1","toolName":"edit",
+       "content":[{"type":"text","text":"Edited main.rs"}],
+       "details":{"diff":"-1|fn old() {}\n+1|fn new() {}"}}
+    ]))
+    .unwrap();
+    let id = super::message_id(&view, 0);
+    let (window, _) = cx
+      .update(|cx| {
+        gpui_kit::open_window(
+          WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds::new(Default::default(), size(px(1000.), px(1400.))))),
+            ..Default::default()
+          },
+          cx,
+          |window, cx| cx.new(|cx| CaptureTranscript::new(view, window, cx)),
+        )
+      })
+      .unwrap();
+    cx.update_window(window, |_, window, cx| {
+      window.render_frame(cx);
+      let reasoning = format!("{id}-part-0-toggle");
+      let reasoning_body = format!("{id}-part-0-details");
+      let edit = format!("{id}-part-1-toggle");
+      let edit_body = format!("{id}-part-1-details");
+      assert!(window.try_find(reasoning_body.clone()).is_none());
+      assert!(window.find(edit_body.clone()).visible());
+      window.click(edit.clone(), cx);
+      assert!(window.try_find(edit_body.clone()).is_none());
+      for _ in 0..2 {
+        window.click(reasoning.clone(), cx);
+        let header = window.find(reasoning.clone()).bounds();
+        let body = window.find(reasoning_body.clone()).bounds();
+        assert!(body.top() >= header.bottom());
+        assert_eq!(body.size.width, header.size.width);
+        window.click(reasoning.clone(), cx);
+        assert!(window.try_find(reasoning_body.clone()).is_none());
+
+        window.click(edit.clone(), cx);
+        let header = window.find(edit.clone()).bounds();
+        let body = window.find(edit_body.clone()).bounds();
+        assert!(body.top() >= header.bottom());
+        assert_eq!(body.size.width, header.size.width);
+        assert!(window.find_by_label("fn new() {}").visible());
+        window.click(edit.clone(), cx);
+        assert!(window.try_find(edit_body.clone()).is_none());
+      }
+      window.click(edit.clone(), cx);
+      window.click("collapse-file", cx);
+      assert!(window.try_find_by_label("fn new() {}").is_none());
+      window.click(edit.clone(), cx);
+      window.click(edit.clone(), cx);
+      assert!(window.try_find_by_label("fn new() {}").is_none());
+      window.click("collapse-file", cx);
+      assert!(window.find_by_label("fn new() {}").visible());
+    })
+    .unwrap();
   }
 }
