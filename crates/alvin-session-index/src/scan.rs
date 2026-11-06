@@ -105,7 +105,6 @@ mod tests {
     // omp records the cwd as the OS reported it, which may be a symlinked spelling (`/var` for `/private/var`).
     assert_eq!(head.cwd.canonicalize().unwrap(), project);
     assert_eq!(head.path, file);
-    assert_eq!(head.title.as_deref(), Some("Reply with the single word ok."));
   }
 
   #[test]

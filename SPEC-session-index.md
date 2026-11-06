@@ -45,6 +45,8 @@ Tests that start omp set `HOME` to a throwaway directory, pass `--session-dir` t
 
 For each distinct `cwd` in headers, call `Workspace::discover(cwd)` (code-workspace 0.2.0, read from the published source). `Workspace::repository_root()` returns the primary repository for a linked git worktree (`.git` file, `gitdir:` then `commondir`) or a secondary jj workspace (`.jj/repo` pointer); `Workspace::root()` is the checkout itself; `Workspace::vcs()` reports git, jj, or colocated jj. Sessions group by (repository root, checkout root). A `cwd` is resolved once per scan and cached by path.
 
+Checkout-scoped listing first compares the requested checkout id against the canonical cwd and its ancestors, then discovers only candidate workspaces and validates both project and checkout membership. It still scans every session header and reports scan errors. A project-wide listing discovers all distinct cwds.
+
 Unresolved sessions: when `discover` fails (the `cwd` gone, or a worktree whose main repository was deleted, which 0.2.0 reports as an error), the sessions belong to no project and are not listed. The project is gone, so there is nothing to open or resume it in.
 
 ## Dependencies

@@ -24,7 +24,11 @@ pub enum PreparationProgress {
   Loading,
 }
 
-pub(crate) fn prepare(root: &Path, progress: &mut impl FnMut(PreparationProgress) -> ControlFlow<()>) -> Result<PathBuf> {
+/// Download missing model assets into the revision-keyed cache without loading inference.
+///
+/// # Errors
+/// Returns cache IO, download, asset-length, or cancellation errors.
+pub fn prepare(root: &Path, progress: &mut impl FnMut(PreparationProgress) -> ControlFlow<()>) -> Result<PathBuf> {
   let dir = root.join(MODEL).join(REVISION);
   fs::create_dir_all(&dir).map_err(|source| Error::CacheIo { path: dir.clone(), source })?;
   let mut missing = Vec::new();

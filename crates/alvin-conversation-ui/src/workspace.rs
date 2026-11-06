@@ -855,6 +855,7 @@ impl Workspace {
 
 #[cfg(test)]
 mod tests {
+  use std::path::PathBuf;
   use std::time::Duration;
 
   use gpui_kit::test::{TestAppContextExt as _, TestEventExt as _, TestQueryExt as _, TestWindowExt as _};
@@ -871,7 +872,11 @@ mod tests {
       if let Some(path) = self.0.take()
         && let Err(error) = std::fs::remove_dir_all(&path)
       {
-        tracing::error!(path = %path.display(), %error, "could not remove workspace test directory");
+        if std::thread::panicking() {
+          eprintln!("could not remove {}: {error}", path.display());
+        } else {
+          panic!("could not remove {}: {error}", path.display());
+        }
       }
     }
   }
@@ -1219,7 +1224,10 @@ mod tests {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let (handle, workspace, _events) = cx.update(|cx| {
       gpui_kit::init(cx);
-      crate::init(fixture.directory.0.as_ref().unwrap().join("speech-cache"), cx);
+      crate::init(
+        PathBuf::from(std::env::var_os("ALVIN_TEST_SPEECH_CACHE").expect("run tests through mise test")),
+        cx,
+      );
       let model = cx.new(|cx| {
         let mut model = Model::new(client.clone(), cx);
         model.seed_workspace(projects, vec![(key, page)], cx);
@@ -1238,6 +1246,10 @@ mod tests {
       (handle, workspace, events)
     });
     cx.update_window(handle, |_, window, cx| {
+      window.render_frame(cx);
+      window.click("focus-sessions", cx);
+      window.press("down", cx);
+      window.press("right", cx);
       window.render_frame(cx);
       assert_eq!(window.find("navigation-back").disabled(), Some(true));
       window.click("titlebar-toggle-sidebar", cx);
@@ -1447,6 +1459,10 @@ mod tests {
         window.pointer_up(restore, MouseButton::Left, cx);
         window.render_frame(cx);
         assert!(window.find_by_label("Workbench").visible());
+        window.click("focus-sessions", cx);
+        window.press("down", cx);
+        window.press("right", cx);
+        window.render_frame(cx);
         assert!(window.find_by_label("Write the docs").visible());
       })
       .unwrap();
@@ -1504,11 +1520,12 @@ mod tests {
     let executor = cx.foreground_executor().clone();
     executor.block_test(async {
       let opened = open_workspace(cx).await;
-      cx.wait_for(opened.handle, BUDGET, |window, _| {
-        window.try_find_by_label("Write the docs").is_some()
-      })
-      .await;
       cx.update_window(opened.handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find_by_label("Write the docs").is_none());
+        window.click("focus-sessions", cx);
+        window.press("down", cx);
+        window.press("right", cx);
         window.render_frame(cx);
         for label in ["alvin", "Fix the build", "Write the docs"] {
           assert!(window.find_by_label(label).visible(), "{label} is listed");
@@ -1534,13 +1551,11 @@ mod tests {
     });
   }
 
+  #[test_context::test_context(crate::test_support::RealGateway)]
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
-  async fn navigation_and_shutdown_cancel_dictation(cx: &mut TestAppContext) {
-    use std::path::PathBuf;
-
+  async fn navigation_and_shutdown_cancel_dictation(fixture: &mut crate::test_support::RealGateway, cx: &mut TestAppContext) {
     use alvin_client::{ChannelPair, Client, Endpoint};
-    use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
     use alvin_protocol::{LiveApiClient, OpenRequest, OpenTarget, ProjectsApiClient};
     use gpui_kit::WindowOptions;
 
@@ -1552,30 +1567,7 @@ mod tests {
     let executor = cx.foreground_executor().clone();
     tokio::task::coop::unconstrained(async {
       executor.block_test(async {
-        let directory = tempfile::tempdir().unwrap();
-        let repo = directory.path().join("repo");
-        let sessions = directory.path().join("sessions");
-        std::fs::create_dir_all(&repo).unwrap();
-        std::fs::create_dir_all(sessions.join("-repo")).unwrap();
-        assert!(
-          std::process::Command::new("git")
-            .args(["init", "--quiet"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success()
-        );
-        let repo = repo.canonicalize().unwrap();
-        let seed =
-          include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
-        std::fs::write(sessions.join("-repo/2026-01-01T00-00-00-000Z_seed.jsonl"), seed).unwrap();
-        let gateway = Gateway::new(
-          GatewayConfig::builder()
-            .sessions_dir(sessions)
-            .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
-            .build(),
-        );
-        let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
+        let client = Client::connect(Endpoint::Channel(ChannelPair::from(fixture.gateway.connect_channel(64).unwrap())))
           .await
           .unwrap();
         let projects = ProjectsApiClient::list(&client).await.unwrap();
@@ -1594,9 +1586,15 @@ mod tests {
         .await
         .unwrap();
         let second = LiveApiClient::open(&client, OpenRequest { target, model: None }).await.unwrap();
+        let session_dir = fixture.directory.path().canonicalize().unwrap().join("sessions");
+        assert!(first.file.starts_with(&session_dir));
+        assert!(second.file.starts_with(&session_dir));
         let (handle, workspace, model) = cx.update(|cx| {
           gpui_kit::init(cx);
-          crate::init(directory.path().join("speech"), cx);
+          crate::init(
+            PathBuf::from(std::env::var_os("ALVIN_TEST_SPEECH_CACHE").expect("run tests through mise test")),
+            cx,
+          );
           let model = cx.new(|cx| {
             let mut model = Model::new(client.clone(), cx);
             model.seed_workspace(projects, Vec::new(), cx);
@@ -1723,7 +1721,6 @@ mod tests {
           assert_eq!(first_session.read(cx).composer_text(cx), first_draft);
           assert_eq!(second_session.read(cx).composer_text(cx), second_draft);
         });
-        gateway.shutdown().await.unwrap();
       });
     })
     .await;

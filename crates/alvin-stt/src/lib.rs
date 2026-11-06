@@ -5,5 +5,5 @@ mod model;
 mod transcriber;
 
 pub use error::{Error, Result};
-pub use model::PreparationProgress;
+pub use model::{PreparationProgress, prepare};
 pub use transcriber::{Stream, Transcriber};

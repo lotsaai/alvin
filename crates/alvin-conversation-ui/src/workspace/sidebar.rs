@@ -1,7 +1,7 @@
 //! The project tree: projects, their checkouts and the sessions of each, with the commands to open them.
 
 use std::cell::Cell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use alvin_conversation::{Run, SessionsKey, Workspace};
@@ -16,7 +16,7 @@ use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::tree::{TreeItem, TreeState, tree};
+use gpui_kit::component::tree::{TreeEvent, TreeItem, TreeState, tree};
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
   App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable as _, InteractiveElement as _, IntoElement,
@@ -60,7 +60,11 @@ enum Node {
     pinned: bool,
   },
   /// Loads the next page of a checkout's sessions.
-  More { key: SessionsKey, after: SessionCursor },
+  More {
+    key: SessionsKey,
+    after: SessionCursor,
+  },
+  Loading,
 }
 
 impl Node {
@@ -87,6 +91,7 @@ pub(crate) struct ProjectTree {
   search_trigger: FocusHandle,
   grouping: Grouping,
   loading_all: bool,
+  loading: BTreeSet<SessionsKey>,
   load_failed: bool,
   open_menu: Option<String>,
   /// What the tree was last built from, so a model change that leaves it alone keeps the rows and their expansion.
@@ -108,6 +113,39 @@ impl ProjectTree {
     let tree = cx.new(|cx| TreeState::new(cx));
     let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search sessions"));
     let subscriptions = vec![
+      cx.subscribe(&tree, |this, _, event: &TreeEvent, cx| {
+        let TreeEvent::Expanded(id) = event else {
+          return;
+        };
+        let key = match this.nodes.get(id) {
+          Some(Node::Project {
+            id,
+            checkout: Some(checkout),
+            ..
+          }) => Some(SessionsKey {
+            project: ProjectId::from(id.clone()),
+            checkout: Some(checkout.clone()),
+          }),
+          Some(Node::Checkout { project, checkout, .. }) => Some(SessionsKey {
+            project: project.clone(),
+            checkout: Some(checkout.clone()),
+          }),
+          _ => None,
+        };
+        if let Some(key) = key
+          && this.model.read(cx).conversation().workspace().sessions(&key).is_none()
+          && this.loading.insert(key.clone())
+        {
+          let load = this.model.update(cx, |model, cx| model.load_sessions(key.clone(), None, cx));
+          cx.spawn(async move |this, cx| {
+            load.await;
+            drop(this.update(cx, |view, _| {
+              view.loading.remove(&key);
+            }));
+          })
+          .detach();
+        }
+      }),
       cx.subscribe(&model, |this, _, change: &ModelChange, cx| match change {
         ModelChange::Workspace => this.sync(cx),
         ModelChange::SessionMetadata(_) => {
@@ -134,6 +172,7 @@ impl ProjectTree {
       search_trigger: cx.focus_handle().tab_stop(true),
       grouping: Grouping::Project,
       loading_all: false,
+      loading: BTreeSet::new(),
       load_failed: false,
       open_menu: None,
       built_from: None,
@@ -248,6 +287,19 @@ fn item_id(kind: &str, id: &str) -> SharedString {
   SharedString::from(format!("{kind}:{id}"))
 }
 
+fn project_name(workspace: &Workspace, project: &alvin_protocol::ProjectSummary) -> String {
+  let name = project.root.file_name();
+  if workspace
+    .projects()
+    .iter()
+    .any(|other| other.id != project.id && other.root.file_name() == name)
+  {
+    project.root.display().to_string()
+  } else {
+    name.map_or_else(|| project.root.display().to_string(), |name| name.to_string_lossy().into_owned())
+  }
+}
+
 /// The tree items for the workspace, and what each stands for.
 fn items(
   workspace: &Workspace,
@@ -274,6 +326,11 @@ fn items(
       };
       let list = workspace.sessions(&key);
       let mut children = Vec::new();
+      if list.is_none() && grouping == Grouping::Project && query.is_empty() {
+        let id = item_id("loading", checkout.id.as_str());
+        nodes.insert(id.clone(), Node::Loading);
+        children.push(TreeItem::new(id, "Loading sessions…"));
+      }
 
       let mut sessions: Vec<_> = list.iter().flat_map(|list| &list.sessions).collect();
       sessions.sort_by_key(|session| !preference.is_some_and(|pref| pref.pinned_sessions.contains(session.id.as_str())));
@@ -337,7 +394,7 @@ fn items(
             checkout: checkout.id.clone(),
           },
         );
-        checkouts.push(TreeItem::new(id, name).expanded(true).children(children));
+        checkouts.push(TreeItem::new(id, name).children(children));
       }
     }
     if grouping == Grouping::Project && !query.is_empty() && checkouts.is_empty() {
@@ -357,13 +414,10 @@ fn items(
           .map(|checkout| checkout.id.clone()),
       },
     );
-    let name = preference.and_then(|pref| pref.alias.clone()).unwrap_or_else(|| {
-      project
-        .root
-        .file_name()
-        .map_or_else(|| project.root.display().to_string(), |name| name.to_string_lossy().into_owned())
-    });
-    projects.push(TreeItem::new(id, name).expanded(true).children(checkouts));
+    let name = preference
+      .and_then(|pref| pref.alias.clone())
+      .unwrap_or_else(|| project_name(workspace, project));
+    projects.push(TreeItem::new(id, name).children(checkouts));
   }
   if grouping == Grouping::Recent {
     recent.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
@@ -458,12 +512,9 @@ fn merge_live_sessions(
     } else {
       let project_id = item_id("project", project.as_str());
       if !items.iter().any(|item| item.id == project_id) {
-        let name = preference.and_then(|pref| pref.alias.clone()).unwrap_or_else(|| {
-          summary
-            .root
-            .file_name()
-            .map_or_else(|| summary.root.display().to_string(), |name| name.to_string_lossy().into_owned())
-        });
+        let name = preference
+          .and_then(|pref| pref.alias.clone())
+          .unwrap_or_else(|| project_name(model.conversation().workspace(), summary));
         nodes.insert(
           project_id.clone(),
           Node::Project {
@@ -687,12 +738,11 @@ impl Render for ProjectTree {
       .filter(|project| self.preferences.get(project.id.as_str()).is_some_and(|pref| pref.hidden))
       .map(|project| {
         let id = project.id.as_str().to_owned();
-        let name = self.preferences.get(&id).and_then(|pref| pref.alias.clone()).unwrap_or_else(|| {
-          project
-            .root
-            .file_name()
-            .map_or_else(|| project.root.display().to_string(), |name| name.to_string_lossy().into_owned())
-        });
+        let name = self
+          .preferences
+          .get(&id)
+          .and_then(|pref| pref.alias.clone())
+          .unwrap_or_else(|| project_name(self.model.read(cx).conversation().workspace(), project));
         (id, name)
       })
       .collect();
@@ -894,7 +944,7 @@ impl Render for ProjectTree {
               let scope = matches!(node, Some(Node::Project { .. } | Node::Checkout { .. }));
               let icon = match node {
                 Some(Node::Session { .. } | Node::Live { .. }) => IconName::Ellipsis,
-                Some(Node::More { .. }) => IconName::Ellipsis,
+                Some(Node::More { .. } | Node::Loading) => IconName::Ellipsis,
                 Some(Node::Checkout { .. }) => IconName::GitFork,
                 Some(Node::Project { .. }) | None if entry.is_expanded() => IconName::FolderOpen,
                 Some(Node::Project { .. }) | None => IconName::Folder,
@@ -1037,7 +1087,7 @@ impl Render for ProjectTree {
                     .update(cx, |model, cx| model.load_sessions(key.clone(), Some(after.clone()), cx))
                     .detach();
                 }),
-                Some(Node::Project { .. } | Node::Checkout { .. }) | None => row,
+                Some(Node::Project { .. } | Node::Checkout { .. } | Node::Loading) | None => row,
               }
             })),
         )
@@ -1157,7 +1207,9 @@ mod tests {
 
     workspace.set_projects(vec![summary(vec![checkout("root", "/work/repo")])]);
     let (tree, nodes) = items(&workspace, &ProjectPreferences::new(), "", Grouping::Project);
-    assert!(tree[0].children.is_empty());
+    assert_eq!(tree[0].children.len(), 1);
+    assert!(!tree[0].is_expanded());
+    assert!(matches!(nodes.get(&item_id("loading", "root")), Some(Node::Loading)));
     assert!(matches!(nodes.get(&item_id("project", "project")), Some(Node::Project { checkout: Some(id), .. }) if id.as_str() == "root"));
 
     workspace.set_projects(vec![summary(vec![checkout("branch", "/work/branch")])]);
@@ -1184,6 +1236,26 @@ mod tests {
         matches!(nodes.get(&item_id("checkout", id)), Some(Node::Checkout { project: p, checkout, .. }) if p == &project && checkout.as_str() == id)
       );
     }
+  }
+
+  #[test]
+  fn colliding_project_names_include_their_paths() {
+    let mut workspace = Workspace::default();
+    workspace.set_projects(
+      ["/one/repo", "/two/repo", "/work/other"]
+        .into_iter()
+        .map(|root| ProjectSummary {
+          id: ProjectId::from(root.to_owned()),
+          root: PathBuf::from(root),
+          checkouts: Vec::new(),
+        })
+        .collect(),
+    );
+    let (tree, _) = items(&workspace, &ProjectPreferences::new(), "", Grouping::Project);
+    assert_eq!(
+      tree.iter().map(|item| item.label.as_ref()).collect::<Vec<_>>(),
+      ["/one/repo", "/two/repo", "other"]
+    );
   }
 
   #[test]
@@ -1291,11 +1363,10 @@ mod tests {
     cx.executor().allow_parking();
     let executor = cx.foreground_executor().clone();
     executor.block_test(async {
-      let dir = std::env::temp_dir().join(format!("alvin-sidebar-{}", alvin_protocol::EventId::new().as_uuid()));
-      std::fs::create_dir_all(&dir).unwrap();
+      let dir = tempfile::tempdir().unwrap();
       let gateway = Gateway::new(
         GatewayConfig::builder()
-          .sessions_dir(dir.clone())
+          .sessions_dir(dir.path().to_path_buf())
           .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
           .build(),
       );
@@ -1306,7 +1377,10 @@ mod tests {
       let checkout = CheckoutId::from("checkout".to_owned());
       let (handle, view) = cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::init(dir.join("speech-cache"), cx);
+        crate::init(
+          PathBuf::from(std::env::var_os("ALVIN_TEST_SPEECH_CACHE").expect("run tests through mise test")),
+          cx,
+        );
         let model = cx.new(|cx| {
           let mut model = Model::new(client, cx);
           model.seed_workspace(
@@ -1347,6 +1421,8 @@ mod tests {
         window.render_frame(cx);
         window.click("focus-sessions", cx);
         window.press("down", cx);
+        window.press("right", cx);
+        window.render_frame(cx);
         let selected = view.read(cx).tree.read(cx).selected_item().unwrap().id.clone();
         let other = window.find_by_label("Write docs").bounds().center();
         window.pointer_move(other, None, cx);
@@ -1391,19 +1467,19 @@ mod tests {
         assert!(window.find_by_label("Write docs").visible());
       })
       .unwrap();
-      std::fs::remove_dir_all(dir).unwrap();
+      gateway.shutdown().await.unwrap();
+      dir.close().unwrap();
     });
   }
 
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
   async fn remaining_pages_are_loaded_from_the_gateway(cx: &mut TestAppContext) {
-    use alvin_protocol::ListSessions;
-
     cx.executor().allow_parking();
     let executor = cx.foreground_executor().clone();
     executor.block_test(async {
-      let base = std::env::temp_dir().join(format!("alvin-pages-{}", alvin_protocol::EventId::new().as_uuid()));
+      let directory = tempfile::tempdir().unwrap();
+      let base = directory.path();
       let repo = base.join("repo");
       let sessions = base.join("sessions").join("-repo");
       std::fs::create_dir_all(&repo).unwrap();
@@ -1437,26 +1513,18 @@ mod tests {
         project: project.id.clone(),
         checkout: Some(project.checkouts.first().unwrap().id.clone()),
       };
-      let page = alvin_protocol::SessionsApiClient::list(
-        &client,
-        ListSessions {
-          project: key.project.clone(),
-          checkout: key.checkout.clone(),
-          after: None,
-          limit: 50,
-        },
-      )
-      .await
-      .unwrap();
-      assert_eq!(page.sessions.len(), 50);
-      assert!(page.next.is_some());
       let model = cx.update(|cx| {
         gpui_kit::init(cx);
-        cx.new(|cx| {
-          let mut model = Model::new(client, cx);
-          model.seed_workspace(projects, vec![(key.clone(), page)], cx);
-          model
-        })
+        cx.new(|cx| Model::new(client, cx))
+      });
+      cx.update(|cx| model.update(cx, |model, cx| model.refresh_projects(cx))).await;
+      cx.update(|cx| assert!(model.read(cx).conversation().workspace().sessions(&key).is_none()));
+      cx.update(|cx| model.update(cx, |model, cx| model.load_sessions(key.clone(), None, cx)))
+        .await;
+      cx.update(|cx| {
+        let list = model.read(cx).conversation().workspace().sessions(&key).unwrap();
+        assert_eq!(list.sessions.len(), 50);
+        assert!(list.next.is_some());
       });
       let load = cx.update(|cx| model.update(cx, |model, cx| model.load_all_sessions(cx)));
       assert!(load.await);
@@ -1466,7 +1534,8 @@ mod tests {
         assert_eq!(list.sessions.len(), 55);
         assert!(list.next.is_none());
       });
-      std::fs::remove_dir_all(base).unwrap();
+      gateway.shutdown().await.unwrap();
+      directory.close().unwrap();
     });
   }
 }

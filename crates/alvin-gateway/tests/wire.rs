@@ -41,7 +41,7 @@ const RECORDED_CWD: &str = "/tmp/alvin-probe.hnBA/proj";
 struct Project {
   root: PathBuf,
   sessions: PathBuf,
-  /// A throwaway `HOME` for omp, so it touches nothing under the real home.
+  /// An isolated agent directory for the auto-resume configuration test.
   home: PathBuf,
   gateways: Vec<Arc<Gateway>>,
 }
@@ -69,11 +69,13 @@ impl AsyncTestContext for Project {
   }
 
   async fn teardown(self) {
+    let mut errors = Vec::new();
     for gateway in &self.gateways {
       if let Err(error) = gateway.shutdown().await {
-        tracing::error!(%error, "closing a test gateway");
+        errors.push(error);
       }
     }
+    assert!(errors.is_empty(), "closing test gateways: {errors:?}");
   }
 }
 
@@ -93,13 +95,18 @@ impl Project {
   }
 
   fn gateway(&mut self) -> Arc<Gateway> {
-    let gateway = Arc::new(gateway(&self.sessions));
+    let omp = HostConfig::builder()
+      .omp(PathBuf::from("omp"))
+      .extra_args(vec!["--session-dir".into(), self.sessions.join("-repo").into_os_string()])
+      .build();
+    let gateway = Arc::new(Gateway::new(
+      GatewayConfig::builder().sessions_dir(self.sessions.clone()).omp(omp).build(),
+    ));
     self.gateways.push(Arc::clone(&gateway));
     gateway
   }
 
-  /// A gateway that starts real omp, with a home and an agent directory of its own so nothing under the real home is read,
-  /// and the model key from the environment the tests run in. Its sessions go where the index looks them.
+  /// A gateway using real omp configuration and the fixture's session directory.
   fn live_gateway(&mut self) -> Arc<Gateway> {
     self.gateway_with(&["--no-tools"], true)
   }
@@ -110,7 +117,17 @@ impl Project {
   }
 
   fn gateway_with(&mut self, tools: &[&str], session_dir: bool) -> Arc<Gateway> {
-    let agent_dir = self.home.join("agent");
+    let env = if session_dir {
+      Vec::new()
+    } else {
+      vec![
+        (OsString::from("HOME"), self.home.clone().into_os_string()),
+        (OsString::from("PI_CODING_AGENT_DIR"), self.home.join("agent").into_os_string()),
+        (OsString::from("OMP_PROFILE"), OsString::new()),
+        (OsString::from("PI_PROFILE"), OsString::new()),
+        (OsString::from("XDG_DATA_HOME"), self.home.join("data").into_os_string()),
+      ]
+    };
     let mut args: Vec<OsString> = tools
       .iter()
       .chain(&["--no-skills", "--no-rules", "--no-extensions", "--no-context-files"])
@@ -120,22 +137,7 @@ impl Project {
       args.push(OsString::from("--session-dir"));
       args.push(self.sessions.join("-repo").into_os_string());
     }
-    let omp = HostConfig::builder()
-      .omp(PathBuf::from("omp"))
-      .extra_args(args)
-      .env(
-        [
-          (OsString::from("HOME"), self.home.clone().into_os_string()),
-          (OsString::from("PI_CODING_AGENT_DIR"), agent_dir.into_os_string()),
-        ]
-        .into_iter()
-        .chain([(
-          OsString::from("OPENROUTER_API_KEY"),
-          std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is set in the environment the tests run in"),
-        )])
-        .collect(),
-      )
-      .build();
+    let omp = HostConfig::builder().omp(PathBuf::from("omp")).extra_args(args).env(env).build();
     let gateway = Arc::new(Gateway::new(
       GatewayConfig::builder()
         .sessions_dir(self.sessions.clone())
@@ -150,9 +152,14 @@ impl Project {
 
 impl Drop for Project {
   fn drop(&mut self) {
-    if let Some(base) = self.root.parent() {
-      // Best effort: a leftover temporary directory must not fail an otherwise passing test.
-      drop(std::fs::remove_dir_all(base));
+    if let Some(base) = self.root.parent()
+      && let Err(error) = std::fs::remove_dir_all(base)
+    {
+      if std::thread::panicking() {
+        eprintln!("could not remove {}: {error}", base.display());
+      } else {
+        panic!("could not remove {}: {error}", base.display());
+      }
     }
   }
 }

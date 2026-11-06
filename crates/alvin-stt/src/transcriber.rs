@@ -168,23 +168,32 @@ impl Stream {
 mod tests {
   use std::ops::ControlFlow;
 
-  use tempfile::TempDir;
+  use std::path::PathBuf;
   use test_context::{AsyncTestContext, test_context};
 
   use crate::Transcriber;
 
-  struct Fixture(TempDir);
+  struct Fixture(PathBuf);
 
   impl AsyncTestContext for Fixture {
     async fn setup() -> Self {
-      Self(TempDir::new().unwrap())
+      Self(PathBuf::from(
+        std::env::var_os("ALVIN_TEST_SPEECH_CACHE").expect("run tests through mise test"),
+      ))
     }
   }
 
   #[test_context(Fixture)]
   #[tokio::test]
   async fn transcribes_real_audio_twice(fixture: &mut Fixture) {
-    let mut model = Transcriber::load(fixture.0.path(), |_| ControlFlow::Continue(())).unwrap();
+    let mut model = Transcriber::load(&fixture.0, |progress| {
+      assert!(
+        matches!(progress, crate::PreparationProgress::Loading),
+        "mise test must prepare the shared model before nextest"
+      );
+      ControlFlow::Continue(())
+    })
+    .unwrap();
     let mut reader = hound::WavReader::open(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/jfk.wav")).unwrap();
     let samples: Vec<i16> = reader.samples().collect::<std::result::Result<_, _>>().unwrap();
     assert_eq!(model.transcribe(&[]).unwrap(), "");

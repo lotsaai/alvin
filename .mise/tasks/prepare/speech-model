@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+#MISE description="Prepare cached speech model assets without loading inference"
+
+set -euo pipefail
+
+exec cargo run --quiet --example prepare-model -- "$ALVIN_TEST_SPEECH_CACHE"

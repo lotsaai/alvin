@@ -16,12 +16,10 @@ const MODEL: &str = "openrouter/inclusionai/ling-3.0-flash";
 const SEED_RECORDS: &str = include_str!("../fixtures/seed-session.jsonl");
 const SEED_CWD: &str = "/tmp/alvin-probe.hnBA/proj";
 
-/// A temporary git repository with its own omp sessions directory. omp runs with a throwaway `HOME`; it still reads the
-/// machine's agent configuration so model credentials resolve, and nothing here opens or prints anything in it.
+/// A temporary git repository with its own omp sessions directory and the machine's normal agent configuration.
 pub(crate) struct Fixture {
   base: PathBuf,
   sessions: PathBuf,
-  home: PathBuf,
   session_dir: PathBuf,
 }
 
@@ -48,10 +46,13 @@ impl AsyncTestContext for ServerFixture {
   }
 
   async fn teardown(mut self) {
-    if let Some(server) = self.server.take() {
-      server.shutdown().await.unwrap();
-    }
-    self.gateway.shutdown().await.unwrap();
+    let server = match self.server.take() {
+      Some(server) => server.shutdown().await,
+      None => Ok(()),
+    };
+    let gateway = self.gateway.shutdown().await;
+    server.unwrap();
+    gateway.unwrap();
   }
 }
 
@@ -66,9 +67,8 @@ impl Fixture {
     let base = base.canonicalize().unwrap();
     let repo = base.join("repo");
     let sessions = base.join("sessions");
-    let home = base.join("home");
     let session_dir = sessions.join("-repo");
-    for dir in [&repo, &session_dir, &home] {
+    for dir in [&repo, &session_dir] {
       std::fs::create_dir_all(dir).unwrap();
     }
     let git = Command::new("git").args(["init", "--quiet"]).current_dir(&repo).output().unwrap();
@@ -78,14 +78,12 @@ impl Fixture {
     Self {
       base,
       sessions,
-      home,
       session_dir,
     }
   }
 
   /// A gateway configuration over the repository's sessions that starts real omp in isolation.
   pub(crate) fn config(&self) -> GatewayConfig {
-    // omp gets the fixture's own home and agent directory, and the model key from the environment the tests run in.
     let args = [
       "--no-tools",
       "--no-skills",
@@ -98,22 +96,7 @@ impl Fixture {
     .into_iter()
     .chain([self.session_dir.clone().into_os_string()])
     .collect();
-    let omp = HostConfig::builder()
-      .omp(PathBuf::from("omp"))
-      .extra_args(args)
-      .env(
-        [
-          (OsString::from("HOME"), self.home.clone().into_os_string()),
-          (OsString::from("PI_CODING_AGENT_DIR"), self.home.join("agent").into_os_string()),
-        ]
-        .into_iter()
-        .chain([(
-          OsString::from("OPENROUTER_API_KEY"),
-          std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is set in the environment the tests run in"),
-        )])
-        .collect(),
-      )
-      .build();
+    let omp = HostConfig::builder().omp(PathBuf::from("omp")).extra_args(args).build();
     GatewayConfig::builder()
       .sessions_dir(self.sessions.clone())
       .omp(omp)
@@ -124,7 +107,12 @@ impl Fixture {
 
 impl Drop for Fixture {
   fn drop(&mut self) {
-    // Best effort: a leftover temporary directory must not fail an otherwise passing test.
-    drop(std::fs::remove_dir_all(&self.base));
+    if let Err(error) = std::fs::remove_dir_all(&self.base) {
+      if std::thread::panicking() {
+        eprintln!("could not remove {}: {error}", self.base.display());
+      } else {
+        panic!("could not remove {}: {error}", self.base.display());
+      }
+    }
   }
 }

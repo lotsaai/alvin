@@ -68,12 +68,14 @@ Use mise tasks only. Never `cargo test`, never targeted test runs.
 
 ```
 Format:    mise format
+Verify:    mise verify
 Test:      mise test
 Fresh run: mise run --force test
+Model:     mise run prepare:speech-model
 Hakari:    mise hakari
 ```
 
-After changes run `mise format`, then `mise run --force test` if Rust changed. Read each format step's output, not the exit code. The `scaffold` module adds build and dev tasks if needed.
+After changes run `mise format`, then `mise verify`. Verification runs checks, the full test suite, and compatibility checks. Speech integration tests reuse the application's persistent model cache (`~/Library/Caches/alvin/speech` on macOS, `${XDG_CACHE_HOME:-$HOME/.cache}/alvin/speech` on Linux). `test:rust` depends on `prepare:speech-model`, which checks the revision-keyed asset manifest and downloads only missing or incomplete files without loading inference. Preparation also runs through `mise test` and `mise verify`; individual tests never download into temporary caches. Tests of missing, incomplete, and inaccessible caches remain isolated.
 
 `.mise/tasks` pruning (heyday leftovers): `nsh/`, `generate/sql/heydayd`, `test/server.sh` and the NSH platform test tasks, `dev/api`, `dev/web`, `dev/ios`, `dev/android`, `dist/*`. Rename heyday binary outputs to alvin's. Remove the NSH excludes from `hk.pkl`.
 

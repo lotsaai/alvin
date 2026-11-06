@@ -22,8 +22,13 @@ impl TempDir {
 
 impl Drop for TempDir {
   fn drop(&mut self) {
-    // Best effort: a leftover temp directory must not fail an otherwise passing test.
-    drop(std::fs::remove_dir_all(&self.0));
+    if let Err(error) = std::fs::remove_dir_all(&self.0) {
+      if std::thread::panicking() {
+        eprintln!("could not remove {}: {error}", self.0.display());
+      } else {
+        panic!("could not remove {}: {error}", self.0.display());
+      }
+    }
   }
 }
 
@@ -52,11 +57,8 @@ pub fn run(dir: &Path, program: &str, args: &[&str]) {
 
 /// Runs real `omp` once in `cwd` and returns the session file it wrote under `session_dir`.
 ///
-/// The run is isolated: `HOME` and omp's agent directory are throwaway directories, so omp reads and writes nothing under the
-/// real home (the sandbox denies parts of it, and tests must not touch it). The model key comes from the environment the
-/// tests run in.
+/// omp reads the machine's normal agent configuration, while its session goes to the supplied directory.
 pub fn run_omp(cwd: &Path, session_dir: &Path, prompt: &str) -> PathBuf {
-  let home = TempDir::new();
   let output = Command::new("omp")
     .args([
       "-p",
@@ -71,12 +73,6 @@ pub fn run_omp(cwd: &Path, session_dir: &Path, prompt: &str) -> PathBuf {
     .args(["--no-context-files", "--no-title", "--session-dir"])
     .arg(session_dir)
     .current_dir(cwd)
-    .env("HOME", home.path())
-    .env("PI_CODING_AGENT_DIR", home.path().join("agent"))
-    .env(
-      "OPENROUTER_API_KEY",
-      std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is set in the environment the tests run in"),
-    )
     .output()
     .unwrap();
   assert!(

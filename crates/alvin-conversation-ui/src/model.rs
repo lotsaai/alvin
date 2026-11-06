@@ -250,33 +250,34 @@ impl Model {
     self.bash_running.contains(&live)
   }
 
-  /// Loads the projects and the first page of every checkout's sessions.
+  /// Loads projects and refreshes the first page of already loaded checkouts.
   pub fn refresh_projects(&mut self, cx: &mut Context<Self>) -> Task<()> {
     let client = self.client.clone();
     cx.spawn(async move |this, cx| {
       let projects = ProjectsApiClient::list(&client).await.map_err(Error::from);
       let keys = match projects {
         Ok(projects) => {
-          let keys: Vec<SessionsKey> = projects
-            .iter()
-            .flat_map(|project| {
-              project.checkouts.iter().map(|checkout| SessionsKey {
-                project: project.id.clone(),
-                checkout: Some(checkout.id.clone()),
-              })
-            })
-            .collect();
-          if this
-            .update(cx, |model, cx| {
-              model.conversation.set_projects(projects);
-              cx.emit(ModelChange::Workspace);
-              cx.notify();
-            })
-            .is_err()
-          {
-            return;
+          match this.update(cx, |model, cx| {
+            let mut keys = Vec::new();
+            for project in &projects {
+              for checkout in &project.checkouts {
+                let key = SessionsKey {
+                  project: project.id.clone(),
+                  checkout: Some(checkout.id.clone()),
+                };
+                if model.conversation.workspace().sessions(&key).is_some() {
+                  keys.push(key);
+                }
+              }
+            }
+            model.conversation.set_projects(projects);
+            cx.emit(ModelChange::Workspace);
+            cx.notify();
+            keys
+          }) {
+            Ok(keys) => keys,
+            Err(_) => return,
           }
-          keys
         }
         Err(error) => {
           fail(&this, cx, &error);

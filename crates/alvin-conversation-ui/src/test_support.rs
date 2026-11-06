@@ -16,6 +16,82 @@ use crate::workspace::Workspace;
 /// The root of the one project every test window knows.
 pub(crate) const ROOT: &str = "/work/alvin";
 
+/// A real gateway and repository whose omp sessions stay in the test directory.
+pub(crate) struct RealGateway {
+  pub(crate) directory: tempfile::TempDir,
+  pub(crate) gateway: alvin_gateway::Gateway,
+}
+
+impl test_context::AsyncTestContext for RealGateway {
+  async fn setup() -> Self {
+    use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
+
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().join("repo");
+    let sessions = directory.path().join("sessions");
+    let session_dir = sessions.join("-repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&session_dir).unwrap();
+    assert!(
+      std::process::Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(&repo)
+        .status()
+        .unwrap()
+        .success()
+    );
+    let repo = repo.canonicalize().unwrap();
+    let seed = include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
+    std::fs::write(session_dir.join("2026-01-01T00-00-00-000Z_seed.jsonl"), seed).unwrap();
+    let omp = HostConfig::builder()
+      .omp(PathBuf::from("omp"))
+      .extra_args(vec!["--session-dir".into(), session_dir.into_os_string()])
+      .build();
+    let gateway = Gateway::new(
+      GatewayConfig::builder()
+        .sessions_dir(sessions)
+        .omp(omp)
+        .default_model(Some("openrouter/inclusionai/ling-3.0-flash".to_owned()))
+        .build(),
+    );
+    Self { directory, gateway }
+  }
+
+  async fn teardown(self) {
+    self.gateway.shutdown().await.unwrap();
+    self.directory.close().unwrap();
+  }
+}
+
+#[tokio::test]
+async fn real_gateway_fixture_isolates_sessions_and_cleans_up() {
+  use alvin_protocol::{LiveApiClient, OpenRequest, OpenTarget, ProjectsApiClient};
+  use test_context::AsyncTestContext as _;
+
+  let fixture = RealGateway::setup().await;
+  let directory = fixture.directory.path().canonicalize().unwrap();
+  let client = Client::connect(Endpoint::Channel(ChannelPair::from(fixture.gateway.connect_channel(64).unwrap())))
+    .await
+    .unwrap();
+  let projects = ProjectsApiClient::list(&client).await.unwrap();
+  let project = projects.first().unwrap();
+  let session = LiveApiClient::open(
+    &client,
+    OpenRequest {
+      target: OpenTarget::New {
+        project: project.id.clone(),
+        checkout: project.checkouts.first().unwrap().id.clone(),
+      },
+      model: None,
+    },
+  )
+  .await
+  .unwrap();
+  assert!(session.file.starts_with(directory.join("sessions")));
+  fixture.teardown().await;
+  assert!(!directory.exists());
+}
+
 /// The gateway end of a channel nobody serves. A client over it is connected, and none of its calls is ever answered, so
 /// a view that issues a command has nothing come back to it. Tests put the state a reply would have produced in the model
 /// themselves.

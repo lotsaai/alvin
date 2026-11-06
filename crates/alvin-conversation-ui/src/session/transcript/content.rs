@@ -38,11 +38,21 @@ enum Identity {
 }
 
 enum Body {
-  Text { id: SharedString, text: String, streaming: bool },
+  Text {
+    id: SharedString,
+    text: String,
+    streaming: bool,
+  },
   Reasoning(Entity<Reasoning>),
   Redacted(Option<usize>),
-  Image { id: SharedString, image: image::PreparedImage },
-  Fallback { from: String, to: String },
+  Image {
+    id: SharedString,
+    image: Box<image::PreparedImage>,
+  },
+  Fallback {
+    from: String,
+    to: String,
+  },
   ServerTool(String),
   Tool(Entity<ToolBlock>),
 }
@@ -162,7 +172,7 @@ impl Part {
       AssistantContent::RedactedThinking(value) => Body::Redacted(value.data.as_ref().map(String::len)),
       AssistantContent::Image(value) => Body::Image {
         id: id.clone(),
-        image: image::PreparedImage::new(value),
+        image: Box::new(image::PreparedImage::new(value)),
       },
       AssistantContent::Fallback(value) => Body::Fallback {
         from: fallback::model(&value.from).to_owned(),

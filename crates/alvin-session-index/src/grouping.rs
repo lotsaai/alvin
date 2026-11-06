@@ -80,7 +80,7 @@ pub fn group(cwds: impl IntoIterator<Item = PathBuf>) -> Result<Vec<ProjectSumma
   )
 }
 
-/// The sessions of one project, or of one checkout of it, resolving each distinct `cwd` once.
+/// The sessions of one project, or of one checkout of it, resolving each relevant distinct `cwd` once.
 ///
 /// Empty when no project has that id, or the project has no such checkout: a project and a checkout only exist
 /// through their sessions.
@@ -89,7 +89,13 @@ pub fn select(heads: Vec<SessionHead>, project: &ProjectId, checkout: Option<&Ch
   let mut selected = Vec::new();
   for head in heads {
     if !resolutions.contains_key(&head.cwd) {
-      resolutions.insert(head.cwd.clone(), resolve(&head.cwd)?);
+      let candidate = checkout.is_none_or(|wanted| {
+        head
+          .cwd
+          .canonicalize()
+          .map_or(true, |cwd| cwd.ancestors().any(|ancestor| path_id(ancestor) == wanted.as_str()))
+      });
+      resolutions.insert(head.cwd.clone(), if candidate { resolve(&head.cwd)? } else { None });
     }
     let Some(Some(Resolved {
       repository,
@@ -246,6 +252,41 @@ mod tests {
 
     assert_eq!(selected.len(), 1);
     assert_eq!(selected[0].id.as_str(), "alive");
+  }
+
+  #[test]
+  fn checkout_selection_resolves_nested_and_symlinked_cwds_and_checks_project_membership() {
+    let tmp = TempDir::new();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    run(&repo, "git", &["init", "--quiet"]);
+    let nested = repo.join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    let link = tmp.path().join("link");
+    std::os::unix::fs::symlink(&repo, &link).unwrap();
+    let other = tmp.path().join("other");
+    std::fs::create_dir(&other).unwrap();
+    run(&other, "git", &["init", "--quiet"]);
+    let head = |cwd: &Path, id: &str| crate::SessionHead {
+      path: PathBuf::from(format!("{id}.jsonl")),
+      id: alvin_protocol::SessionId::from(id.to_owned()),
+      cwd: cwd.to_path_buf(),
+      title: None,
+      created: jiff::Timestamp::UNIX_EPOCH,
+      modified: jiff::Timestamp::UNIX_EPOCH,
+      parent: None,
+      assistant_in_head: false,
+    };
+    let heads = vec![head(&nested, "nested"), head(&link, "link"), head(&other, "other")];
+    let checkout = CheckoutId::from(blake3_hex(&repo));
+    let selected = select(heads.clone(), &project_id(&repo), Some(&checkout)).unwrap();
+    assert_eq!(selected.iter().map(|head| head.id.as_str()).collect::<Vec<_>>(), ["nested", "link"]);
+    assert!(select(heads.clone(), &project_id(&other), Some(&checkout)).unwrap().is_empty());
+    assert!(
+      select(heads, &project_id(&repo), Some(&CheckoutId::from(blake3_hex(&other))))
+        .unwrap()
+        .is_empty()
+    );
   }
 
   #[test]

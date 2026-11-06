@@ -50,6 +50,10 @@ Open item for `app`: desktop packaging tasks come back under `dist/` only when t
 
 `hk.pkl`: remove `**/.nsh/**` excludes. Keep cargo-check, cargo-clippy, rustfmt, cargo-sort steps and the toml, shell, yaml linters.
 
+Betterleaks is installed through `mise.toml` and runs in the shared `hk` checks for commits, pushes, `mise check`, and `mise format`. Findings are redacted; scanning does not validate credentials against live services.
+
+`mise.local.toml` is ignored and remains machine-local. Do not commit it.
+
 ## Commands
 
 ```

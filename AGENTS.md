@@ -156,7 +156,7 @@ Banned domain vocabulary with required replacements: "birth"/"born" → "join"/"
 
 | Task | Description |
 |---|---|
-| `mise format` | Checks for this codebase (check, clippy `-D warnings`, rustfmt, cargo-sort, toml/whitespace guards). |
+| `mise verify` | Checks for this codebase (check, clippy `-D warnings`, rustfmt, cargo-sort, toml/whitespace guards). |
 | `mise test` | All tests (Rust `nextest`). |
 | `mise run --force test` | Force a fresh full test run (bypass cache). |
 | `mise hakari` | Regenerate the workspace-hack crate after dependency changes. |

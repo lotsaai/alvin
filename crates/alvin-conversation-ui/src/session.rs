@@ -777,57 +777,34 @@ mod tests {
     .unwrap();
   }
 
+  #[test_context::test_context(crate::test_support::RealGateway)]
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
-  async fn dictation_streams_into_an_editable_undoable_draft(cx: &mut TestAppContext) {
+  async fn dictation_streams_into_an_editable_undoable_draft(fixture: &mut crate::test_support::RealGateway, cx: &mut TestAppContext) {
     use std::path::PathBuf;
 
     use alvin_client::{ChannelPair, Client, Endpoint};
-    use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
     use alvin_protocol::{EventBody, LiveApiClient, MessagesRequest, ProjectsApiClient, SubscribeRequest};
     use gpui_kit::component::speech::SpeechEvent;
     use gpui_kit::{Focusable as _, WindowOptions};
 
     use super::SessionView;
     use super::dictation::{Dictation, test_support};
-    use crate::model::Model;
+    use crate::model::{Model, ModelEvent};
 
     cx.executor().allow_parking();
     let executor = cx.foreground_executor().clone();
     tokio::task::coop::unconstrained(async {
       executor.block_test(async {
         cx.update(gpui_kit::init);
-        let directory = tempfile::tempdir().unwrap();
-        let repo = directory.path().join("repo");
-        let sessions = directory.path().join("sessions");
-        std::fs::create_dir_all(&repo).unwrap();
-        std::fs::create_dir_all(sessions.join("-repo")).unwrap();
-        assert!(
-          std::process::Command::new("git")
-            .args(["init", "--quiet"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success()
-        );
-        let repo = repo.canonicalize().unwrap();
-        let seed =
-          include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
-        std::fs::write(
-          sessions.join("-repo/2026-01-01T00-00-00-000Z_01a18ff1-ab74-73b8-a3a2-79905565c49b.jsonl"),
-          seed,
-        )
-        .unwrap();
-        cx.update(|cx| crate::init(directory.path().join("speech"), cx));
+        cx.update(|cx| {
+          crate::init(
+            PathBuf::from(std::env::var_os("ALVIN_TEST_SPEECH_CACHE").expect("run tests through mise test")),
+            cx,
+          );
+        });
         let (_preparation_probe, prepared) = cx.update(test_support::watch_preparation);
-        let gateway = Gateway::new(
-          GatewayConfig::builder()
-            .sessions_dir(sessions)
-            .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
-            .default_model(Some("openrouter/inclusionai/ling-3.0-flash".to_owned()))
-            .build(),
-        );
-        let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
+        let client = Client::connect(Endpoint::Channel(ChannelPair::from(fixture.gateway.connect_channel(64).unwrap())))
           .await
           .unwrap();
         let projects = ProjectsApiClient::list(&client).await.unwrap();
@@ -840,6 +817,11 @@ mod tests {
         });
         opening.await;
         let session = LiveApiClient::list(&client).await.unwrap().into_iter().next().unwrap();
+        assert!(
+          session
+            .file
+            .starts_with(fixture.directory.path().canonicalize().unwrap().join("sessions"))
+        );
         let mut events = client
           .events(SubscribeRequest {
             live: session.live,
@@ -850,11 +832,20 @@ mod tests {
         let (input, delivered) = test_support::file_input();
         let (final_tx, final_rx) = async_channel::bounded(1);
         let (partial_tx, partial_rx) = async_channel::unbounded();
+        let (closed_tx, closed_rx) = async_channel::bounded(1);
         let (handle, view) = cx.update(|cx| {
           let (handle, view) = gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
             cx.new(|cx| {
               let dictation = cx.new(|cx| Dictation::with_input(input, cx));
               let mut view = SessionView::with_dictation(model.clone(), session.live, dictation.clone(), window, cx);
+              view._subscriptions.push(cx.subscribe(&model, move |_, _, event: &ModelEvent, _| {
+                let result = match event {
+                  ModelEvent::Closed(live) if *live == session.live => Ok(()),
+                  ModelEvent::Failed { message, .. } => Err(message.clone()),
+                  _ => return,
+                };
+                closed_tx.try_send(result).unwrap();
+              }));
               view
                 ._subscriptions
                 .push(cx.subscribe(&dictation, move |_, _, event: &SpeechEvent, _| {
@@ -1076,8 +1067,8 @@ mod tests {
           assert_eq!(view.read(cx).composer_text(cx), draft);
         })
         .unwrap();
+        closed_rx.recv().await.unwrap().expect("session close failed");
         cx.update(crate::shutdown).await;
-        gateway.shutdown().await.unwrap();
       });
     })
     .await;
@@ -1099,18 +1090,17 @@ mod tests {
     let speech_cache = tempfile::tempdir().unwrap();
     cx.update(|cx| crate::init(speech_cache.path().to_path_buf(), cx));
     cx.update(|cx| cx.set_reduce_motion(true));
-    let directory = std::env::temp_dir().join(format!("alvin-composer-{}", alvin_protocol::EventId::new().as_uuid()));
-    std::fs::create_dir_all(&directory).unwrap();
+    let directory = tempfile::tempdir().unwrap();
     let gateway = Gateway::new(
       GatewayConfig::builder()
-        .sessions_dir(directory.clone())
+        .sessions_dir(directory.path().to_path_buf())
         .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
         .build(),
     );
     let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
       .await
       .unwrap();
-    let session = live_session(directory.to_str().unwrap());
+    let session = live_session(directory.path().to_str().unwrap());
     let (handle, view, model) = cx.update(|cx| {
       let model = cx.new(|cx| {
         let mut model = Model::new(client, cx);
@@ -1408,7 +1398,7 @@ mod tests {
     })
     .unwrap();
     gateway.shutdown().await.unwrap();
-    std::fs::remove_dir_all(directory).unwrap();
+    directory.close().unwrap();
   }
 
   #[tokio::test(flavor = "multi_thread")]

@@ -1188,6 +1188,8 @@ impl Render for AppView {
 
 #[cfg(test)]
 mod tests {
+  use std::path::PathBuf;
+
   use alvin_conversation_ui::{Model, UserMessageColors, Workspace};
   use gpui_kit::component::ActiveTheme as _;
   use gpui_kit::test::{TestEventExt as _, TestQueryExt as _, TestWindowExt as _};
@@ -1207,7 +1209,7 @@ mod tests {
     let executor = cx.foreground_executor().clone();
     executor.block_test(async {
       let client = connect(&fixture.endpoint).await.unwrap();
-      let cache = fixture.project.base().join("speech-cache");
+      let cache = PathBuf::from(std::env::var_os("ALVIN_TEST_SPEECH_CACHE").expect("run tests through mise test"));
       let (handle, view) = cx.update(|cx| {
         gpui_kit::init(cx);
         alvin_conversation_ui::init(cache, cx);
@@ -1279,7 +1281,10 @@ mod tests {
       let config = Configuration::for_test(path.clone()).unwrap();
       let (handle, view) = cx.update(|cx| {
         gpui_kit::init(cx);
-        alvin_conversation_ui::init(fixture.project.base().join("speech-cache"), cx);
+        alvin_conversation_ui::init(
+          PathBuf::from(std::env::var_os("ALVIN_TEST_SPEECH_CACHE").expect("run tests through mise test")),
+          cx,
+        );
         gpui_kit::open_window(
           WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::new(
@@ -1577,7 +1582,10 @@ mod tests {
       let client = connect(&fixture.endpoint).await.unwrap();
       let handle = cx.update(|cx| {
         gpui_kit::init(cx);
-        alvin_conversation_ui::init(fixture.project.base().join("speech-cache"), cx);
+        alvin_conversation_ui::init(
+          PathBuf::from(std::env::var_os("ALVIN_TEST_SPEECH_CACHE").expect("run tests through mise test")),
+          cx,
+        );
         gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
           let model = cx.new(|cx| Model::new(client.clone(), cx));
           let workspace = cx.new(|cx| Workspace::new(model, client, window, cx));

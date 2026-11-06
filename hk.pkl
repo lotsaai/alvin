@@ -2,6 +2,11 @@ amends "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Config.pk
 import "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Builtins.pkl"
 
 local linters = new Mapping<String, Step> {
+  ["betterleaks"] = new Step {
+    glob = List("**/*")
+    exclude = "mise.local.toml"
+    check = "betterleaks dir --redact --no-banner {{files}}"
+  }
   ["client-boundaries"] = new Step {
     glob = List("**/Cargo.toml", "Cargo.lock", ".config/hakari.toml", ".mise/tasks/check-boundaries")
     check = "mise run check-boundaries"

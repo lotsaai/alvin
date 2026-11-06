@@ -32,36 +32,21 @@ impl TempDir {
 
 impl Drop for TempDir {
   fn drop(&mut self) {
-    // Best effort: a leftover temp directory must not fail an otherwise passing test.
-    drop(std::fs::remove_dir_all(&self.0));
+    if let Err(error) = std::fs::remove_dir_all(&self.0) {
+      if std::thread::panicking() {
+        eprintln!("could not remove {}: {error}", self.0.display());
+      } else {
+        panic!("could not remove {}: {error}", self.0.display());
+      }
+    }
   }
 }
 
-/// A host over an isolated omp: `HOME` is a throwaway directory, so omp touches nothing under the real home (the sandbox
-/// denies parts of it), while the machine's agent configuration stays reachable so model credentials resolve. This code
-/// never opens or prints anything in it.
+/// A host with isolated sessions and the machine's normal omp configuration.
 pub struct Fixture {
   pub host: Host,
   pub cwd: TempDir,
   sessions: TempDir,
-  _home: TempDir,
-}
-
-/// The model key, from the environment the tests run in.
-fn openrouter_api_key() -> OsString {
-  std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is set in the environment the tests run in")
-}
-
-/// The environment of a test's omp: a home and an agent directory of its own, so nothing under the real home is read, and the
-/// model key from the environment the tests run in. Without the key omp reports it when a test prompts.
-fn omp_env(home: &std::path::Path) -> Vec<(OsString, OsString)> {
-  [
-    (OsString::from("HOME"), home.as_os_str().to_owned()),
-    (OsString::from("PI_CODING_AGENT_DIR"), home.join("agent").into_os_string()),
-  ]
-  .into_iter()
-  .chain([(OsString::from("OPENROUTER_API_KEY"), openrouter_api_key())])
-  .collect()
 }
 
 impl Fixture {
@@ -70,7 +55,6 @@ impl Fixture {
   }
 
   pub fn with_capacity(capacity: usize) -> Self {
-    let home = TempDir::new();
     let config = HostConfig::builder()
       .omp(PathBuf::from("omp"))
       .extra_args(
@@ -78,14 +62,12 @@ impl Fixture {
           .map(OsString::from)
           .to_vec(),
       )
-      .env(omp_env(home.path()))
       .event_capacity(NonZeroUsize::new(capacity).unwrap())
       .build();
     Self {
       host: Host::new(config),
       cwd: TempDir::new(),
       sessions: TempDir::new(),
-      _home: home,
     }
   }
 
