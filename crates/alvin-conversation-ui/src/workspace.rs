@@ -164,7 +164,7 @@ impl Workspace {
         this.model_event(event, window, cx);
       }),
       cx.subscribe_in(&projects, window, |this, _, live: &LiveSessionId, window, cx| {
-        this.active = Some(*live);
+        this.set_active(Some(*live), cx);
         this.history.visit(*live);
         this.model.update(cx, |model, _| model.select_tab());
         this.sync_active_sidebar(cx);
@@ -231,7 +231,7 @@ impl Workspace {
 
   fn traverse(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
     if let Some(live) = self.history.traverse(forward) {
-      self.active = Some(live);
+      self.set_active(Some(live), cx);
       self.model.update(cx, |model, _| model.select_tab());
       self.sync_active_sidebar(cx);
       self.repair_terminal_focus(window, cx);
@@ -250,6 +250,22 @@ impl Workspace {
     self.active
   }
 
+  /// Cancels dictation in all retained sessions.
+  pub fn cancel_dictation(&mut self, cx: &mut Context<Self>) {
+    for (_, view) in &self.tabs {
+      view.update(cx, |view, cx| view.cancel_dictation(cx));
+    }
+  }
+
+  fn set_active(&mut self, next: Option<LiveSessionId>, cx: &mut Context<Self>) {
+    if self.active != next
+      && let Some((_, view)) = self.tabs.iter().find(|(live, _)| Some(*live) == self.active)
+    {
+      view.update(cx, |view, cx| view.cancel_dictation(cx));
+    }
+    self.active = next;
+  }
+
   /// Whether the project sidebar is visible.
   pub fn sidebar_visible(&self) -> bool {
     self.sidebar_visible
@@ -262,6 +278,7 @@ impl Workspace {
 
   /// Closes retained terminals and waits for their engines and gateway processes.
   pub fn shutdown(&mut self, cx: &mut Context<Self>) -> gpui_kit::Task<()> {
+    self.cancel_dictation(cx);
     let pending: Vec<_> = self
       .terminals
       .values()
@@ -344,7 +361,7 @@ impl Workspace {
           self.tabs.push((live, view));
         }
         if self.model.read(cx).navigation_is_current(*intent) {
-          self.active = Some(live);
+          self.set_active(Some(live), cx);
           self.history.visit(live);
           self.sync_active_sidebar(cx);
         }
@@ -352,14 +369,18 @@ impl Workspace {
         cx.notify();
       }
       ModelEvent::Closed(live) => {
+        if let Some((_, view)) = self.tabs.iter().find(|(tab, _)| tab == live) {
+          view.update(cx, |view, cx| view.cancel_dictation(cx));
+        }
         self.tabs.retain(|(tab, _)| tab != live);
         self.history.remove(*live);
         if self.active == Some(*live) {
-          self.active = self
+          let next = self
             .history
             .index
             .and_then(|index| self.history.entries.get(index).copied())
             .or_else(|| self.tabs.last().map(|(tab, _)| *tab));
+          self.set_active(next, cx);
           if self.history.index.is_none()
             && let Some(live) = self.active
           {
@@ -549,7 +570,12 @@ impl Workspace {
               .icon(IconName::Close)
               .accessibility_label("Close session")
               .tooltip("Close session")
-              .on_click(move |_, _, cx| model.update(cx, |model, cx| model.close(live, cx)).detach()),
+              .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some((_, view)) = this.tabs.iter().find(|(tab, _)| *tab == live) {
+                  view.update(cx, |view, cx| view.cancel_dictation(cx));
+                }
+                model.update(cx, |model, cx| model.close(live, cx)).detach();
+              })),
           )
       })
       .child(div().flex_1().min_w_0())
@@ -1138,7 +1164,6 @@ mod tests {
         }
       }
     }
-
     struct TerminalProbe {
       _subscriptions: Vec<Subscription>,
     }
@@ -1194,7 +1219,7 @@ mod tests {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let (handle, workspace, _events) = cx.update(|cx| {
       gpui_kit::init(cx);
-      crate::init(cx);
+      crate::init(fixture.directory.0.as_ref().unwrap().join("speech-cache"), cx);
       let model = cx.new(|cx| {
         let mut model = Model::new(client.clone(), cx);
         model.seed_workspace(projects, vec![(key, page)], cx);
@@ -1507,6 +1532,201 @@ mod tests {
       })
       .unwrap();
     });
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[gpui_kit::test]
+  async fn navigation_and_shutdown_cancel_dictation(cx: &mut TestAppContext) {
+    use std::path::PathBuf;
+
+    use alvin_client::{ChannelPair, Client, Endpoint};
+    use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
+    use alvin_protocol::{LiveApiClient, OpenRequest, OpenTarget, ProjectsApiClient};
+    use gpui_kit::WindowOptions;
+
+    use crate::model::Model;
+    use crate::session::dictation::test_support::{file_input, watch_preparation};
+    use crate::workspace::Workspace;
+
+    cx.executor().allow_parking();
+    let executor = cx.foreground_executor().clone();
+    tokio::task::coop::unconstrained(async {
+      executor.block_test(async {
+        let directory = tempfile::tempdir().unwrap();
+        let repo = directory.path().join("repo");
+        let sessions = directory.path().join("sessions");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(sessions.join("-repo")).unwrap();
+        assert!(
+          std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success()
+        );
+        let repo = repo.canonicalize().unwrap();
+        let seed =
+          include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
+        std::fs::write(sessions.join("-repo/2026-01-01T00-00-00-000Z_seed.jsonl"), seed).unwrap();
+        let gateway = Gateway::new(
+          GatewayConfig::builder()
+            .sessions_dir(sessions)
+            .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
+            .build(),
+        );
+        let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
+          .await
+          .unwrap();
+        let projects = ProjectsApiClient::list(&client).await.unwrap();
+        let project = projects.first().unwrap();
+        let target = OpenTarget::New {
+          project: project.id.clone(),
+          checkout: project.checkouts.first().unwrap().id.clone(),
+        };
+        let first = LiveApiClient::open(
+          &client,
+          OpenRequest {
+            target: target.clone(),
+            model: None,
+          },
+        )
+        .await
+        .unwrap();
+        let second = LiveApiClient::open(&client, OpenRequest { target, model: None }).await.unwrap();
+        let (handle, workspace, model) = cx.update(|cx| {
+          gpui_kit::init(cx);
+          crate::init(directory.path().join("speech"), cx);
+          let model = cx.new(|cx| {
+            let mut model = Model::new(client.clone(), cx);
+            model.seed_workspace(projects, Vec::new(), cx);
+            model
+          });
+          let (handle, workspace) = gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| Workspace::new(model.clone(), client, window, cx))
+          })
+          .unwrap();
+          (handle, workspace, model)
+        });
+        let (input, delivered) = file_input();
+        let (_probe, prepared) = cx.update(watch_preparation);
+        cx.update(|cx| model.update(cx, |model, cx| model.seed_open(&first, cx)));
+        cx.update_window(handle, |_, window, cx| {
+          let session = workspace.read(cx).session(first.live).unwrap().clone();
+          session.update(cx, |session, cx| session.set_dictation_input_for_test(input.clone(), cx));
+          window.render_frame(cx);
+          let composer = window.find_by_label("Message").bounds().center();
+          window.pointer_down(composer, MouseButton::Left, cx);
+          window.pointer_up(composer, MouseButton::Left, cx);
+          window.input("preserved draft", cx);
+          window.click(format!("composer-dictation-{}", first.live.as_uuid()), cx);
+        })
+        .unwrap();
+        cx.update(|cx| {
+          assert!(
+            workspace
+              .read(cx)
+              .session(first.live)
+              .unwrap()
+              .read(cx)
+              .dictation_active_for_test(cx)
+          );
+          model.update(cx, |model, cx| model.seed_open(&second, cx));
+        });
+        cx.update(|cx| {
+          assert!(
+            !workspace
+              .read(cx)
+              .session(first.live)
+              .unwrap()
+              .read(cx)
+              .dictation_active_for_test(cx)
+          );
+        });
+        prepared.recv().await.unwrap().unwrap();
+        cx.update_window(handle, |_, window, cx| {
+          assert!(delivered.try_recv().is_err());
+          assert_eq!(
+            workspace.read(cx).session(first.live).unwrap().read(cx).composer_text(cx),
+            "preserved draft"
+          );
+          workspace.update(cx, |workspace, cx| workspace.traverse(false, window, cx));
+          window.render_frame(cx);
+          window.click(format!("composer-dictation-{}", first.live.as_uuid()), cx);
+        })
+        .unwrap();
+        delivered.recv().await.unwrap();
+        let (first_session, first_draft) = cx
+          .update_window(handle, |_, window, cx| {
+            let first_session = workspace.read(cx).session(first.live).unwrap().clone();
+            let first_draft = first_session.read(cx).composer_text(cx);
+            workspace.update(cx, |workspace, cx| workspace.traverse(true, window, cx));
+            assert!(
+              !workspace
+                .read(cx)
+                .session(first.live)
+                .unwrap()
+                .read(cx)
+                .dictation_active_for_test(cx)
+            );
+            assert_eq!(first_session.read(cx).composer_text(cx), first_draft);
+            let session = workspace.read(cx).session(second.live).unwrap().clone();
+            session.update(cx, |session, cx| session.set_dictation_input_for_test(input, cx));
+            window.render_frame(cx);
+            window.click(format!("composer-dictation-{}", second.live.as_uuid()), cx);
+            (first_session, first_draft)
+          })
+          .unwrap();
+        delivered.recv().await.unwrap();
+        cx.update(|cx| model.update(cx, |model, cx| model.seed_close(first.live, cx)));
+        let cleanup = cx.update(|cx| {
+          assert!(workspace.read(cx).session(first.live).is_none());
+          assert!(
+            workspace
+              .read(cx)
+              .session(second.live)
+              .unwrap()
+              .read(cx)
+              .dictation_active_for_test(cx)
+          );
+          let cleanup = workspace.update(cx, |workspace, cx| workspace.shutdown(cx));
+          assert!(
+            !workspace
+              .read(cx)
+              .session(second.live)
+              .unwrap()
+              .read(cx)
+              .dictation_active_for_test(cx)
+          );
+          cleanup
+        });
+        cleanup.await;
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          window.click(format!("composer-dictation-{}", second.live.as_uuid()), cx);
+        })
+        .unwrap();
+        delivered.recv().await.unwrap();
+        let (second_session, second_draft) = cx
+          .update_window(handle, |_, window, cx| {
+            let session = workspace.read(cx).session(second.live).unwrap().clone();
+            let draft = session.read(cx).composer_text(cx);
+            window.render_frame(cx);
+            window.click("close-session", cx);
+            assert!(!session.read(cx).dictation_active_for_test(cx));
+            (session, draft)
+          })
+          .unwrap();
+        cx.update(crate::shutdown).await;
+        cx.run_until_parked();
+        cx.update(|cx| {
+          assert_eq!(first_session.read(cx).composer_text(cx), first_draft);
+          assert_eq!(second_session.read(cx).composer_text(cx), second_draft);
+        });
+        gateway.shutdown().await.unwrap();
+      });
+    })
+    .await;
   }
 
   #[tokio::test(flavor = "multi_thread")]

@@ -1306,7 +1306,7 @@ mod tests {
       let checkout = CheckoutId::from("checkout".to_owned());
       let (handle, view) = cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::init(cx);
+        crate::init(dir.join("speech-cache"), cx);
         let model = cx.new(|cx| {
           let mut model = Model::new(client, cx);
           model.seed_workspace(

@@ -1062,47 +1062,26 @@ fn message(live: LiveSessionId, text: &str) -> PromptRequest {
 #[tokio::test]
 async fn the_queue_is_edited_while_a_turn_runs_over_both_transports(project: &mut Project) {
   project.sessions(1);
-  let gateway = project.live_gateway();
+  let gateway = project.ask_gateway();
   let ([channel, ws], server) = both_transports(&gateway).await;
   let opened = open_new(&channel).await;
   let mut stream = subscribe(&channel, opened.live, None).await.unwrap();
   prompt(
     &channel,
     opened.live,
-    "Write the numbers from 1 to 400, one per line, nothing else.",
+    "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue.",
   )
   .await;
-  loop {
-    if matches!(
-      next_event(&mut stream).await.body,
-      EventBody::Agent(RpcAgentEvent::MessageUpdate(_))
-    ) {
-      break;
-    }
-  }
+  // An unanswered dialog keeps the turn running until restore aborts it.
+  until_ask(&mut stream).await;
 
-  // A follow-up waits for the turn to end; it is queued and visible.
   LiveApiClient::follow_up(&channel, message(opened.live, "queued one"))
     .await
     .unwrap();
   until_queue(&mut stream, &[], &["queued one"]).await;
 
-  // Promoting it moves it to the steering queue.
-  let promoted = QueueApiClient::promote(
-    &ws,
-    PromoteQueuedRequest {
-      live: opened.live,
-      message: "queued one".to_owned(),
-    },
-  )
-  .await
-  .unwrap();
-  assert!(promoted.promoted);
-  until_queue(&mut stream, &["queued one"], &[]).await;
-
-  // A second follow-up can be taken out again.
   LiveApiClient::follow_up(&ws, message(opened.live, "queued two")).await.unwrap();
-  until_queue(&mut stream, &["queued one"], &["queued two"]).await;
+  until_queue(&mut stream, &[], &["queued one", "queued two"]).await;
   let removed = QueueApiClient::remove(
     &channel,
     RemoveQueuedRequest {
@@ -1114,18 +1093,46 @@ async fn the_queue_is_edited_while_a_turn_runs_over_both_transports(project: &mu
   .await
   .unwrap();
   assert!(removed.removed);
-  until_queue(&mut stream, &["queued one"], &[]).await;
+  until_queue(&mut stream, &[], &["queued one"]).await;
 
-  // Restoring aborts the turn and hands back what was queued and not yet sent.
   LiveApiClient::follow_up(&channel, message(opened.live, "queued three"))
     .await
     .unwrap();
-  until_queue(&mut stream, &["queued one"], &["queued three"]).await;
+  until_queue(&mut stream, &[], &["queued one", "queued three"]).await;
   let restored = QueueApiClient::restore(&ws, opened.live).await.unwrap();
+  assert!(restored.steering.is_empty());
   assert_eq!(
     restored.follow_up.iter().map(|message| message.text.as_str()).collect::<Vec<_>>(),
-    ["queued three"]
+    ["queued one", "queued three"]
   );
+  drop(stream);
+
+  // Promotion interrupts the pending tool, so test it in a separate turn.
+  let opened = open_new(&channel).await;
+  let mut stream = subscribe(&channel, opened.live, None).await.unwrap();
+  prompt(
+    &channel,
+    opened.live,
+    "Use the ask tool exactly once to ask me which colour I prefer, with the options red and blue.",
+  )
+  .await;
+  until_ask(&mut stream).await;
+  LiveApiClient::follow_up(&channel, message(opened.live, "queued one"))
+    .await
+    .unwrap();
+  until_queue(&mut stream, &[], &["queued one"]).await;
+  let promoted = QueueApiClient::promote(
+    &ws,
+    PromoteQueuedRequest {
+      live: opened.live,
+      message: "queued one".to_owned(),
+    },
+  )
+  .await
+  .unwrap();
+  assert!(promoted.promoted);
+  until_queue(&mut stream, &["queued one"], &[]).await;
+  until_queue(&mut stream, &[], &[]).await;
 
   drop((stream, channel, ws));
   server.shutdown().await.unwrap();

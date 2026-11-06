@@ -5,6 +5,7 @@
 
 mod history;
 
+use std::ops::Range as ByteRange;
 use std::rc::Rc;
 
 use alvin_protocol::{AvailableSlashCommand, LiveSessionId};
@@ -20,15 +21,18 @@ use gpui_kit::component::input::{
 use gpui_kit::component::input::{MoveEnd, MoveHome, MoveToNextWord, MoveToPreviousWord};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::progress::ProgressCircle;
+use gpui_kit::component::speech::SpeechWaveform;
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-  Anchor, AnyElement, App, AppContext as _, ClipboardItem, Context, ElementId, Entity, InteractiveElement as _, IntoElement, KeyBinding,
-  ParentElement as _, Pixels, Render, Result, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window,
-  actions, div, relative, rems,
+  Anchor, AnyElement, App, AppContext as _, ClipboardItem, Context, ElementId, Entity, EntityInputHandler as _, InteractiveElement as _,
+  IntoElement, KeyBinding, ParentElement as _, Pixels, Render, Result, SharedString, StatefulInteractiveElement as _, Styled as _,
+  Subscription, Task, Window, actions, div, relative, rems,
 };
 use lsp_types::{CompletionContext, CompletionItem, CompletionResponse, CompletionTextEdit, Position, Range, TextEdit};
 
+use super::dictation::{Dictation, Phase};
 use super::{markdown, pickers::Pickers};
 use crate::model::{Model, ModelChange, ModelEvent};
 
@@ -86,6 +90,43 @@ pub(crate) enum Layout {
   #[default]
   Compact,
   Expanded,
+}
+
+#[derive(Default)]
+pub(super) struct DictationEdits {
+  pending: String,
+  inserted: bool,
+  selection: Option<(ByteRange<usize>, bool, usize)>,
+}
+
+impl DictationEdits {
+  pub(super) fn push(&mut self, text: &str) {
+    self.pending.push_str(text);
+  }
+
+  pub(super) fn flush(&mut self, editor: &mut EditorState, window: &mut Window, cx: &mut Context<EditorState>) {
+    if self.pending.is_empty() || editor.marked_text_range(window, cx).is_some() {
+      return;
+    }
+    let text = std::mem::take(&mut self.pending);
+    let selection = editor.selected_range();
+    if !self.inserted || selection.is_empty() {
+      editor.replace(text, window, cx);
+      self.selection = None;
+    } else {
+      let reversed = editor.is_selection_reversed();
+      let offset = match &self.selection {
+        Some((previous, direction, offset)) if *previous == selection && *direction == reversed => *offset,
+        _ => selection.end,
+      };
+      editor.set_selected_range(offset..offset, cx);
+      editor.replace(text, window, cx);
+      let end = editor.selected_range().end;
+      editor.set_selected_range_with_direction(selection.clone(), reversed, cx);
+      self.selection = Some((selection, reversed, end));
+    }
+    self.inserted = true;
+  }
 }
 
 /// The composer's editor: soft-wrapped markdown without a gutter, where Enter submits and a leading `/` offers the session's
@@ -209,6 +250,7 @@ pub(crate) struct Composer {
   live: LiveSessionId,
   model: Entity<Model>,
   composer: Entity<EditorState>,
+  dictation: Entity<Dictation>,
   composer_layout: Layout,
   pickers: Pickers,
   history: Option<history::Browse>,
@@ -217,11 +259,18 @@ pub(crate) struct Composer {
 }
 
 impl Composer {
-  pub(crate) fn new(model: Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut Context<Self>) -> Self {
+  pub(crate) fn new(
+    model: Entity<Model>,
+    live: LiveSessionId,
+    dictation: Entity<Dictation>,
+    window: &mut Window,
+    cx: &mut Context<Self>,
+  ) -> Self {
     let composer = state(&model, live, window, cx);
     let mut pickers = Pickers::new(&model, live, window, cx);
     pickers.sync(&model, live, window, cx);
     let subscriptions = vec![
+      cx.observe(&dictation, |_, _, cx| cx.notify()),
       cx.subscribe_in(&model, window, |this, model, change: &ModelChange, window, cx| {
         if matches!(change, ModelChange::Session(id) if *id == this.live) {
           this.pickers.sync(model, this.live, window, cx);
@@ -232,6 +281,7 @@ impl Composer {
         if let ModelEvent::ComposerText { live, text } = event
           && *live == this.live
         {
+          this.dictation.update(cx, |dictation, cx| dictation.cancel(cx));
           this.composer.update(cx, |editor, cx| editor.set_value(text.clone(), window, cx));
         }
       }),
@@ -243,6 +293,7 @@ impl Composer {
           }
         }
         if let Some(submission) = submitted(event, state, this.composer_layout, cx) {
+          this.dictation.update(cx, |dictation, cx| dictation.cancel(cx));
           this
             .model
             .update(cx, |model, cx| model.send(this.live, &submission.text, submission.follow_up, cx))
@@ -255,6 +306,7 @@ impl Composer {
       live,
       model,
       composer,
+      dictation,
       composer_layout: Layout::Compact,
       history: None,
       recalling_history: false,
@@ -293,6 +345,90 @@ impl Composer {
     });
     cx.notify();
   }
+  fn dictation_toolbar(&self, cx: &Context<Self>) -> impl IntoElement {
+    let dictation = self.dictation.read(cx);
+    let phase = dictation.phase();
+    let label = match phase {
+      Phase::Idle | Phase::Failed(_) => "Start dictation",
+      Phase::Capturing => "Stop dictation",
+      Phase::Preparing(_) | Phase::Transcribing => "Cancel dictation",
+    };
+    let button = Button::new(self.id("composer-dictation"))
+      .small()
+      .ghost()
+      .icon(if matches!(phase, Phase::Capturing) {
+        gpui_kit::assets::IconName::MicOff
+      } else {
+        gpui_kit::assets::IconName::Mic
+      })
+      .tooltip(label)
+      .accessibility_label(label)
+      .on_click(cx.listener(|this, _, _, cx| {
+        if matches!(this.dictation.read(cx).phase(), Phase::Transcribing) {
+          this.dictation.update(cx, |dictation, cx| dictation.cancel(cx));
+        } else {
+          this.dictation.update(cx, |dictation, cx| dictation.toggle(cx));
+        }
+      }));
+    let status = match phase {
+      Phase::Preparing(Some(alvin_stt::PreparationProgress::Downloading { .. })) => Some(match dictation.remaining(cx) {
+        Some(remaining) if remaining.as_secs() >= 60 => {
+          format!("About {} min left", remaining.as_secs().div_ceil(60))
+        }
+        Some(remaining) => format!("About {} sec left", remaining.as_secs().max(1)),
+        None => "Estimating…".to_owned(),
+      }),
+      Phase::Preparing(Some(alvin_stt::PreparationProgress::Loading)) => Some("Loading speech model".to_owned()),
+      Phase::Preparing(None) => Some("Preparing speech model".to_owned()),
+      Phase::Transcribing => Some("Transcribing".to_owned()),
+      Phase::Failed(error) => Some(error.clone()),
+      Phase::Idle | Phase::Capturing => None,
+    };
+    h_flex()
+      .flex_1()
+      .min_w_0()
+      .justify_end()
+      .gap_2()
+      .when_some(
+        match phase {
+          Phase::Preparing(Some(alvin_stt::PreparationProgress::Downloading {
+            completed_bytes,
+            total_bytes,
+          }))
+            if *total_bytes > 0 =>
+          {
+            Some((*completed_bytes as f64 / *total_bytes as f64 * 100.) as f32)
+          }
+          _ => None,
+        },
+        |row, percent| {
+          row.child(
+            gpui_kit::component::progress::Progress::new(self.id("dictation-download-progress"))
+              .small()
+              .w(gpui_kit::rems(6.))
+              .value(percent)
+              .accessibility_label("Downloading speech model"),
+          )
+        },
+      )
+      .when(matches!(phase, Phase::Capturing), |row| {
+        row.child(SpeechWaveform::new(dictation.speech()).small().w(gpui_kit::rems(4.)))
+      })
+      .when(matches!(phase, Phase::Transcribing), |row| row.child(Spinner::new().xsmall()))
+      .when_some(status, |row, status| {
+        row.child(div().text_xs().text_color(cx.theme().muted_foreground).child(status))
+      })
+      .when(matches!(phase, Phase::Failed(_)), |row| {
+        row.child(
+          Button::new(self.id("dictation-retry"))
+            .small()
+            .ghost()
+            .label("Retry")
+            .on_click(cx.listener(|this, _, _, cx| this.dictation.update(cx, |dictation, cx| dictation.toggle(cx)))),
+        )
+      })
+      .child(button)
+  }
 
   fn interrupt_button(&self, cx: &App) -> Option<AnyElement> {
     let live = self.live;
@@ -306,6 +442,7 @@ impl Composer {
       return None;
     }
     let (model, composer) = (self.model.clone(), self.composer.clone());
+    let dictation = self.dictation.clone();
     Some(
       Button::new(self.id("session-interrupt"))
         .small()
@@ -316,6 +453,7 @@ impl Composer {
           if text.is_empty() {
             return;
           }
+          dictation.update(cx, |dictation, cx| dictation.cancel(cx));
           composer.update(cx, |composer, cx| composer.set_value("", window, cx));
           model.update(cx, |model, cx| model.interrupt_and_send(live, text, cx)).detach();
         })
@@ -325,6 +463,7 @@ impl Composer {
 
   fn send_button(&self, cx: &App) -> AnyElement {
     let (model, composer, live) = (self.model.clone(), self.composer.clone(), self.live);
+    let dictation = self.dictation.clone();
     let running = model.read(cx).bash_running(live)
       || model
         .read(cx)
@@ -356,6 +495,7 @@ impl Composer {
         if text.is_empty() {
           return;
         }
+        dictation.update(cx, |dictation, cx| dictation.cancel(cx));
         composer.update(cx, |composer, cx| composer.set_value("", window, cx));
         model.update(cx, |model, cx| model.send(live, &text, false, cx)).detach();
       })
@@ -583,6 +723,7 @@ impl Render for Composer {
             )
           })
           .child(context)
+          .child(self.dictation_toolbar(cx))
           .child(
             Button::new(self.id("composer-expand"))
               .small()
@@ -599,9 +740,78 @@ impl Render for Composer {
 #[cfg(test)]
 mod tests {
   use alvin_protocol::AvailableSlashCommand;
+  use gpui_kit::component::input::{Editor, EditorState};
+  use gpui_kit::{
+    App, AppContext as _, Context, Entity, EntityInputHandler as _, IntoElement as _, Render, TestAppContext, Window, WindowOptions,
+  };
   use lsp_types::CompletionTextEdit;
 
-  use super::command_items;
+  use super::{DictationEdits, command_items};
+
+  struct EditorFixture {
+    editor: Entity<EditorState>,
+  }
+
+  impl Render for EditorFixture {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl gpui_kit::IntoElement {
+      Editor::new(&self.editor).into_any_element()
+    }
+  }
+
+  fn editor_fixture(cx: &mut TestAppContext) -> (gpui_kit::AnyWindowHandle, Entity<EditorState>) {
+    cx.update(gpui_kit::init);
+    let (window, fixture) = cx.update(|cx: &mut App| {
+      gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+        cx.new(|cx| EditorFixture {
+          editor: cx.new(|cx| EditorState::new(window, cx)),
+        })
+      })
+      .unwrap()
+    });
+    let editor = cx.update(|cx| fixture.read(cx).editor.clone());
+    (window, editor)
+  }
+
+  #[gpui_kit::test]
+  fn dictation_keeps_chunk_order_and_selection(cx: &mut TestAppContext) {
+    let (window, editor) = editor_fixture(cx);
+    cx.update_window(window, |_, window, cx| {
+      editor.update(cx, |editor, cx| {
+        let mut edits = DictationEdits::default();
+        edits.push("hello");
+        edits.flush(editor, window, cx);
+        editor.set_selected_range_with_direction(0..5, true, cx);
+        edits.push(" world");
+        edits.flush(editor, window, cx);
+        edits.push("!");
+        edits.flush(editor, window, cx);
+        assert_eq!(editor.value().as_ref(), "hello world!");
+        assert_eq!(editor.selected_range(), 0..5);
+        assert!(editor.is_selection_reversed());
+      });
+    })
+    .unwrap();
+  }
+
+  #[gpui_kit::test]
+  fn dictation_waits_for_ime_commit(cx: &mut TestAppContext) {
+    let (window, editor) = editor_fixture(cx);
+    cx.update_window(window, |_, window, cx| {
+      editor.update(cx, |editor, cx| {
+        editor.replace_and_mark_text_in_range(None, "ni", Some(2..2), window, cx);
+        let mut edits = DictationEdits::default();
+        edits.push(" spoken");
+        edits.flush(editor, window, cx);
+        assert_eq!(editor.value().as_ref(), "ni");
+        assert!(editor.marked_text_range(window, cx).is_some());
+        editor.replace_text_in_range(None, "你", window, cx);
+        edits.flush(editor, window, cx);
+        assert_eq!(editor.value().as_ref(), "你 spoken");
+        assert!(editor.marked_text_range(window, cx).is_none());
+      });
+    })
+    .unwrap();
+  }
 
   fn command(name: &str) -> AvailableSlashCommand {
     serde_json::from_value(serde_json::json!({ "name": name, "source": "builtin", "description": "does it" })).unwrap()

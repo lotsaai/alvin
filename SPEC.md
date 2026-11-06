@@ -27,7 +27,8 @@ Success means:
 | `gateway` | `alvin-gateway` | Implements the protocol server traits over `session-index` and `omp-host`. Mounts the same `Methods` on the channel transport and on a WebSocket listener. Ships the `alvind` binary serving `ws(s)://` | `session-index`, `omp-host` |
 | `client` | `alvin-client` | The one typed client. Transport is an implementation detail chosen by endpoint | `protocol` |
 | `conversation` | `alvin-conversation` | Pure UI state: projects, sessions, live turns, queue, history tree | `protocol` |
-| `conversation-ui` | `alvin-conversation-ui` | gpui-kit views | `conversation`, `client` |
+| `stt` | `alvin-stt` | Local speech model provisioning and transcription, independent of UI and gateway | `scaffold` |
+| `conversation-ui` | `alvin-conversation-ui` | gpui-kit views | `conversation`, `client`, `stt` |
 | `app` | `alvin-app` | Desktop face. Parses client configuration and connects to a separately running gateway over WebSocket | `conversation-ui`, `client`, `telemetry` |
 
 Build order: `scaffold → protocol → session-index, omp-host → gateway, client, conversation → conversation-ui → app`.
@@ -88,6 +89,7 @@ crates/alvin-client/          → typed client
 crates/alvin-conversation/    → UI state
 crates/alvin-conversation-ui/ → gpui-kit views
 crates/alvin-app/             → desktop binary
+crates/alvin-stt/             → local speech model provisioning and transcription
 crates/alvin-telemetry/       → shared OTLP setup and shutdown
 crates/alvin-workspace-hack/  → hakari, build-only
 .mise/tasks/                  → task scripts

@@ -1,5 +1,7 @@
 //! Actions and the key bindings this crate registers.
 
+use std::path::PathBuf;
+
 use gpui_kit::{App, KeyBinding, actions};
 
 actions!(
@@ -31,8 +33,9 @@ const TOGGLE_TERMINAL_KEY: &str = "cmd-j";
 #[cfg(not(target_os = "macos"))]
 const TOGGLE_TERMINAL_KEY: &str = "ctrl-j";
 
-/// Registers this crate's key bindings. Call after `gpui_kit::init`.
-pub fn init(cx: &mut App) {
+/// Registers this crate's key bindings and speech cache. Call after `gpui_kit::init`.
+pub fn init(speech_cache_dir: PathBuf, cx: &mut App) {
+  crate::session::dictation::init(speech_cache_dir, cx);
   crate::session::refresh_markdown_theme(cx);
   crate::session::init_timeline(cx);
   crate::session::init_shortcuts(cx);

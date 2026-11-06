@@ -1,61 +1,53 @@
-//! Errors from the terminal's engine and gateway connection.
+//! Errors from terminal operations and speech input.
 
 use std::error::Error as StdError;
-use std::fmt;
 
-/// A terminal operation failed.
-#[derive(Debug)]
+/// A terminal or speech operation failed.
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
   /// A gateway operation failed.
-  Gateway(alvin_client::Error),
+  #[error("terminal gateway: {0}")]
+  Gateway(#[source] alvin_client::Error),
   /// The terminal engine or its byte stream failed.
-  TerminalEngine(std::io::Error),
+  #[error("terminal engine: {0}")]
+  TerminalEngine(#[source] std::io::Error),
   /// The engine refused input.
-  TerminalInput(Box<dyn StdError + Send + Sync>),
+  #[error("terminal input: {0}")]
+  TerminalInput(#[source] Box<dyn StdError + Send + Sync>),
   /// The terminal engine thread panicked during shutdown.
+  #[error("terminal engine thread panicked")]
   TerminalThread,
   /// Base64-encoded image data could not be decoded.
+  #[error("Invalid image data: {source}")]
   ImageData {
     /// Underlying base64 decoding error.
+    #[source]
     source: base64::DecodeError,
   },
   /// Inline image data had no MIME type.
+  #[error("Image data is missing a MIME type")]
   ImageMimeMissing,
   /// Inline image data used an unsupported MIME type.
+  #[error("Unsupported image format: {mime}")]
   ImageMimeUnsupported {
     /// MIME type supplied by the image.
     mime: String,
   },
   /// An image contained neither inline data nor a URL.
+  #[error("Image has no data or URL")]
   ImageSourceMissing,
-}
-
-impl fmt::Display for Error {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::Gateway(source) => write!(f, "terminal gateway: {source}"),
-      Self::TerminalEngine(source) => write!(f, "terminal engine: {source}"),
-      Self::TerminalInput(source) => write!(f, "terminal input: {source}"),
-      Self::TerminalThread => f.write_str("terminal engine thread panicked"),
-      Self::ImageData { source } => write!(f, "Invalid image data: {source}"),
-      Self::ImageMimeMissing => f.write_str("Image data is missing a MIME type"),
-      Self::ImageMimeUnsupported { mime } => write!(f, "Unsupported image format: {mime}"),
-      Self::ImageSourceMissing => f.write_str("Image has no data or URL"),
-    }
-  }
-}
-
-impl StdError for Error {
-  fn source(&self) -> Option<&(dyn StdError + 'static)> {
-    match self {
-      Self::Gateway(source) => Some(source),
-      Self::TerminalEngine(source) => Some(source),
-      Self::TerminalInput(source) => Some(source.as_ref()),
-      Self::ImageData { source } => Some(source),
-      Self::ImageMimeMissing | Self::ImageMimeUnsupported { .. } | Self::ImageSourceMissing => None,
-      Self::TerminalThread => None,
-    }
-  }
+  /// Local speech model preparation or inference failed.
+  #[error("speech recognition: {source}")]
+  Speech {
+    #[source]
+    source: alvin_stt::Error,
+  },
+  /// The audio input or recognizer failed.
+  #[error("speech capture: {source}")]
+  SpeechCapture {
+    #[source]
+    source: gpui_kit::component::speech::SpeechError,
+  },
 }
 
 /// A terminal operation result.

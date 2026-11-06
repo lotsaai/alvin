@@ -12,3 +12,9 @@ for package in alvin-client alvin-conversation-ui alvin-app; do
 		exit 1
 	fi
 done
+
+dependencies=$(cargo tree --locked --quiet -p alvin-stt --target all --edges normal,build --prefix none)
+if grep -E '^(alvin-(app|client|conversation|conversation-ui|gateway|omp-host|protocol|session-index|telemetry|workspace-hack)|gpui-kit|gpui-component|gpui-base|omp-rpc|jsonrpsee|code-workspace) v' <<<"$dependencies"; then
+	echo "alvin-stt must not depend on application, UI, or server crates outside dev-dependencies" >&2
+	exit 1
+fi

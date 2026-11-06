@@ -7,4 +7,4 @@ platforms = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-l
 # Client-facing crates stay outside gateway feature unification.
 # The shared telemetry pipeline must not pull the server feature graph into the desktop.
 [traversal-excludes]
-workspace-members = ["alvin-protocol", "alvin-client", "alvin-conversation", "alvin-conversation-ui", "alvin-app", "alvin-telemetry"]
+workspace-members = ["alvin-protocol", "alvin-client", "alvin-conversation", "alvin-conversation-ui", "alvin-app", "alvin-telemetry", "alvin-stt"]

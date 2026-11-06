@@ -1,0 +1,17 @@
+[package]
+name = "alvin-stt"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "Local streaming speech transcription with a reusable Nemotron model"
+
+[dependencies]
+parakeet-rs = "0.4.4"
+thiserror = "2.0.21"
+ureq = "3.5.1"
+
+[dev-dependencies]
+hound = "3.5.1"
+tempfile = "3.23.0"
+test-context = "0.5.5"
+tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }

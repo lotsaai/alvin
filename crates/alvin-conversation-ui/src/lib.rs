@@ -15,6 +15,7 @@ pub use actions::{Abort, ToggleSidebar, ToggleTerminal, init};
 pub use conversation_preferences::ConversationPreferences;
 pub use error::{Error, Result};
 pub use model::{Model, ModelEvent};
+pub use session::dictation::shutdown;
 pub use session::{UserMessageColors, refresh_markdown_theme};
 pub use terminal::{TerminalCursor, TerminalSettings, parse_terminal_color, parse_terminal_palette_entry};
 pub use workspace::{ProjectPreference, ProjectPreferences, Workspace, WorkspaceEvent};

@@ -1,0 +1,2 @@
+jfk.wav is the public domain recording of President John F. Kennedy's 1961 inaugural address, distributed as a sample by whisper.cpp:
+https://github.com/ggml-org/whisper.cpp/blob/master/samples/jfk.wav

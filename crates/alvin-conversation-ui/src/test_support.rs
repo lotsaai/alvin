@@ -83,12 +83,14 @@ pub(crate) struct Opened {
   pub(crate) workspace: Entity<Workspace>,
   pub(crate) model: Entity<Model>,
   _gateway: IdleGateway,
+  _speech_cache: tempfile::TempDir,
 }
 
 /// Opens the test window.
 pub(crate) async fn open_workspace(cx: &mut TestAppContext) -> Opened {
   cx.update(gpui_kit::init);
-  cx.update(crate::init);
+  let speech_cache = tempfile::tempdir().expect("create speech cache");
+  cx.update(|cx| crate::init(speech_cache.path().to_path_buf(), cx));
   let (client, gateway) = IdleGateway::connect().await;
   let project = ProjectId::from("project".to_owned());
   let checkout = CheckoutId::from("checkout".to_owned());
@@ -134,5 +136,6 @@ pub(crate) async fn open_workspace(cx: &mut TestAppContext) -> Opened {
     workspace,
     model,
     _gateway: gateway,
+    _speech_cache: speech_cache,
   }
 }

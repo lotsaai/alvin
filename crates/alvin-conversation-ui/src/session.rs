@@ -4,6 +4,7 @@ mod ansi;
 mod ask;
 mod composer;
 mod dialogs;
+pub(crate) mod dictation;
 mod focus;
 mod history_tree;
 mod markdown;
@@ -35,6 +36,7 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::popover::Popover;
+use gpui_kit::component::speech::SpeechEvent;
 use gpui_kit::component::{ActiveTheme as _, IconName, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -46,6 +48,7 @@ use gpui_kit::{
 use crate::actions::{Abort, SESSION_CONTEXT};
 use crate::model::{Model, ModelChange};
 use dialogs::Dialogs;
+use dictation::{DictatedText, Dictation, Phase};
 use history_tree::HistoryTreeView;
 use status::Banner;
 use timeline::ConversationTimeline;
@@ -89,6 +92,9 @@ pub(crate) struct SessionView {
   model: Entity<Model>,
   scroller: Entity<MessageScrollerState>,
   composer: Entity<composer::Composer>,
+  dictation: Entity<Dictation>,
+  dictation_generation: Option<Rc<()>>,
+  dictation_edits: composer::DictationEdits,
   timeline: Entity<ConversationTimeline>,
   dialogs: Dialogs,
   /// The history panel, whether it is open.
@@ -109,6 +115,32 @@ impl SessionView {
   fn id(&self, part: &str) -> ElementId {
     ElementId::from(SharedString::from(format!("{part}-{}", self.live.as_uuid())))
   }
+  pub(crate) fn cancel_dictation(&mut self, cx: &mut Context<Self>) {
+    self.dictation.update(cx, |dictation, cx| dictation.cancel(cx));
+    self.dictation_generation = None;
+    self.dictation_edits = composer::DictationEdits::default();
+  }
+
+  fn flush_dictation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if let Some(generation) = &self.dictation_generation {
+      if !self.dictation.read(cx).accepts_generation(generation) {
+        self.dictation_generation = None;
+        self.dictation_edits = composer::DictationEdits::default();
+        return;
+      }
+      let edits = &mut self.dictation_edits;
+      let editor = self.composer.read(cx).editor().clone();
+      editor.update(cx, |editor, cx| edits.flush(editor, window, cx));
+    }
+  }
+
+  fn dictation_active(&self, cx: &App) -> bool {
+    matches!(
+      self.dictation.read(cx).phase(),
+      Phase::Preparing(_) | Phase::Capturing | Phase::Transcribing
+    )
+  }
+
   /// The session menu: rename, compact, export and the counts omp gives.
   pub(crate) fn session_menu(&self) -> impl IntoElement {
     let live = self.live;
@@ -147,7 +179,19 @@ impl SessionView {
   }
 
   pub(crate) fn new(model: Entity<Model>, live: LiveSessionId, window: &mut Window, cx: &mut Context<Self>) -> Self {
-    let composer = cx.new(|cx| composer::Composer::new(model.clone(), live, window, cx));
+    let dictation = cx.new(Dictation::new);
+    Self::with_dictation(model, live, dictation, window, cx)
+  }
+
+  fn with_dictation(
+    model: Entity<Model>,
+    live: LiveSessionId,
+    dictation: Entity<Dictation>,
+    window: &mut Window,
+    cx: &mut Context<Self>,
+  ) -> Self {
+    let composer = cx.new(|cx| composer::Composer::new(model.clone(), live, dictation.clone(), window, cx));
+    let editor = composer.read(cx).editor().clone();
     let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
     let timeline = cx.new(|cx| ConversationTimeline::new(scroller.clone(), window, cx));
     let notices = cx.new(|_| notice::NoticeList::new());
@@ -162,6 +206,29 @@ impl SessionView {
       cx.observe(&scroller, |_, _, cx| cx.notify()),
       cx.observe(&timeline, |_, _, cx| cx.notify()),
       cx.observe(&composer, |_, _, cx| cx.notify()),
+      cx.observe(&dictation, |_, _, cx| cx.notify()),
+      cx.subscribe_in(&dictation, window, |this, dictation, event: &DictatedText, window, cx| {
+        if !dictation.read(cx).accepts_generation(&event.generation) {
+          return;
+        }
+        if this
+          .dictation_generation
+          .as_ref()
+          .is_none_or(|previous| !Rc::ptr_eq(previous, &event.generation))
+        {
+          this.dictation_edits = composer::DictationEdits::default();
+          this.dictation_generation = Some(event.generation.clone());
+        }
+        this.dictation_edits.push(&event.text);
+        this.flush_dictation(window, cx);
+      }),
+      cx.observe_in(&editor, window, |this, _, window, cx| this.flush_dictation(window, cx)),
+      cx.subscribe_in(&dictation, window, |this, _, event: &SpeechEvent, window, cx| {
+        if matches!(event, SpeechEvent::Final(_)) {
+          let editor = this.composer.read(cx).editor().clone();
+          editor.update(cx, |editor, cx| editor.focus(window, cx));
+        }
+      }),
       cx.subscribe_in(&model, window, |this, model, change: &ModelChange, window, cx| {
         if matches!(change, ModelChange::Session(live) if *live == this.live) {
           this.sync_rows(window, cx);
@@ -175,6 +242,9 @@ impl SessionView {
       model,
       scroller,
       composer,
+      dictation,
+      dictation_generation: None,
+      dictation_edits: composer::DictationEdits::default(),
       timeline,
       dialogs,
       history,
@@ -267,9 +337,13 @@ impl SessionView {
     let live = self.live;
     let banner = self.model.read(cx).conversation().live(live).and_then(status::banner)?;
     let model = self.model.clone();
+    let dictation = self.dictation.clone();
     let alert = Alert::warning(self.id("session-banner-alert"), banner.text()).banner();
     let alert = alert.when(banner == Banner::Exited, |alert| {
-      alert.on_close(move |_, _, cx| model.update(cx, |model, cx| model.close(live, cx)).detach())
+      alert.on_close(move |_, _, cx| {
+        dictation.update(cx, |dictation, cx| dictation.cancel(cx));
+        model.update(cx, |model, cx| model.close(live, cx)).detach();
+      })
     });
     Some(
       div()
@@ -445,7 +519,20 @@ impl Render for SessionView {
         )
       }))
       .children(widgets(WidgetPlacement::AboveEditor))
-      .child(self.composer.clone())
+      .child(
+        v_flex()
+          .w_full()
+          .min_w_0()
+          .when(expanded, |container| container.flex_1().min_h_0())
+          .capture_action(cx.listener(|this, _: &gpui_kit::component::input::Escape, _, cx| {
+            if this.dictation_active(cx) {
+              this.cancel_dictation(cx);
+            } else {
+              cx.propagate();
+            }
+          }))
+          .child(self.composer.clone()),
+      )
       .children(widgets(WidgetPlacement::BelowEditor))
       .child(self.status_row(cx));
     let content = if expanded {
@@ -563,7 +650,9 @@ impl Render for SessionView {
       .relative()
       .key_context(SESSION_CONTEXT)
       .on_action(cx.listener(move |this, _: &Abort, window, cx| {
-        if this.composer.read(cx).expanded() {
+        if this.dictation_active(cx) {
+          this.cancel_dictation(cx);
+        } else if this.composer.read(cx).expanded() {
           this.composer.update(cx, |composer, cx| composer.toggle(window, cx));
         } else {
           this.model.update(cx, |model, cx| model.abort(live, cx)).detach();
@@ -593,6 +682,14 @@ impl SessionView {
   /// What the composer holds.
   pub(crate) fn composer_text(&self, cx: &App) -> String {
     self.composer.read(cx).editor().read(cx).value().to_string()
+  }
+
+  pub(crate) fn dictation_active_for_test(&self, cx: &App) -> bool {
+    self.dictation_active(cx)
+  }
+
+  pub(crate) fn set_dictation_input_for_test(&mut self, input: Rc<dyn gpui_kit::component::speech::AudioInput>, cx: &mut Context<Self>) {
+    self.dictation.update(cx, |dictation, _| dictation.set_input(input));
   }
 }
 
@@ -682,6 +779,312 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
+  async fn dictation_streams_into_an_editable_undoable_draft(cx: &mut TestAppContext) {
+    use std::path::PathBuf;
+
+    use alvin_client::{ChannelPair, Client, Endpoint};
+    use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
+    use alvin_protocol::{EventBody, LiveApiClient, MessagesRequest, ProjectsApiClient, SubscribeRequest};
+    use gpui_kit::component::speech::SpeechEvent;
+    use gpui_kit::{Focusable as _, WindowOptions};
+
+    use super::SessionView;
+    use super::dictation::{Dictation, test_support};
+    use crate::model::Model;
+
+    cx.executor().allow_parking();
+    let executor = cx.foreground_executor().clone();
+    tokio::task::coop::unconstrained(async {
+      executor.block_test(async {
+        cx.update(gpui_kit::init);
+        let directory = tempfile::tempdir().unwrap();
+        let repo = directory.path().join("repo");
+        let sessions = directory.path().join("sessions");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(sessions.join("-repo")).unwrap();
+        assert!(
+          std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success()
+        );
+        let repo = repo.canonicalize().unwrap();
+        let seed =
+          include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
+        std::fs::write(
+          sessions.join("-repo/2026-01-01T00-00-00-000Z_01a18ff1-ab74-73b8-a3a2-79905565c49b.jsonl"),
+          seed,
+        )
+        .unwrap();
+        cx.update(|cx| crate::init(directory.path().join("speech"), cx));
+        let (_preparation_probe, prepared) = cx.update(test_support::watch_preparation);
+        let gateway = Gateway::new(
+          GatewayConfig::builder()
+            .sessions_dir(sessions)
+            .omp(HostConfig::builder().omp(PathBuf::from("omp")).build())
+            .default_model(Some("openrouter/inclusionai/ling-3.0-flash".to_owned()))
+            .build(),
+        );
+        let client = Client::connect(Endpoint::Channel(ChannelPair::from(gateway.connect_channel(64).unwrap())))
+          .await
+          .unwrap();
+        let projects = ProjectsApiClient::list(&client).await.unwrap();
+        let project = projects.first().unwrap();
+        let model = cx.update(|cx| cx.new(|cx| Model::new(client.clone(), cx)));
+        let opening = cx.update(|cx| {
+          model.update(cx, |model, cx| {
+            model.new_session(project.id.clone(), project.checkouts.first().unwrap().id.clone(), cx)
+          })
+        });
+        opening.await;
+        let session = LiveApiClient::list(&client).await.unwrap().into_iter().next().unwrap();
+        let mut events = client
+          .events(SubscribeRequest {
+            live: session.live,
+            after: None,
+          })
+          .await
+          .unwrap();
+        let (input, delivered) = test_support::file_input();
+        let (final_tx, final_rx) = async_channel::bounded(1);
+        let (partial_tx, partial_rx) = async_channel::unbounded();
+        let (handle, view) = cx.update(|cx| {
+          let (handle, view) = gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| {
+              let dictation = cx.new(|cx| Dictation::with_input(input, cx));
+              let mut view = SessionView::with_dictation(model.clone(), session.live, dictation.clone(), window, cx);
+              view
+                ._subscriptions
+                .push(cx.subscribe(&dictation, move |_, _, event: &SpeechEvent, _| {
+                  let result = match event {
+                    SpeechEvent::Final(_) => Ok(()),
+                    SpeechEvent::Error(error) => Err(error.clone()),
+                    SpeechEvent::Partial(text) => {
+                      partial_tx.try_send(text.clone()).unwrap();
+                      return;
+                    }
+                    SpeechEvent::Started | SpeechEvent::Cancelled => return,
+                  };
+                  final_tx.try_send(result).unwrap();
+                }));
+              view
+            })
+          })
+          .unwrap();
+          (handle, view)
+        });
+        let id = session.live.as_uuid();
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          let editor = window.find_by_label("Message").bounds().center();
+          window.pointer_down(editor, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(editor, gpui_kit::MouseButton::Left, cx);
+          window.input("before REPLACE after", cx);
+          for _ in 0..6 {
+            window.press("left", cx);
+          }
+          for _ in 0..7 {
+            window.press("shift-left", cx);
+          }
+          window.click(format!("composer-dictation-{id}"), cx);
+        })
+        .unwrap();
+        prepared.recv().await.unwrap().expect("speech model preparation failed");
+        tokio::select! {
+          result = delivered.recv() => result.expect("file delivery channel closed"),
+          result = final_rx.recv() => panic!("speech ended before audio delivery: {:?}", result.unwrap()),
+        }
+        let partial = partial_rx.recv().await.unwrap();
+        assert!(!partial.is_empty());
+        cx.update(|cx| {
+          let draft = view.read(cx).composer_text(cx);
+          assert!(draft.starts_with("before "));
+          assert!(draft.ends_with(" after"));
+          assert!(!draft.contains("REPLACE"));
+          assert_eq!(model.read(cx).conversation().live(session.live).unwrap().total_messages, 0);
+        });
+        cx.update_window(handle, |_, window, cx| {
+          let composer = view.read(cx).composer.read(cx).editor().clone();
+          composer.update(cx, |composer, cx| composer.focus(window, cx));
+          window.input("[edited]", cx);
+          assert!(composer.read(cx).value().contains("[edited]"));
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          assert_eq!(window.find(format!("composer-dictation-{id}")).label(), Some("Stop dictation"));
+          window.click(format!("composer-dictation-{id}"), cx);
+        })
+        .unwrap();
+        final_rx.recv().await.unwrap().expect("speech recognition failed");
+        let text = cx
+          .update_window(handle, |_, window, cx| {
+            let composer = view.read(cx).composer.read(cx).editor().clone();
+            let text = composer.read(cx).value().to_string();
+            assert!(text.starts_with("before "));
+            assert!(text.ends_with(" after"));
+            assert!(text.to_lowercase().contains("ask not what your country can do for you"));
+            assert!(!text.contains("REPLACE"));
+            assert!(text.contains("[edited]"));
+            assert!(composer.focus_handle(cx).is_focused(window));
+            assert_eq!(model.read(cx).conversation().live(session.live).unwrap().total_messages, 0);
+            window.press("secondary-z", cx);
+            assert_ne!(composer.read(cx).value().as_ref(), text);
+            window.press("secondary-shift-z", cx);
+            assert_eq!(composer.read(cx).value().as_ref(), text);
+            text
+          })
+          .unwrap();
+        assert_eq!(LiveApiClient::state(&client, session.live).await.unwrap().message_count, 0);
+        for (input, delivered) in [test_support::empty_file_input(), test_support::short_file_input()] {
+          cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |view, cx| view.set_dictation_input_for_test(input, cx));
+            window.render_frame(cx);
+            assert_eq!(window.find(format!("composer-dictation-{id}")).label(), Some("Start dictation"));
+            window.click(format!("composer-dictation-{id}"), cx);
+          })
+          .unwrap();
+          tokio::select! {
+            result = delivered.recv() => result.expect("file delivery channel closed"),
+            result = final_rx.recv() => panic!("speech ended before audio delivery: {:?}", result.unwrap()),
+          }
+          cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert_eq!(window.find(format!("composer-dictation-{id}")).label(), Some("Stop dictation"));
+            window.click(format!("composer-dictation-{id}"), cx);
+          })
+          .unwrap();
+          final_rx.recv().await.unwrap().expect("speech recognition failed");
+          cx.update(|cx| {
+            assert_eq!(view.read(cx).composer_text(cx), text);
+            assert_eq!(model.read(cx).conversation().live(session.live).unwrap().total_messages, 0);
+          });
+          assert_eq!(LiveApiClient::state(&client, session.live).await.unwrap().message_count, 0);
+        }
+        let (input, delivered) = test_support::file_input();
+        cx.update(|cx| view.update(cx, |view, cx| view.set_dictation_input_for_test(input, cx)));
+        cx.update_window(handle, |_, window, cx| {
+          window.click(format!("session-send-{id}"), cx);
+          assert_eq!(view.read(cx).composer_text(cx), "");
+        })
+        .unwrap();
+        loop {
+          let event = events.next().await.unwrap().unwrap();
+          if matches!(event.body, EventBody::PromptResult(_)) {
+            break;
+          }
+        }
+        let page = LiveApiClient::messages(
+          &client,
+          MessagesRequest {
+            live: session.live,
+            cursor: None,
+            limit: None,
+          },
+        )
+        .await
+        .unwrap();
+        assert!(format!("{:?}", page.messages).contains(&text), "{page:?}");
+        let (started_tx, started_rx) = async_channel::bounded(1);
+        let (release_tx, release_rx) = async_channel::bounded(1);
+        let (finished_tx, finished_rx) = async_channel::bounded(1);
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          let editor = window.find_by_label("Message").bounds().center();
+          window.pointer_down(editor, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(editor, gpui_kit::MouseButton::Left, cx);
+          window.input("keep this draft", cx);
+          let dictation = view.read(cx).dictation.clone();
+          dictation.update(cx, |dictation, _| {
+            dictation.gate_inference(test_support::InferenceGate {
+              started: started_tx,
+              release: release_rx,
+              finished: finished_tx,
+            });
+          });
+          window.click(format!("composer-dictation-{id}"), cx);
+        })
+        .unwrap();
+        delivered.recv().await.unwrap();
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          window.click(format!("composer-dictation-{id}"), cx);
+        })
+        .unwrap();
+        started_rx.recv().await.unwrap();
+        cx.update(|cx| {
+          model.update(cx, |model, cx| {
+            model.seed_event(
+              &event(
+                session.live,
+                serde_json::json!({ "kind": "availableCommandsUpdate", "frame": { "commands": [
+                { "name": "model", "source": "builtin", "description": "Pick a model" }
+              ] } }),
+              ),
+              cx,
+            );
+          });
+        });
+        cx.update_window(handle, |_, window, cx| {
+          let editor = window.find_by_label("Message").bounds().center();
+          window.pointer_down(editor, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(editor, gpui_kit::MouseButton::Left, cx);
+          window.press("secondary-a", cx);
+          window.input("/mo", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          assert_eq!(view.read(cx).composer_text(cx), "/mo");
+          assert!(window.find_by_label("/model").visible());
+          let editor = window.find_by_label("Message").bounds().center();
+          window.pointer_down(editor, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(editor, gpui_kit::MouseButton::Left, cx);
+          window.press("escape", cx);
+          assert!(!view.read(cx).dictation_active_for_test(cx));
+          window.input(" changed", cx);
+          assert_eq!(view.read(cx).composer_text(cx), "/mo changed");
+        })
+        .unwrap();
+        release_tx.send(()).await.unwrap();
+        finished_rx.recv().await.unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| assert_eq!(view.read(cx).composer_text(cx), "/mo changed"));
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          window.click(format!("composer-dictation-{id}"), cx);
+        })
+        .unwrap();
+        delivered.recv().await.unwrap();
+        cx.update(|cx| {
+          model.update(cx, |model, cx| {
+            model.seed_event(&event(session.live, serde_json::json!({ "kind": "processExited" })), cx);
+          });
+        });
+        cx.update_window(handle, |_, window, cx| {
+          window.render_frame(cx);
+          assert!(view.read(cx).dictation_active_for_test(cx));
+          let draft = view.read(cx).composer_text(cx);
+          let banner = window.find(format!("session-banner-{id}")).bounds();
+          let close = gpui_kit::point(banner.right() - gpui_kit::px(26.), banner.center().y);
+          window.pointer_down(close, gpui_kit::MouseButton::Left, cx);
+          window.pointer_up(close, gpui_kit::MouseButton::Left, cx);
+          assert!(!view.read(cx).dictation_active_for_test(cx));
+          assert_eq!(view.read(cx).composer_text(cx), draft);
+        })
+        .unwrap();
+        cx.update(crate::shutdown).await;
+        gateway.shutdown().await.unwrap();
+      });
+    })
+    .await;
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[gpui_kit::test]
   async fn editor_and_reading_width_remain_aligned_across_layout_changes(cx: &mut TestAppContext) {
     use std::path::PathBuf;
 
@@ -693,7 +1096,8 @@ mod tests {
     use crate::model::Model;
 
     cx.update(gpui_kit::init);
-    cx.update(crate::init);
+    let speech_cache = tempfile::tempdir().unwrap();
+    cx.update(|cx| crate::init(speech_cache.path().to_path_buf(), cx));
     cx.update(|cx| cx.set_reduce_motion(true));
     let directory = std::env::temp_dir().join(format!("alvin-composer-{}", alvin_protocol::EventId::new().as_uuid()));
     std::fs::create_dir_all(&directory).unwrap();

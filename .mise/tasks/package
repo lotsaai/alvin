@@ -11,7 +11,7 @@ cd "$proj_dir"
 bundle="$proj_dir/target/debug/Alvin.app/Contents"
 iconset=$(mktemp -d "${TMPDIR:-/tmp}/alvin.XXXXXX")
 trap 'rm -rf "$iconset"' EXIT
-mkdir -p "$iconset/Alvin.iconset" "$bundle/MacOS" "$bundle/Resources"
+mkdir -p "$iconset/Alvin.iconset" "$bundle/MacOS" "$bundle/Resources/licenses"
 for size in 16 32 128 256 512; do
 	sips -s format png -z "$size" "$size" assets/chipmunk-mascot.webp --out "$iconset/Alvin.iconset/icon_${size}x${size}.png" >/dev/null
 	double=$((size * 2))
@@ -19,6 +19,22 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$iconset/Alvin.iconset" -o "$bundle/Resources/Alvin.icns"
 cp target/debug/alvin-app "$bundle/MacOS/alvin-app"
+cp crates/alvin-stt/licenses/nemotron-3.5-NOTICE.txt "$bundle/Resources/licenses/"
+linkage=$(otool -L "$bundle/MacOS/alvin-app")
+first_line=true
+while read -r library _; do
+	if "$first_line"; then
+		first_line=false
+		continue
+	fi
+	case "$library" in
+	/usr/lib/* | /System/Library/*) ;;
+	*)
+		printf 'Unexpected non-system library: %s\n' "$library" >&2
+		exit 1
+		;;
+	esac
+done <<<"$linkage"
 cat >"$bundle/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -29,6 +45,7 @@ cat >"$bundle/Info.plist" <<'PLIST'
   <key>CFBundleName</key><string>Alvin</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>Alvin</string>
+  <key>NSMicrophoneUsageDescription</key><string>Dictate text into messages.</string>
 </dict>
 </plist>
 PLIST

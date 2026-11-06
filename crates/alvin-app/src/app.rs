@@ -15,7 +15,7 @@ use crate::config::Configuration;
 use crate::project_preferences::ProjectPreferencesFile;
 use crate::settings::AppView;
 
-gpui_kit::assets::icon_assets!(ExtraIcons, [GitFork, Smartphone]);
+gpui_kit::assets::icon_assets!(ExtraIcons, [GitFork, MicOff, Smartphone]);
 
 struct AppAssets;
 
@@ -86,7 +86,11 @@ fn start_with_config(cx: &mut App, client: Client, config: Option<Configuration>
     .transpose()?
     .unwrap_or_default();
   gpui_kit::init(cx);
-  alvin_conversation_ui::init(cx);
+  let speech_cache = dirs::cache_dir()
+    .ok_or_else(|| eyre::eyre!("cannot determine the cache directory"))?
+    .join("alvin")
+    .join("speech");
+  alvin_conversation_ui::init(speech_cache, cx);
   cx.bind_keys([KeyBinding::new(QUIT_KEY, Quit, None)]);
 
   let quitting = Rc::new(Cell::new(false));
@@ -115,10 +119,12 @@ fn start_with_config(cx: &mut App, client: Client, config: Option<Configuration>
     move |cx| {
       let view = app_view.borrow_mut().take();
       let cleanup = view.as_ref().map(|view| view.update(cx, |view, cx| view.shutdown(cx)));
+      let speech = alvin_conversation_ui::shutdown(cx);
       async move {
         if let Some(cleanup) = cleanup {
           cleanup.await;
         }
+        speech.await;
         drop(view);
       }
     }
@@ -154,13 +160,14 @@ fn start_with_config(cx: &mut App, client: Client, config: Option<Configuration>
   Ok(view)
 }
 
-/// Shuts retained terminal views down, then quits.
+/// Stops retained work and quits after terminal cleanup.
 fn quit(quitting: &Rc<Cell<bool>>, app_view: &Rc<RefCell<Option<Entity<AppView>>>>, cx: &mut App) {
   if quitting.replace(true) {
     return;
   }
   let view = app_view.borrow_mut().take();
   let cleanup = view.as_ref().map(|view| view.update(cx, |view, cx| view.shutdown(cx)));
+  alvin_conversation_ui::shutdown(cx).detach();
   cx.spawn(async move |cx| {
     if let Some(cleanup) = cleanup {
       cleanup.await;
@@ -205,7 +212,13 @@ mod tests {
   fn application_assets_include_sidebar_and_default_icons() {
     use gpui_kit::AssetSource as _;
 
-    for path in ["icons/git-fork.svg", "icons/smartphone.svg", "icons/settings.svg"] {
+    for path in [
+      "icons/git-fork.svg",
+      "icons/mic.svg",
+      "icons/mic-off.svg",
+      "icons/smartphone.svg",
+      "icons/settings.svg",
+    ] {
       assert!(AppAssets.load(path).unwrap().is_some(), "missing {path}");
     }
   }
@@ -483,6 +496,10 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
           window.click("model-picker", cx);
           window.input(&target.id, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
           assert!(window.try_find_by_label(&target_label).is_some());
           let point = window.find_by_label(&target_label).bounds().center();
           window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
@@ -507,6 +524,10 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
           window.click("model-picker", cx);
           window.input(&target.id, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
           let point = window.find_by_label(&target_label).bounds().center();
           window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
           window.pointer_up(point, gpui_kit::MouseButton::Left, cx);

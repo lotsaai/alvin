@@ -361,7 +361,10 @@ impl AppView {
             }
           }
         }
-        WorkspaceEvent::SettingsRequested => this.open = true,
+        WorkspaceEvent::SettingsRequested => {
+          workspace.update(cx, |workspace, cx| workspace.cancel_dictation(cx));
+          this.open = true;
+        }
       }
       cx.notify();
     })
@@ -1199,6 +1202,71 @@ mod tests {
   #[test_context(ServerFixture)]
   #[tokio::test(flavor = "multi_thread")]
   #[gpui_kit::test]
+  async fn opening_settings_cancels_pending_dictation_and_preserves_draft(fixture: &mut ServerFixture, cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let executor = cx.foreground_executor().clone();
+    executor.block_test(async {
+      let client = connect(&fixture.endpoint).await.unwrap();
+      let cache = fixture.project.base().join("speech-cache");
+      let (handle, view) = cx.update(|cx| {
+        gpui_kit::init(cx);
+        alvin_conversation_ui::init(cache, cx);
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+          let model = cx.new(|cx| Model::new(client.clone(), cx));
+          let workspace = cx.new(|cx| Workspace::new(model, client, window, cx));
+          cx.new(|cx| AppView::new(workspace, None, None, Default::default(), window, cx))
+        })
+        .unwrap()
+      });
+      let workspace = cx.read(|cx| view.read(cx).workspace.clone());
+      let model = cx.read(|cx| workspace.read(cx).model().clone());
+      cx.update(|cx| model.update(cx, |model, cx| model.refresh_projects(cx))).await;
+      let (project, checkout) = cx.read(|cx| {
+        let project = model.read(cx).conversation().workspace().projects().first().unwrap();
+        (project.id.clone(), project.checkouts.first().unwrap().id.clone())
+      });
+      cx.update(|cx| model.update(cx, |model, cx| model.new_session(project, checkout, cx)))
+        .await;
+      let live = cx.read(|cx| workspace.read(cx).active().unwrap());
+      let button = format!("composer-dictation-{}", live.as_uuid());
+      cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        let editor = window.find_by_label("Message").bounds().center();
+        window.pointer_down(editor, MouseButton::Left, cx);
+        window.pointer_up(editor, MouseButton::Left, cx);
+        window.input("keep this draft", cx);
+        window.click(button.clone(), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find(button.clone()).label(), Some("Cancel dictation"));
+        window.click("sidebar-settings", cx);
+      })
+      .unwrap();
+      cx.run_until_parked();
+      cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.find("settings-general").visible());
+        window.click("back-to-sessions", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find(button).label(), Some("Start dictation"));
+        assert!(window.try_find(format!("dictation-retry-{}", live.as_uuid())).is_none());
+        let editor = window.find_by_label("Message").bounds().center();
+        window.pointer_down(editor, MouseButton::Left, cx);
+        window.pointer_up(editor, MouseButton::Left, cx);
+        window.press("secondary-a", cx);
+        window.press("secondary-c", cx);
+        assert_eq!(
+          cx.read_from_clipboard().and_then(|item| item.text()).as_deref(),
+          Some("keep this draft")
+        );
+      })
+      .unwrap();
+      cx.update(alvin_conversation_ui::shutdown).await;
+    });
+  }
+
+  #[test_context(ServerFixture)]
+  #[tokio::test(flavor = "multi_thread")]
+  #[gpui_kit::test]
   async fn settings_commit_only_the_changed_control(fixture: &mut ServerFixture, cx: &mut TestAppContext) {
     cx.executor().allow_parking();
     let executor = cx.foreground_executor().clone();
@@ -1211,7 +1279,7 @@ mod tests {
       let config = Configuration::for_test(path.clone()).unwrap();
       let (handle, view) = cx.update(|cx| {
         gpui_kit::init(cx);
-        alvin_conversation_ui::init(cx);
+        alvin_conversation_ui::init(fixture.project.base().join("speech-cache"), cx);
         gpui_kit::open_window(
           WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::new(
@@ -1509,7 +1577,7 @@ mod tests {
       let client = connect(&fixture.endpoint).await.unwrap();
       let handle = cx.update(|cx| {
         gpui_kit::init(cx);
-        alvin_conversation_ui::init(cx);
+        alvin_conversation_ui::init(fixture.project.base().join("speech-cache"), cx);
         gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
           let model = cx.new(|cx| Model::new(client.clone(), cx));
           let workspace = cx.new(|cx| Workspace::new(model, client, window, cx));

@@ -9,6 +9,11 @@ path = "junit.xml"
 # each other, so at most four run at a time.
 [test-groups]
 omp = { max-threads = 4 }
+speech-model = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'test(transcribes_real_audio_twice) | test(dictation_streams_into_an_editable_undoable_draft) | test(navigation_and_shutdown_cancel_dictation) | test(opening_settings_cancels_pending_dictation_and_preserves_draft)'
+test-group = 'speech-model'
 
 [[profile.default.overrides]]
 filter = 'package(alvin-gateway) | package(alvin-omp-host) | package(alvin-session-index) | package(alvin-app)'
