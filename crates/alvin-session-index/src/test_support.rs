@@ -57,9 +57,31 @@ pub fn run(dir: &Path, program: &str, args: &[&str]) {
 
 /// Runs real `omp` once in `cwd` and returns the session file it wrote under `session_dir`.
 ///
-/// omp reads the machine's normal agent configuration, while its session goes to the supplied directory.
+/// Each invocation uses a temporary home and agent directory, separate from the supplied session directory.
 pub fn run_omp(cwd: &Path, session_dir: &Path, prompt: &str) -> PathBuf {
-  let output = Command::new("omp")
+  let home = TempDir::new();
+  let paths: Vec<PathBuf> = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+    .filter(|path| path.is_absolute())
+    .collect();
+  let executable = |name: &str| paths.iter().map(|path| path.join(name)).find(|path| path.is_file());
+  let omp = executable("omp").expect("omp not found in PATH");
+  let mut safe_path = vec![PathBuf::from("/usr/bin"), PathBuf::from("/bin")];
+  for name in ["bun", "node"] {
+    if let Some(path) = executable(name) {
+      safe_path.insert(0, path.parent().unwrap().to_path_buf());
+    }
+  }
+  let mut command = Command::new(omp);
+  command
+    .env_clear()
+    .env("HOME", home.path())
+    .env("PI_CODING_AGENT_DIR", home.path().join("agent"))
+    .env("PATH", std::env::join_paths(safe_path).unwrap());
+  command.env(
+    "OPENROUTER_API_KEY",
+    std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is required"),
+  );
+  let output = command
     .args([
       "-p",
       prompt,

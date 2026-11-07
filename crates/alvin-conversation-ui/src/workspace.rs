@@ -900,7 +900,7 @@ mod tests {
   impl test_context::AsyncTestContext for RealWorkspaceFixture {
     async fn setup() -> Self {
       use alvin_client::{ChannelPair, Client, Endpoint};
-      use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
+      use alvin_gateway::{Gateway, GatewayConfig};
       use alvin_omp_host::{Host, StartRequest};
       use alvin_protocol::{ListSessions, ProjectsApiClient, SessionsApiClient};
       use std::collections::HashSet;
@@ -921,10 +921,7 @@ mod tests {
           .success()
       );
       let repo = repo.canonicalize().unwrap();
-      let omp = HostConfig::builder()
-        .omp(std::path::PathBuf::from("omp"))
-        .extra_args(vec!["--session-dir".into(), session_dir.clone().into_os_string()])
-        .build();
+      let omp = crate::test_support::omp_config(&base, vec!["--session-dir".into(), session_dir.clone().into_os_string()]);
       let host = Host::new(omp.clone());
       let (seed, _events) = host
         .start(

@@ -41,7 +41,7 @@ const RECORDED_CWD: &str = "/tmp/alvin-probe.hnBA/proj";
 struct Project {
   root: PathBuf,
   sessions: PathBuf,
-  /// An isolated agent directory for the auto-resume configuration test.
+  /// An isolated agent directory for this test.
   home: PathBuf,
   gateways: Vec<Arc<Gateway>>,
 }
@@ -94,10 +94,31 @@ impl Project {
     }
   }
 
+  fn omp_environment(&self) -> (PathBuf, Vec<(OsString, OsString)>) {
+    let paths: Vec<_> = std::env::split_paths(&std::env::var_os("PATH").expect("PATH is required")).collect();
+    let find = |name: &str| paths.iter().map(|dir| dir.join(name)).find(|path| path.is_file()).unwrap();
+    let omp = find("omp");
+    let bun = find("bun");
+    let path = std::env::join_paths([bun.parent().unwrap(), Path::new("/usr/bin"), Path::new("/bin")]).unwrap();
+    let env = vec![
+      (OsString::from("HOME"), self.home.clone().into_os_string()),
+      (OsString::from("PI_CODING_AGENT_DIR"), self.home.join("agent").into_os_string()),
+      (OsString::from("PATH"), path),
+      (
+        OsString::from("OPENROUTER_API_KEY"),
+        std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is required"),
+      ),
+    ];
+    (omp, env)
+  }
+
   fn gateway(&mut self) -> Arc<Gateway> {
+    let (executable, env) = self.omp_environment();
     let omp = HostConfig::builder()
-      .omp(PathBuf::from("omp"))
+      .omp(executable)
       .extra_args(vec!["--session-dir".into(), self.sessions.join("-repo").into_os_string()])
+      .clear_env(true)
+      .env(env)
       .build();
     let gateway = Arc::new(Gateway::new(
       GatewayConfig::builder().sessions_dir(self.sessions.clone()).omp(omp).build(),
@@ -106,7 +127,7 @@ impl Project {
     gateway
   }
 
-  /// A gateway using real omp configuration and the fixture's session directory.
+  /// A gateway using the fixture's isolated omp configuration and session directory.
   fn live_gateway(&mut self) -> Arc<Gateway> {
     self.gateway_with(&["--no-tools"], true)
   }
@@ -117,17 +138,7 @@ impl Project {
   }
 
   fn gateway_with(&mut self, tools: &[&str], session_dir: bool) -> Arc<Gateway> {
-    let env = if session_dir {
-      Vec::new()
-    } else {
-      vec![
-        (OsString::from("HOME"), self.home.clone().into_os_string()),
-        (OsString::from("PI_CODING_AGENT_DIR"), self.home.join("agent").into_os_string()),
-        (OsString::from("OMP_PROFILE"), OsString::new()),
-        (OsString::from("PI_PROFILE"), OsString::new()),
-        (OsString::from("XDG_DATA_HOME"), self.home.join("data").into_os_string()),
-      ]
-    };
+    let (executable, env) = self.omp_environment();
     let mut args: Vec<OsString> = tools
       .iter()
       .chain(&["--no-skills", "--no-rules", "--no-extensions", "--no-context-files"])
@@ -137,7 +148,12 @@ impl Project {
       args.push(OsString::from("--session-dir"));
       args.push(self.sessions.join("-repo").into_os_string());
     }
-    let omp = HostConfig::builder().omp(PathBuf::from("omp")).extra_args(args).env(env).build();
+    let omp = HostConfig::builder()
+      .omp(executable)
+      .extra_args(args)
+      .clear_env(true)
+      .env(env)
+      .build();
     let gateway = Arc::new(Gateway::new(
       GatewayConfig::builder()
         .sessions_dir(self.sessions.clone())

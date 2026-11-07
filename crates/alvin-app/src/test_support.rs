@@ -16,7 +16,7 @@ const MODEL: &str = "openrouter/inclusionai/ling-3.0-flash";
 const SEED_RECORDS: &str = include_str!("../fixtures/seed-session.jsonl");
 const SEED_CWD: &str = "/tmp/alvin-probe.hnBA/proj";
 
-/// A temporary git repository with its own omp sessions directory and the machine's normal agent configuration.
+/// A temporary git repository with isolated omp configuration and sessions.
 pub(crate) struct Fixture {
   base: PathBuf,
   sessions: PathBuf,
@@ -68,6 +68,10 @@ impl Fixture {
     let repo = base.join("repo");
     let sessions = base.join("sessions");
     let session_dir = sessions.join("-repo");
+    let home = base.join("home");
+    let agent = base.join("agent");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&agent).unwrap();
     for dir in [&repo, &session_dir] {
       std::fs::create_dir_all(dir).unwrap();
     }
@@ -96,7 +100,38 @@ impl Fixture {
     .into_iter()
     .chain([self.session_dir.clone().into_os_string()])
     .collect();
-    let omp = HostConfig::builder().omp(PathBuf::from("omp")).extra_args(args).build();
+    let paths: Vec<_> = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+      .map(|dir| {
+        if dir.is_absolute() {
+          dir
+        } else {
+          std::env::current_dir().unwrap().join(dir)
+        }
+      })
+      .collect();
+    let find = |name: &str| paths.iter().map(|dir| dir.join(name)).find(|path| path.is_file());
+    let omp_path = find("omp").expect("omp must be on PATH");
+    let bun_path = find("bun");
+    let mut runtime_paths = vec![omp_path.parent().unwrap(), Path::new("/usr/bin"), Path::new("/bin")];
+    if let Some(bun) = &bun_path {
+      runtime_paths.insert(1, bun.parent().unwrap());
+    }
+    let path = std::env::join_paths(runtime_paths).unwrap();
+    let env = vec![
+      ("HOME".into(), self.base.join("home").into_os_string()),
+      ("PI_CODING_AGENT_DIR".into(), self.base.join("agent").into_os_string()),
+      ("PATH".into(), path),
+      (
+        "OPENROUTER_API_KEY".into(),
+        std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY"),
+      ),
+    ];
+    let omp = HostConfig::builder()
+      .omp(omp_path)
+      .extra_args(args)
+      .clear_env(true)
+      .env(env)
+      .build();
     GatewayConfig::builder()
       .sessions_dir(self.sessions.clone())
       .omp(omp)

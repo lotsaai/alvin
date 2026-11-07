@@ -29,9 +29,12 @@ pub struct HostConfig {
   /// Extra command-line arguments appended after the host's own.
   #[builder(default)]
   extra_args: Vec<OsString>,
-  /// Environment variables added to the inherited environment.
+  /// Environment variables added to the process environment.
   #[builder(default)]
   env: Vec<(OsString, OsString)>,
+  /// Clear inherited environment variables before applying `env`.
+  #[builder(default)]
+  clear_env: bool,
   /// Events buffered between omp and the consumer.
   #[builder(default = DEFAULT_EVENT_CAPACITY)]
   event_capacity: NonZeroUsize,
@@ -82,6 +85,9 @@ async fn launch(config: &HostConfig, request: StartRequest) -> Result<(Session, 
     resume,
   } = request;
   let mut process = Process::new(&config.omp);
+  if config.clear_env {
+    process.env_clear();
+  }
   // `--cwd` sets the directory omp records; `current_dir` makes a missing directory fail at spawn with a clear error.
   process.args(["--mode", "rpc-ui", "--cwd"]).arg(&cwd).current_dir(&cwd);
   if let Some(model) = &model {

@@ -141,7 +141,7 @@ Banned domain vocabulary with required replacements: "birth"/"born" → "join"/"
 - **Modules**: `foo.rs` beside `foo/`, never `mod.rs`; thin `main.rs` and `lib.rs`; one module per feature; `use` type names at the module top.
 - **Naming**: `UpperCamelCase` types and variants, `snake_case` fns/modules/variables, `SCREAMING_SNAKE_CASE` consts. Crates are `alvin-<role>`. JSON-RPC methods are `<area>/<camelCaseVerb>` (for example `sessions/list`, `live/prompt`).
 - **Testing**:
-  - Real services, no mocks, fakes, or stubs. Tests that need omp start real `omp --mode rpc-ui` with model `openrouter/inclusionai/ling-3.0-flash`, using the machine's existing omp configuration. Never look for, read, or print secrets.
+  - Real services, no mocks, fakes, or stubs. Tests that need omp start real `omp --mode rpc-ui` with model `openrouter/inclusionai/ling-3.0-flash`. Each test uses an isolated omp home and agent directory, clears inherited environment variables, and forwards only `OPENROUTER_API_KEY` alongside explicitly configured runtime paths. Never print secrets.
   - `alvin-session-index` tests run over real session files that omp writes in a temporary project, plus real git worktree and jj workspace layouts.
   - Every gateway method round-trips through `alvin-client` over both the channel transport and a WebSocket on `127.0.0.1:0`. A test pins the declared method list.
   - UI tests use `#[gpui_kit::test]` headless with real views against an embedded gateway; `#[tokio::test]` stacked above `#[gpui_kit::test]` supplies the tokio context. Assert structure and state, not pixels. Never `use gpui_kit::*` or `use super::*` in a module containing `#[gpui_kit::test]`.

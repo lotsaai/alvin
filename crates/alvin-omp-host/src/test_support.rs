@@ -42,7 +42,7 @@ impl Drop for TempDir {
   }
 }
 
-/// A host with isolated sessions and the machine's normal omp configuration.
+/// A host with isolated sessions and agent configuration.
 pub struct Fixture {
   pub host: Host,
   pub cwd: TempDir,
@@ -55,18 +55,35 @@ impl Fixture {
   }
 
   pub fn with_capacity(capacity: usize) -> Self {
+    let cwd = TempDir::new();
+    let paths: Vec<_> = std::env::split_paths(&std::env::var_os("PATH").expect("PATH is required")).collect();
+    let find = |name: &str| paths.iter().map(|dir| dir.join(name)).find(|path| path.is_file()).unwrap();
+    let omp = find("omp");
+    let bun = find("bun");
+    let path = std::env::join_paths([bun.parent().unwrap(), Path::new("/usr/bin"), Path::new("/bin")]).unwrap();
+    let env = vec![
+      (OsString::from("HOME"), cwd.path().as_os_str().to_owned()),
+      (OsString::from("PI_CODING_AGENT_DIR"), cwd.path().join("agent").into_os_string()),
+      (OsString::from("PATH"), path),
+      (
+        OsString::from("OPENROUTER_API_KEY"),
+        std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is required"),
+      ),
+    ];
     let config = HostConfig::builder()
-      .omp(PathBuf::from("omp"))
+      .omp(omp)
       .extra_args(
         ["--no-tools", "--no-skills", "--no-rules", "--no-extensions", "--no-context-files"]
           .map(OsString::from)
           .to_vec(),
       )
+      .clear_env(true)
+      .env(env)
       .event_capacity(NonZeroUsize::new(capacity).unwrap())
       .build();
     Self {
       host: Host::new(config),
-      cwd: TempDir::new(),
+      cwd,
       sessions: TempDir::new(),
     }
   }

@@ -1,9 +1,11 @@
 //! Helpers for headless UI tests.
 
-use std::path::PathBuf;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 
 use alvin_client::{ChannelPair, Client, Endpoint};
 use alvin_conversation::SessionsKey;
+use alvin_gateway::HostConfig;
 use alvin_protocol::{
   CheckoutId, CheckoutSummary, LiveSessionId, LiveSessionSummary, ProjectId, ProjectSummary, SessionPage, SessionSummary,
 };
@@ -16,6 +18,44 @@ use crate::workspace::Workspace;
 /// The root of the one project every test window knows.
 pub(crate) const ROOT: &str = "/work/alvin";
 
+pub(crate) fn omp_config(base: &Path, extra_args: Vec<OsString>) -> HostConfig {
+  let home = base.join("home");
+  let agent = base.join("agent");
+  std::fs::create_dir_all(&home).unwrap();
+  std::fs::create_dir_all(&agent).unwrap();
+  let paths: Vec<_> = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+    .map(|dir| {
+      if dir.is_absolute() {
+        dir
+      } else {
+        std::env::current_dir().unwrap().join(dir)
+      }
+    })
+    .collect();
+  let find = |name: &str| paths.iter().map(|dir| dir.join(name)).find(|path| path.is_file());
+  let omp = find("omp").expect("omp must be on PATH");
+  let bun = find("bun");
+  let mut runtime_paths = vec![omp.parent().unwrap(), Path::new("/usr/bin"), Path::new("/bin")];
+  if let Some(bun) = &bun {
+    runtime_paths.insert(1, bun.parent().unwrap());
+  }
+  let path = std::env::join_paths(runtime_paths).unwrap();
+  let mut env = vec![
+    ("HOME".into(), home.into_os_string()),
+    ("PI_CODING_AGENT_DIR".into(), agent.into_os_string()),
+    ("PATH".into(), path),
+  ];
+  if let Some(key) = std::env::var_os("OPENROUTER_API_KEY") {
+    env.push(("OPENROUTER_API_KEY".into(), key));
+  }
+  HostConfig::builder()
+    .omp(omp)
+    .extra_args(extra_args)
+    .clear_env(true)
+    .env(env)
+    .build()
+}
+
 /// A real gateway and repository whose omp sessions stay in the test directory.
 pub(crate) struct RealGateway {
   pub(crate) directory: tempfile::TempDir,
@@ -24,7 +64,7 @@ pub(crate) struct RealGateway {
 
 impl test_context::AsyncTestContext for RealGateway {
   async fn setup() -> Self {
-    use alvin_gateway::{Gateway, GatewayConfig, HostConfig};
+    use alvin_gateway::{Gateway, GatewayConfig};
 
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().join("repo");
@@ -43,10 +83,7 @@ impl test_context::AsyncTestContext for RealGateway {
     let repo = repo.canonicalize().unwrap();
     let seed = include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
     std::fs::write(session_dir.join("2026-01-01T00-00-00-000Z_seed.jsonl"), seed).unwrap();
-    let omp = HostConfig::builder()
-      .omp(PathBuf::from("omp"))
-      .extra_args(vec!["--session-dir".into(), session_dir.into_os_string()])
-      .build();
+    let omp = omp_config(directory.path(), vec!["--session-dir".into(), session_dir.into_os_string()]);
     let gateway = Gateway::new(
       GatewayConfig::builder()
         .sessions_dir(sessions)
@@ -88,6 +125,7 @@ async fn real_gateway_fixture_isolates_sessions_and_cleans_up() {
   .await
   .unwrap();
   assert!(session.file.starts_with(directory.join("sessions")));
+  assert!(directory.join("agent/agent.db").is_file());
   fixture.teardown().await;
   assert!(!directory.exists());
 }
