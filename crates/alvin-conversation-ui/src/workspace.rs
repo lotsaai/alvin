@@ -1564,15 +1564,18 @@ mod tests {
     let executor = cx.foreground_executor().clone();
     tokio::task::coop::unconstrained(async {
       executor.block_test(async {
+        eprintln!("dictation diagnostic: connecting to gateway");
         let client = Client::connect(Endpoint::Channel(ChannelPair::from(fixture.gateway.connect_channel(64).unwrap())))
           .await
           .unwrap();
+        eprintln!("dictation diagnostic: listing projects");
         let projects = ProjectsApiClient::list(&client).await.unwrap();
         let project = projects.first().unwrap();
         let target = OpenTarget::New {
           project: project.id.clone(),
           checkout: project.checkouts.first().unwrap().id.clone(),
         };
+        eprintln!("dictation diagnostic: opening first session");
         let first = LiveApiClient::open(
           &client,
           OpenRequest {
@@ -1582,6 +1585,7 @@ mod tests {
         )
         .await
         .unwrap();
+        eprintln!("dictation diagnostic: opening second session");
         let second = LiveApiClient::open(&client, OpenRequest { target, model: None }).await.unwrap();
         let session_dir = fixture.directory.path().canonicalize().unwrap().join("sessions");
         assert!(first.file.starts_with(&session_dir));
@@ -1603,6 +1607,7 @@ mod tests {
           .unwrap();
           (handle, workspace, model)
         });
+        eprintln!("dictation diagnostic: starting and cancelling preparation");
         let (input, delivered) = file_input();
         let (_probe, prepared) = cx.update(watch_preparation);
         cx.update(|cx| model.update(cx, |model, cx| model.seed_open(&first, cx)));
@@ -1638,6 +1643,7 @@ mod tests {
               .dictation_active_for_test(cx)
           );
         });
+        eprintln!("dictation diagnostic: waiting for model preparation");
         prepared.recv().await.unwrap().unwrap();
         cx.update_window(handle, |_, window, cx| {
           assert!(delivered.try_recv().is_err());
@@ -1650,6 +1656,7 @@ mod tests {
           window.click(format!("composer-dictation-{}", first.live.as_uuid()), cx);
         })
         .unwrap();
+        eprintln!("dictation diagnostic: waiting for first session audio");
         delivered.recv().await.unwrap();
         let (first_session, first_draft) = cx
           .update_window(handle, |_, window, cx| {
@@ -1672,6 +1679,7 @@ mod tests {
             (first_session, first_draft)
           })
           .unwrap();
+        eprintln!("dictation diagnostic: waiting for second session audio");
         delivered.recv().await.unwrap();
         cx.update(|cx| model.update(cx, |model, cx| model.seed_close(first.live, cx)));
         let cleanup = cx.update(|cx| {
@@ -1695,12 +1703,14 @@ mod tests {
           );
           cleanup
         });
+        eprintln!("dictation diagnostic: waiting for workspace cleanup");
         cleanup.await;
         cx.update_window(handle, |_, window, cx| {
           window.render_frame(cx);
           window.click(format!("composer-dictation-{}", second.live.as_uuid()), cx);
         })
         .unwrap();
+        eprintln!("dictation diagnostic: waiting for restarted session audio");
         delivered.recv().await.unwrap();
         let (second_session, second_draft) = cx
           .update_window(handle, |_, window, cx| {
@@ -1712,12 +1722,14 @@ mod tests {
             (session, draft)
           })
           .unwrap();
+        eprintln!("dictation diagnostic: waiting for speech worker shutdown");
         cx.update(crate::shutdown).await;
         cx.run_until_parked();
         cx.update(|cx| {
           assert_eq!(first_session.read(cx).composer_text(cx), first_draft);
           assert_eq!(second_session.read(cx).composer_text(cx), second_draft);
         });
+        eprintln!("dictation diagnostic: test body complete; fixture teardown follows");
       });
     })
     .await;

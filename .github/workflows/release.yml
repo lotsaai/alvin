@@ -29,7 +29,7 @@ jobs:
             artifact: alvin-x86_64-unknown-linux-gnu.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
@@ -45,7 +45,7 @@ jobs:
           curl -sSL https://apt.llvm.org/llvm.sh | sudo bash -s -- 23
           sudo apt-get install -y --no-install-recommends \
             clang-23 libclang-23-dev
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
         with:
           experimental: true
           install: true
@@ -55,7 +55,7 @@ jobs:
           key: release-${{ matrix.os }}
       - name: Build and package
         run: mise run package-release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: target/distrib/${{ matrix.artifact }}
@@ -67,7 +67,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
