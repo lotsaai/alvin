@@ -923,7 +923,7 @@ mod tests {
             assert_eq!(model.read(cx).conversation().live(session.live).unwrap().total_messages, 0);
             window.press("secondary-z", cx);
             assert_ne!(composer.read(cx).value().as_ref(), text);
-            window.press("secondary-shift-z", cx);
+            window.press(if cfg!(target_os = "macos") { "cmd-shift-z" } else { "ctrl-y" }, cx);
             assert_eq!(composer.read(cx).value().as_ref(), text);
             text
           })
@@ -1022,7 +1022,8 @@ mod tests {
           let editor = window.find_by_label("Message").bounds().center();
           window.pointer_down(editor, gpui_kit::MouseButton::Left, cx);
           window.pointer_up(editor, gpui_kit::MouseButton::Left, cx);
-          window.press("secondary-a", cx);
+          window.press("home", cx);
+          window.press("shift-end", cx);
           window.input("/mo", cx);
         })
         .unwrap();
@@ -1144,7 +1145,7 @@ mod tests {
       assert!(state.focus_handle(cx).is_focused(window));
       window.press("secondary-z", cx);
       assert_ne!(state.read(cx).value().as_ref(), "# PlaN\nsecond line");
-      window.press("secondary-shift-z", cx);
+      window.press(if cfg!(target_os = "macos") { "cmd-shift-z" } else { "ctrl-y" }, cx);
       assert_eq!(state.read(cx).value().as_ref(), "# PlaN\nsecond line");
       window.press("shift-enter", cx);
       assert_eq!(state.read(cx).value().as_ref(), "# PlaN\nsecond line\n");

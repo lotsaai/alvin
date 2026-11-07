@@ -386,7 +386,8 @@ mod tests {
           window.pointer_down(point, gpui_kit::MouseButton::Left, cx);
           window.pointer_up(point, gpui_kit::MouseButton::Left, cx);
           window.input("recover this draft", cx);
-          window.press("secondary-a", cx);
+          window.press("home", cx);
+          window.press("shift-end", cx);
           window.press("backspace", cx);
           window.press("up", cx);
           assert_eq!(window.find_by_label("Message").value(), Some("Reply with the single word ok."));

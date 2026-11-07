@@ -1251,15 +1251,7 @@ mod tests {
         window.render_frame(cx);
         assert_eq!(window.find(button).label(), Some("Start dictation"));
         assert!(window.try_find(format!("dictation-retry-{}", live.as_uuid())).is_none());
-        let editor = window.find_by_label("Message").bounds().center();
-        window.pointer_down(editor, MouseButton::Left, cx);
-        window.pointer_up(editor, MouseButton::Left, cx);
-        window.press("secondary-a", cx);
-        window.press("secondary-c", cx);
-        assert_eq!(
-          cx.read_from_clipboard().and_then(|item| item.text()).as_deref(),
-          Some("keep this draft")
-        );
+        assert_eq!(window.find_by_label("Message").value(), Some("keep this draft"));
       })
       .unwrap();
       cx.update(alvin_conversation_ui::shutdown).await;

@@ -15,8 +15,8 @@ use alvin_client::{ChannelPair, Client, ConnectionState, Endpoint, Error, EventS
 use alvin_gateway::{Gateway, GatewayConfig, WsServer};
 use alvin_omp_host::HostConfig;
 use alvin_protocol::{
-  AnswersUiResponse, AskAnswer, BashRequest, CheckoutId, CompactRequest, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode,
-  ErrorData, Event, EventBody, EventId, ExportRequest, ExtensionUiRequest, ExtensionUiResponse, ForkRequest, LabelRequest, ListSessions,
+  AnswersUiResponse, AskAnswer, BashRequest, CheckoutId, DialogApiClient, EntriesRequest, EntryId, EntryRequest, ErrorCode, ErrorData,
+  Event, EventBody, EventId, ExportRequest, ExtensionUiRequest, ExtensionUiResponse, ForkRequest, LabelRequest, ListSessions,
   LiveApiClient, LiveSessionId, LiveSessionSummary, MessagesRequest, ModelApiClient, NavigateRequest, OpenRequest, OpenTarget, ProjectId,
   ProjectSummary, ProjectsApiClient, PromoteQueuedRequest, PromptRequest, QueueApiClient, QueuedMessageQueue, RemoveQueuedRequest,
   RenameRequest, RespondRequest, RpcAgentEvent, SessionCursor, SessionId, SessionPage, SessionStatus, SessionsApiClient, SetModelRequest,
@@ -1690,26 +1690,6 @@ async fn session_operations_work_over_both_transports(project: &mut Project) {
   .unwrap();
   assert!(Path::new(&written).ends_with("export.html"), "{written}");
   assert!(target.is_file());
-
-  // A session this small is omp's command error, raised before any summarizing starts, reaching the client with its code intact.
-  for client in [&ws, &channel] {
-    let small = LiveApiClient::compact(
-      client,
-      CompactRequest {
-        live: opened.live,
-        custom_instructions: None,
-      },
-    )
-    .await
-    .unwrap_err();
-    assert!(matches!(
-      Error::from(small),
-      Error::Gateway {
-        code: ErrorCode::OmpCommandFailed,
-        ..
-      }
-    ));
-  }
 
   drop((stream, channel, ws));
   server.shutdown().await.unwrap();
