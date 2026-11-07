@@ -261,8 +261,8 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
- "verdant",
  "verdant-parsers-git",
+ "verdant-syntax",
 ]
 
 [[package]]
@@ -1584,15 +1584,6 @@ name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
-
-[[package]]
-name = "convert_case"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
-dependencies = [
- "unicode-segmentation",
-]
 
 [[package]]
 name = "convert_case"
@@ -4155,6 +4146,8 @@ version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash",
 ]
 
@@ -4639,15 +4632,6 @@ dependencies = [
  "hashbrown 0.17.1",
  "serde",
  "serde_core",
-]
-
-[[package]]
-name = "indoc"
-version = "2.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a37b2691796cffeb8a8cd305ac66e65841559f147f4e63231d0eafa4db5384d1"
-dependencies = [
- "rustversion",
 ]
 
 [[package]]
@@ -6977,6 +6961,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "phf"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "010378780309880b08997fae13be7834dba947d36393bd372f2b1556deb2a2f6"
+dependencies = [
+ "phf_shared 0.14.0",
+ "serde",
+]
+
+[[package]]
 name = "phf_codegen"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7014,6 +7008,16 @@ checksum = "135ace3a761e564ec88c03a77317a7c6b80bb7f7135ef2544dbe054243b89737"
 dependencies = [
  "fastrand",
  "phf_shared 0.13.1",
+]
+
+[[package]]
+name = "phf_generator"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aeb62e0959d5a1bebc965f4d15d9e2b7cea002b6b0f5ba8cde6cc26738467100"
+dependencies = [
+ "fastrand",
+ "phf_shared 0.14.0",
 ]
 
 [[package]]
@@ -7065,6 +7069,15 @@ name = "phf_shared"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
+dependencies = [
+ "siphasher",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6fd9027e2d9319be6349febd1db4e8d02aa544921200c9b777720ac34a3aa89"
 dependencies = [
  "siphasher",
 ]
@@ -8075,9 +8088,9 @@ dependencies = [
 
 [[package]]
 name = "rquickjs"
-version = "0.10.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a135375fbac5ba723bb6a48f432a72f81539cedde422f0121a86c7c4e96d8e0d"
+checksum = "4e04e4eedfb060b503b5f0a2644abb890b0b3620d3fb674f9455f230014964e4"
 dependencies = [
  "rquickjs-core",
  "rquickjs-macro",
@@ -8085,28 +8098,28 @@ dependencies = [
 
 [[package]]
 name = "rquickjs-core"
-version = "0.10.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bccb7121a123865c8ace4dea42e7ed84d78b90cbaf4ca32c59849d8d210c9672"
+checksum = "16e4f499ac5b943d97ee6dbc44f23c2c10426f420f7d2f1793d6318911b6608c"
 dependencies = [
- "hashbrown 0.16.1",
- "phf 0.13.1",
+ "hashbrown 0.17.1",
+ "phf 0.14.0",
  "relative-path",
  "rquickjs-sys",
 ]
 
 [[package]]
 name = "rquickjs-macro"
-version = "0.10.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89f93602cc3112c7f30bf5f29e722784232138692c7df4c52ebbac7e035d900d"
+checksum = "3cbcc8219b70ee2faa08d5339f47f15741cba2ce0cb9640e8495f2ab51293f50"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case 0.11.0",
  "fnv",
  "ident_case",
  "indexmap 2.14.2",
- "phf_generator 0.13.1",
- "phf_shared 0.13.1",
+ "phf_generator 0.14.0",
+ "phf_shared 0.14.0",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
@@ -8116,9 +8129,9 @@ dependencies = [
 
 [[package]]
 name = "rquickjs-sys"
-version = "0.10.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57b1b6528590d4d65dc86b5159eae2d0219709546644c66408b2441696d1d725"
+checksum = "a13ac243b86a74120814ef7e9e30ad5a2c1199b7b9963b1cf7c84e4cdc1cad99"
 dependencies = [
  "bindgen",
  "cc",
@@ -8932,12 +8945,6 @@ checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
 dependencies = [
  "version_check",
 ]
-
-[[package]]
-name = "smallbitvec"
-version = "2.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b0e903ee191d8f7a8fbf0d712c3a1699d19e04ceba5ad1eb673053c7d938a09"
 
 [[package]]
 name = "smallvec"
@@ -9988,13 +9995,12 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter"
-version = "0.26.13"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17ebdd3a5a7e28a1890b876fdbd0c3c0fe0a6336cffaa104f11b9f720c9daa29"
+checksum = "a5129de2ccc97808c4583d48f1fb44576d015cf241e432800572bda11ef30c3b"
 dependencies = [
  "cc",
  "regex",
- "regex-syntax",
  "serde_json",
  "streaming-iterator",
  "tree-sitter-language",
@@ -10002,14 +10008,14 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-generate"
-version = "0.26.13"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0bf93bc11e32bbbbfafc167bfbdc3512355a3dbf97d2aa0468e5c45b47bf2c3"
+checksum = "60418c249e4317a2fc9a3959dab47e50ca60910460b8a82a7f73d6e28a73470d"
 dependencies = [
  "bitflags 2.13.2",
  "dunce",
+ "hashbrown 0.17.1",
  "indexmap 2.14.2",
- "indoc",
  "log",
  "pathdiff",
  "regex",
@@ -10019,7 +10025,6 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "smallbitvec",
  "thiserror 2.0.21",
  "topological-sort",
 ]
@@ -10367,20 +10372,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
-name = "verdant"
-version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
-dependencies = [
- "aho-corasick",
- "thiserror 2.0.21",
- "verdant-core",
- "verdant-highlight",
-]
-
-[[package]]
 name = "verdant-core"
-version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
+version = "0.8.0"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#199a00dbfa49a1e855a9ae2e107c97dbfb84de9b"
 dependencies = [
  "palate",
  "palette",
@@ -10391,8 +10385,8 @@ dependencies = [
 
 [[package]]
 name = "verdant-highlight"
-version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
+version = "0.8.0"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#199a00dbfa49a1e855a9ae2e107c97dbfb84de9b"
 dependencies = [
  "regex",
  "streaming-iterator",
@@ -10402,8 +10396,8 @@ dependencies = [
 
 [[package]]
 name = "verdant-macros"
-version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
+version = "0.8.0"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#199a00dbfa49a1e855a9ae2e107c97dbfb84de9b"
 dependencies = [
  "heck 0.5.0",
  "once_cell",
@@ -10417,8 +10411,8 @@ dependencies = [
 
 [[package]]
 name = "verdant-parsers-git"
-version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
+version = "0.8.0"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#199a00dbfa49a1e855a9ae2e107c97dbfb84de9b"
 dependencies = [
  "cc",
  "once_cell",
@@ -10432,13 +10426,24 @@ dependencies = [
 
 [[package]]
 name = "verdant-queries"
-version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
+version = "0.8.0"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#199a00dbfa49a1e855a9ae2e107c97dbfb84de9b"
+
+[[package]]
+name = "verdant-syntax"
+version = "0.8.0"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#199a00dbfa49a1e855a9ae2e107c97dbfb84de9b"
+dependencies = [
+ "aho-corasick",
+ "thiserror 2.0.21",
+ "verdant-core",
+ "verdant-highlight",
+]
 
 [[package]]
 name = "verdant-themes"
-version = "0.7.3"
-source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#c03c76cb8ae876f5f33de526d318f5f8270ccaba"
+version = "0.8.0"
+source = "git+https://github.com/casualjim/verdant?branch=main-git-deploy#199a00dbfa49a1e855a9ae2e107c97dbfb84de9b"
 dependencies = [
  "verdant-core",
 ]

@@ -20,8 +20,8 @@ palate = "0.3.9"
 serde_json = "1.0.154"
 thiserror = "2.0.21"
 tracing = "0.1.44"
-verdant = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3" }
-verdant-parsers-git = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3", features = ["markdown", "markdown_inline", "some"] }
+verdant-parsers-git = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.8.0", features = ["most"] }
+verdant-syntax = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.8.0" }
 
 [dev-dependencies]
 alvin-gateway = { path = "../alvin-gateway" }

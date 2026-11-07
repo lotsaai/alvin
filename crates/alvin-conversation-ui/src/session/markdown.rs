@@ -15,9 +15,9 @@ use gpui_kit::component::input::{
   EditorState, FoldRange, HighlightStyleResolver, InputEdit, InputHighlighter, InputHighlighterFactory, Rope,
 };
 use gpui_kit::{App, Context, HighlightStyle, SharedString, Window};
-use verdant::Processor;
-use verdant::language_set::SupportedLanguage as _;
 use verdant_parsers_git::{Lang, LanguageSetImpl};
+use verdant_syntax::Processor;
+use verdant_syntax::language_set::SupportedLanguage as _;
 
 /// The language name the composer's editor is configured with.
 pub(crate) const LANGUAGE: &str = "markdown";
@@ -42,7 +42,7 @@ pub fn refresh_markdown_theme(cx: &mut App) {
           .into_iter()
           .filter_map(|(range, key)| theme.style(theme_name(key)).map(|style| (range, style)))
           .collect(),
-        Err(verdant::Error::UnsupportedLanguage(_)) => Vec::new(),
+        Err(verdant_syntax::Error::UnsupportedLanguage(_)) => Vec::new(),
         Err(error) => {
           tracing::warn!(%error, %language, "code highlighting failed");
           Vec::new()
@@ -60,7 +60,7 @@ struct MarkdownHighlighter {
 
 /// The highlighted ranges of `text`. Inline markup and fenced code are injected into the block grammar by verdant; a fence in
 /// a language this build has no grammar for stays unhighlighted.
-fn highlight(text: &str) -> verdant::Result<Highlights> {
+fn highlight(text: &str) -> verdant_syntax::Result<Highlights> {
   highlight_language(text, LANGUAGE)
 }
 
@@ -72,7 +72,7 @@ pub(super) fn detected_language(text: &str) -> Option<String> {
   palate::try_detect("file.", text).map(|language| language.to_string().to_ascii_lowercase())
 }
 
-fn highlight_language(text: &str, language: &str) -> verdant::Result<Highlights> {
+fn highlight_language(text: &str, language: &str) -> verdant_syntax::Result<Highlights> {
   thread_local! {
     // Compiled queries are cached per set, so one set per thread keeps every later parse cheap.
     static SET: LanguageSetImpl = LanguageSetImpl::new();
@@ -80,7 +80,7 @@ fn highlight_language(text: &str, language: &str) -> verdant::Result<Highlights>
   SET.with(|set| {
     let raw = language.split_whitespace().next().unwrap_or_default();
     if raw.eq_ignore_ascii_case("text") {
-      return Err(verdant::Error::UnsupportedLanguage(raw.to_owned()));
+      return Err(verdant_syntax::Error::UnsupportedLanguage(raw.to_owned()));
     }
     let raw = if ["sh", "shell", "bash", "zsh"].iter().any(|alias| raw.eq_ignore_ascii_case(alias)) {
       "bash"
@@ -99,8 +99,8 @@ fn highlight_language(text: &str, language: &str) -> verdant::Result<Highlights>
     };
     let language = match Lang::for_name(&name, set) {
       Ok(language) => language,
-      Err(verdant::Error::UnsupportedLanguage(_)) => {
-        Lang::for_injection(&name, set).ok_or_else(|| verdant::Error::UnsupportedLanguage(name.clone()))?
+      Err(verdant_syntax::Error::UnsupportedLanguage(_)) => {
+        Lang::for_injection(&name, set).ok_or_else(|| verdant_syntax::Error::UnsupportedLanguage(name.clone()))?
       }
       Err(error) => return Err(error),
     };
@@ -124,7 +124,7 @@ pub(super) fn syntax_highlighter(theme: Arc<HighlightTheme>) -> impl Fn(&str, &s
   move |language, text| {
     highlight_language(text, language)
       .unwrap_or_else(|error| {
-        if !matches!(error, verdant::Error::UnsupportedLanguage(_)) {
+        if !matches!(error, verdant_syntax::Error::UnsupportedLanguage(_)) {
           tracing::warn!(%error, %language, "diff highlighting failed");
         }
         Vec::new()
@@ -214,7 +214,7 @@ mod tests {
     assert!(key_of(detected, &highlights, "42").is_some());
     assert!(matches!(
       highlight_language("A quiet afternoon.\n", "not-a-language"),
-      Err(verdant::Error::UnsupportedLanguage(_))
+      Err(verdant_syntax::Error::UnsupportedLanguage(_))
     ));
   }
 
@@ -240,7 +240,7 @@ mod tests {
     assert_eq!(highlight_language(shell, "bash").unwrap(), highlights);
     assert!(matches!(
       highlight_language("A quiet afternoon.\n", ""),
-      Err(verdant::Error::UnsupportedLanguage(_))
+      Err(verdant_syntax::Error::UnsupportedLanguage(_))
     ));
   }
 

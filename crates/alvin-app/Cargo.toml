@@ -20,7 +20,7 @@ tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "sync", "
 toml_edit = "0.25.17"
 tracing = "0.1.44"
 url = { version = "2.5.8", features = ["serde"] }
-verdant-themes = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.7.3" }
+verdant-themes = { git = "https://github.com/casualjim/verdant", branch = "main-git-deploy", version = "0.8.0" }
 
 [dev-dependencies]
 alvin-gateway = { version = "0.1.0", path = "../alvin-gateway" }
