@@ -139,10 +139,18 @@ Terminal cleanup uses the existing remote-mode policy. If the gateway is unreach
 is sent, cleanup logs the error and the server shell can remain running. This cutover does not introduce
 retries, ownership leases, or a server-side disconnect cleanup policy.
 
+## Prereleases
+
+After a successful CI run for a push to `main`, the prerelease workflow checks out the exact verified commit and builds release artifacts with `MISE_ENV=ci`. It publishes a GitHub prerelease tagged with the commit and CI run identifiers only after both native builds succeed. Repository Actions must be enabled, and its `GITHUB_TOKEN` must be permitted to create releases and tags.
+
+The macOS Apple Silicon ZIP contains `Alvin.app`, `alvind`, and the Nemotron notice. The Linux x86-64 GNU tarball contains `alvin-app`, `alvind`, and the same notice. `SHA256SUMS` covers both archives. Both require a separately running gateway and its `omp` executable; speech models are downloaded separately. Linux binaries require compatible system libraries and a graphical environment. macOS builds are unsigned and not notarized, so Gatekeeper can block them. No Windows artifact or runnable web application is published; wasm-compatible crates are built as a portability check only.
+
+Run `mise run package-release` on a supported native host to build and package into `target/distrib`; it uses the release build task and the existing macOS bundle layout. The workflow installs Linux development libraries and the pinned Clang toolchain before building. Signing, notarization, and installers are not provided.
+
 ## Out of Scope (v1)
 
 - A web face. `alvin-protocol`, `alvin-client`, and `alvin-conversation-ui` build for wasm32 so it can be added; a browser entry point (`wasm-bindgen`, served bundle, fonts, per gpui-kit's WebAssembly docs) is a later module.
-- Signing, installers, and distribution tasks.
+- Signing, notarization, and installers.
 
 ## Dependencies
 
@@ -156,6 +164,7 @@ crates/alvin-app/src/config.rs     confique schema, layer loading, WebSocket end
 crates/alvin-app/src/app.rs        network client, window, quit hook
 .mise/tasks/dev                    run the desktop app; uses the macOS bundle on macOS
 .mise/tasks/package                build the macOS application bundle
+.mise/tasks/package-release        build and package unsigned release artifacts
 ```
 
 ## Testing Strategy

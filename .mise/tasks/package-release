@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+#MISE description="Build and package unsigned release artifacts"
+#MISE depends=["build:release"]
+
+set -euo pipefail
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir"
+
+mkdir -p target/distrib
+stage=$(mktemp -d "${TMPDIR:-/tmp}/alvin-release.XXXXXX")
+trap 'rm -rf "$stage"' EXIT
+cp target/release/alvind "$stage/"
+cp crates/alvin-stt/licenses/nemotron-3.5-NOTICE.txt "$stage/"
+
+case "$(uname -s)-$(uname -m)" in
+Darwin-arm64)
+	ALVIN_PACKAGE_PROFILE=release bash .mise/tasks/package
+	cp -R target/release/Alvin.app "$stage/"
+	ditto -c -k --sequesterRsrc "$stage" target/distrib/alvin-aarch64-apple-darwin.zip
+	;;
+Linux-x86_64)
+	cp target/release/alvin-app "$stage/"
+	tar -czf target/distrib/alvin-x86_64-unknown-linux-gnu.tar.gz -C "$stage" .
+	;;
+*)
+	printf 'Unsupported release platform: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2
+	exit 1
+	;;
+esac

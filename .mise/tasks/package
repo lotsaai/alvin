@@ -8,7 +8,8 @@ set -euo pipefail
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir"
 
-bundle="$proj_dir/target/debug/Alvin.app/Contents"
+profile=${ALVIN_PACKAGE_PROFILE:-debug}
+bundle="$proj_dir/target/$profile/Alvin.app/Contents"
 iconset=$(mktemp -d "${TMPDIR:-/tmp}/alvin.XXXXXX")
 trap 'rm -rf "$iconset"' EXIT
 mkdir -p "$iconset/Alvin.iconset" "$bundle/MacOS" "$bundle/Resources/licenses"
@@ -18,7 +19,7 @@ for size in 16 32 128 256 512; do
 	sips -s format png -z "$double" "$double" assets/chipmunk-mascot.webp --out "$iconset/Alvin.iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$iconset/Alvin.iconset" -o "$bundle/Resources/Alvin.icns"
-cp target/debug/alvin-app "$bundle/MacOS/alvin-app"
+cp "target/$profile/alvin-app" "$bundle/MacOS/alvin-app"
 cp crates/alvin-stt/licenses/nemotron-3.5-NOTICE.txt "$bundle/Resources/licenses/"
 linkage=$(otool -L "$bundle/MacOS/alvin-app")
 first_line=true
@@ -50,5 +51,7 @@ cat >"$bundle/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --sign - "$proj_dir/target/debug/Alvin.app"
-codesign --verify --strict "$proj_dir/target/debug/Alvin.app"
+if [[ "$profile" == debug ]]; then
+	codesign --force --sign - "$proj_dir/target/$profile/Alvin.app"
+	codesign --verify --strict "$proj_dir/target/$profile/Alvin.app"
+fi
