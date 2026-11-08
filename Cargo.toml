@@ -1,6 +1,6 @@
 [workspace]
 members = ["crates/*"]
-exclude = ["vendor/ghostty-vt", "vendor/ghostty-vt-sys"]
+exclude = ["vendor/ghostty-vt", "vendor/ghostty-vt-sys", "vendor/portable-pty"]
 resolver = "3"
 
 [workspace.package]

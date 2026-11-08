@@ -376,10 +376,16 @@ mod tests {
             })
           })
           .await;
-        assert_eq!(
-          cx.read(|cx| model.read(cx).conversation().live(live).unwrap().last_prompt),
-          Some(alvin_protocol::PromptStatus::Completed)
-        );
+        cx.read(|cx| {
+          let view = model.read(cx).conversation().live(live).unwrap();
+          assert_eq!(
+            view.last_prompt,
+            Some(alvin_protocol::PromptStatus::Completed),
+            "notices: {:?}; transcript: {:?}",
+            view.notices,
+            view.transcript
+          );
+        });
         cx.update_window(handle, |_, window, cx| {
           window.render_frame(cx);
           let point = window.find_by_label("Message").bounds().center();

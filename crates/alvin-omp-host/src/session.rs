@@ -74,7 +74,8 @@ impl Session {
     &self.cwd
   }
 
-  /// The omp process id. On Unix it is also the process group id.
+  /// The spawned executable's process id. A launcher may start omp in a child process.
+  /// On Unix the id is also the process group id.
   pub fn pid(&self) -> u32 {
     self.pid
   }
@@ -310,8 +311,8 @@ impl Session {
     self.call(AbortBashCommand::default()).await
   }
 
-  /// Closes the session and confirms that omp and its children are gone: running work is aborted first, then the client
-  /// closes and takes the process tree down.
+  /// Closes the session: running work is aborted first, then the client takes the process tree down. On Windows,
+  /// processes already exiting before the client's job snapshot may not be covered by its retained-handle waits.
   pub async fn close(mut self) -> Result<()> {
     self.closing.store(true, Ordering::SeqCst);
     let client = self
@@ -505,8 +506,10 @@ mod tests {
   async fn a_killed_omp_yields_a_process_exited_event_and_a_typed_error() {
     let fixture = Fixture::new();
     let (session, mut events) = fixture.start().await;
+    let output = session.bash("echo pid=$$".to_owned()).await.unwrap().output;
+    let pid = output.trim().strip_prefix("pid=").unwrap().parse().unwrap();
 
-    kill(session.pid());
+    kill(pid);
 
     loop {
       match next(&mut events).await {
@@ -517,6 +520,33 @@ mod tests {
     let error = session.abort().await.unwrap_err();
     assert!(matches!(error, Error::ProcessExited { .. }), "{error:?}");
     session.close().await.unwrap();
+  }
+
+  #[cfg(windows)]
+  #[tokio::test]
+  async fn close_waits_for_a_command_left_by_a_killed_omp() {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+    use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
+
+    let fixture = Fixture::new();
+    let (session, mut events) = fixture.start().await;
+    let output = session.bash("echo pid=$$".to_owned()).await.unwrap().output;
+    let omp = output.trim().strip_prefix("pid=").unwrap().parse().unwrap();
+    let (session, child) = running_child(session).await;
+    // SAFETY: OpenProcess returns a new handle to the reported child.
+    let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, child.pid) };
+    assert!(!handle.is_null(), "opening child process: {}", std::io::Error::last_os_error());
+    // SAFETY: handle is a valid owned process handle.
+    let handle = unsafe { OwnedHandle::from_raw_handle(handle.cast()) };
+
+    kill(omp);
+    while !matches!(next(&mut events).await, EventBody::ProcessExited) {}
+    session.close().await.unwrap();
+
+    // SAFETY: handle remains open until after the wait.
+    assert_eq!(unsafe { WaitForSingleObject(handle.as_raw_handle().cast(), 0) }, WAIT_OBJECT_0);
+    child.died().await;
   }
 
   #[tokio::test]
