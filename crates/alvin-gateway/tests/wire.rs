@@ -1935,11 +1935,12 @@ async fn terminal_backpressure_preserves_large_output_over_both_transports(proje
       TerminalInput {
         terminal,
         bytes: if cfg!(windows) {
+          // Keep payload lines narrower than the console so soft-wrap redraws do not change the glyph count.
           let bun = Command::new("mise").args(["which", "bun"]).output().unwrap();
           assert!(bun.status.success(), "{}", String::from_utf8_lossy(&bun.stderr));
           let bun = String::from_utf8(bun.stdout).unwrap();
           format!(
-            "\"{}\" -e \"process.stdout.write('ALVIN'+'START\\n'+'X'.repeat(2097152)+'\\n'+'ALVIN'+'END\\n')\"\r\nexit\r\n",
+            "\"{}\" -e \"process.stdout.write('ALVIN'+'START\\n'+('X'.repeat(64)+'\\n').repeat(32768)+'\\n'+'ALVIN'+'END\\n')\"\r\nexit\r\n",
             bun.trim()
           )
           .into_bytes()
@@ -1991,7 +1992,12 @@ async fn terminal_backpressure_preserves_large_output_over_both_transports(proje
           text.push(byte);
         }
       }
-      assert_eq!(text.len(), 2_097_152);
+      assert_eq!(
+        text.len(),
+        2_097_152,
+        "non-X bytes: {}",
+        text.iter().filter(|byte| **byte != b'X').count()
+      );
       assert!(text.iter().all(|byte| *byte == b'X'));
     } else {
       assert_eq!(bytes.len(), 2_097_152);
