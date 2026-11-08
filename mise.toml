@@ -1,7 +1,5 @@
 redactions = ["*_TOKEN", "*_SECRET", "*_KEY", "*_PASSWORD"]
-
-[plugins]
-fnox-env = "https://github.com/jdx/mise-env-fnox"
+min_version = "2026.10.4"
 
 [settings]
 experimental = true
@@ -27,7 +25,6 @@ shellcheck = "latest"
 cargo-binstall = "latest"
 rust = { version = "latest", profile = "default", components = "llvm-tools,rust-analyzer", targets = "aarch64-apple-darwin,wasm32-unknown-unknown" }
 "cargo:cargo-hakari" = "latest"
-"github:casualjim/remark" = "latest"
 uv = "latest"
 python = "3.14"
 yamllint = "latest"
@@ -57,9 +54,11 @@ watch = [
   ".mise/tasks/gateway",
 ]
 
+[secrets.fnox]
+
 [env]
 _.file = ".env"
-_.fnox-env = { tools = true }
+# _.fnox-env = { tools = true }
 # _.path = ["{{ config_root }}/.cache/native/cargo/bin"]
 CARGO_TERM_COLOR = "always"
 ALVIN_TEST_SPEECH_CACHE = "{% if os() == 'macos' %}{{ env.HOME }}/Library/Caches{% else %}{{ xdg_cache_home }}{% endif %}/alvin/speech"

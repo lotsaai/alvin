@@ -17,10 +17,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Configure Windows environment
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "HOME=$env:USERPROFILE" >> $env:GITHUB_ENV
+          git config --global core.autocrlf false
+
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -53,6 +65,23 @@ jobs:
             exit 1
           fi
 
+      - name: Configure Windows native tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $hostTriple = rustc -vV | Select-String '^host:'
+          if ($hostTriple -notmatch 'x86_64-pc-windows-msvc') {
+            throw "Expected Windows x64 Rust toolchain, got $hostTriple"
+          }
+          $llvmBin = Join-Path $env:ProgramFiles 'LLVM\bin'
+          if (!(Test-Path "$llvmBin\clang.exe") -or
+              !(Test-Path "$llvmBin\libclang.dll")) {
+            throw "Windows runner is missing LLVM in $llvmBin"
+          }
+          $llvmBin >> $env:GITHUB_PATH
+          "LIBCLANG_PATH=$llvmBin" >> $env:GITHUB_ENV
+
       - uses: Swatinem/rust-cache@v2
 
       - name: Install omp and jj
@@ -78,7 +107,7 @@ jobs:
             echo 'OPENROUTER_API_KEY is required for omp tests' >&2
             exit 1
           fi
-          mise run verify
+          mise run --force verify
 
       - name: Check wasm client and protocol
         run: >-

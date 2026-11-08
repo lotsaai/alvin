@@ -1,13 +1,13 @@
 //! Helpers for tests that start real omp.
 
 use std::ffi::OsString;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use alvin_protocol::{AssistantMessageEvent, EventBody, LiveSessionId, PromptStatus, RpcAgentEvent};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::Receiver;
 
 use crate::{Host, HostConfig, Session, StartRequest};
@@ -57,11 +57,28 @@ impl Fixture {
   pub fn with_capacity(capacity: usize) -> Self {
     let cwd = TempDir::new();
     let paths: Vec<_> = std::env::split_paths(&std::env::var_os("PATH").expect("PATH is required")).collect();
-    let find = |name: &str| paths.iter().map(|dir| dir.join(name)).find(|path| path.is_file()).unwrap();
+    let find = |name: &str| {
+      let names = if cfg!(windows) {
+        vec![format!("{name}.exe"), format!("{name}.cmd"), name.to_owned()]
+      } else {
+        vec![name.to_owned()]
+      };
+      paths
+        .iter()
+        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
+        .find(|path| path.is_file())
+        .unwrap()
+    };
     let omp = find("omp");
     let bun = find("bun");
-    let path = std::env::join_paths([bun.parent().unwrap(), Path::new("/usr/bin"), Path::new("/bin")]).unwrap();
-    let env = vec![
+    let mut dirs = vec![bun.parent().unwrap().to_path_buf()];
+    if cfg!(windows) {
+      dirs.push(PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot is required")).join("System32"));
+    } else {
+      dirs.extend([PathBuf::from("/usr/bin"), PathBuf::from("/bin")]);
+    }
+    let path = std::env::join_paths(dirs).unwrap();
+    let mut env = vec![
       (OsString::from("HOME"), cwd.path().as_os_str().to_owned()),
       (OsString::from("PI_CODING_AGENT_DIR"), cwd.path().join("agent").into_os_string()),
       (OsString::from("PATH"), path),
@@ -70,6 +87,13 @@ impl Fixture {
         std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is required"),
       ),
     ];
+    if cfg!(windows) {
+      for name in ["SystemRoot", "TEMP", "TMP"] {
+        if let Some(value) = std::env::var_os(name) {
+          env.push((OsString::from(name), value));
+        }
+      }
+    }
     let config = HostConfig::builder()
       .omp(omp)
       .extra_args(
@@ -145,62 +169,60 @@ pub fn prompt_status(events: &[EventBody]) -> Option<PromptStatus> {
 
 /// Whether process `pid` exists.
 pub fn alive(pid: u32) -> bool {
-  Command::new("kill")
-    .args(["-0", &pid.to_string()])
-    .output()
-    .unwrap()
-    .status
-    .success()
+  if cfg!(windows) {
+    let output = Command::new("tasklist")
+      .args(["/FO", "CSV", "/NH", "/FI", &format!("PID eq {pid}")])
+      .output()
+      .unwrap();
+    assert!(output.status.success());
+    String::from_utf8_lossy(&output.stdout).contains(&format!("\",\"{pid}\","))
+  } else {
+    Command::new("kill").args(["-0", &pid.to_string()]).status().unwrap().success()
+  }
 }
 
-/// A shell command that reports its own pid through the fifo at `fifo`, then becomes `/bin/sleep 600` still holding
-/// the fifo's write end. omp runs commands in its own shell where `sleep` is a builtin without a process and `$!` is
-/// empty, so the child reports its pid itself; the sandbox denies listing processes.
-pub fn sleeper(fifo: &Path) -> String {
-  format!("/bin/sh -c 'exec 3> {}; echo $$ >&3; exec /bin/sleep 600'", fifo.display())
-}
-
-/// Creates the fifo a [`sleeper`] reports through.
-pub fn make_fifo(dir: &Path) -> PathBuf {
-  let fifo = dir.join("child.fifo");
-  let status = Command::new("mkfifo").arg(&fifo).status().unwrap();
+/// Forcibly terminates the process without terminating its descendants directly.
+pub fn kill(pid: u32) {
+  let status = if cfg!(windows) {
+    Command::new("taskkill").args(["/F", "/PID", &pid.to_string()]).status().unwrap()
+  } else {
+    Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap()
+  };
   assert!(status.success());
-  fifo
 }
 
-/// A [`sleeper`] that has reported in.
+/// A Bun process reports its pid over TCP and holds the connection until it is terminated.
+pub fn sleeper(listener: &TcpListener) -> String {
+  let port = listener.local_addr().unwrap().port();
+  format!(
+    "bun -e 'import net from \"net\"; const s = net.connect({port}, \"127.0.0.1\"); s.on(\"connect\", () => s.write(process.pid + \"\\n\"));'"
+  )
+}
+
+/// A sleeper that has reported in.
 pub struct Child {
-  /// The sleeper's pid.
   pub pid: u32,
-  reader: BufReader<File>,
+  reader: BufReader<TcpStream>,
 }
 
 impl Child {
-  /// Waits for the sleeper to report its pid through `fifo`. The fifo is read with blocking calls on the blocking
-  /// pool: kqueue does not report end-of-file on a fifo, so tokio's pipe types cannot tell when the writer died.
-  pub async fn report(fifo: &Path) -> Self {
-    let fifo = fifo.to_owned();
-    tokio::task::spawn_blocking(move || {
-      // Opening the read end blocks until the sleeper opens the write end.
-      let mut reader = BufReader::new(File::open(fifo).unwrap());
-      let mut line = String::new();
-      reader.read_line(&mut line).unwrap();
-      Self {
-        pid: line.trim().parse().unwrap(),
-        reader,
-      }
-    })
-    .await
-    .unwrap()
+  /// Waits for the sleeper to connect and report its pid.
+  pub async fn report(listener: TcpListener) -> Self {
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+    reader.read_line(&mut line).await.unwrap();
+    Self {
+      pid: line.trim().parse().unwrap(),
+      reader,
+    }
   }
 
-  /// Resolves once the sleeper has died: its write end of the fifo closes with it.
+  /// Resolves when the sleeper dies and its socket closes.
   pub async fn died(mut self) {
-    tokio::task::spawn_blocking(move || {
-      let mut rest = Vec::new();
-      self.reader.read_to_end(&mut rest).unwrap();
-    })
-    .await
-    .unwrap();
+    let mut rest = Vec::new();
+    if let Err(error) = self.reader.read_to_end(&mut rest).await {
+      assert_eq!(error.kind(), std::io::ErrorKind::ConnectionReset);
+    }
   }
 }

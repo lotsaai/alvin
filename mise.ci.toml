@@ -4,3 +4,6 @@ task.output = "prefix"
 [env]
 NEXTEST_PROFILE = "ci"
 ALVIN_TEST_SPEECH_CACHE = "{{ env.HOME }}/.cache/alvin/speech"
+
+[tasks."test:rust"]
+secrets = []

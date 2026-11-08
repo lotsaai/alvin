@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 #MISE description="Prepare cached speech model assets without loading inference"
+#MISE depends=["build:debug"]
 
 set -euo pipefail
 

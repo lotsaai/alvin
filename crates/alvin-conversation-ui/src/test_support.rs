@@ -32,12 +32,24 @@ pub(crate) fn omp_config(base: &Path, extra_args: Vec<OsString>) -> HostConfig {
       }
     })
     .collect();
-  let find = |name: &str| paths.iter().map(|dir| dir.join(name)).find(|path| path.is_file());
+  let find = |name: &str| {
+    let names = if cfg!(windows) {
+      vec![format!("{name}.exe"), format!("{name}.cmd"), name.to_owned()]
+    } else {
+      vec![name.to_owned()]
+    };
+    paths
+      .iter()
+      .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
+      .find(|path| path.is_file())
+  };
   let omp = find("omp").expect("omp must be on PATH");
-  let bun = find("bun");
-  let mut runtime_paths = vec![omp.parent().unwrap(), Path::new("/usr/bin"), Path::new("/bin")];
-  if let Some(bun) = &bun {
-    runtime_paths.insert(1, bun.parent().unwrap());
+  let bun = find("bun").expect("bun must be on PATH");
+  let mut runtime_paths = vec![bun.parent().unwrap().to_path_buf()];
+  if cfg!(windows) {
+    runtime_paths.push(PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot is required")).join("System32"));
+  } else {
+    runtime_paths.extend([PathBuf::from("/usr/bin"), PathBuf::from("/bin")]);
   }
   let path = std::env::join_paths(runtime_paths).unwrap();
   let mut env = vec![
@@ -47,6 +59,13 @@ pub(crate) fn omp_config(base: &Path, extra_args: Vec<OsString>) -> HostConfig {
   ];
   if let Some(key) = std::env::var_os("OPENROUTER_API_KEY") {
     env.push(("OPENROUTER_API_KEY".into(), key));
+  }
+  if cfg!(windows) {
+    for name in ["SystemRoot", "TEMP", "TMP"] {
+      if let Some(value) = std::env::var_os(name) {
+        env.push((OsString::from(name), value));
+      }
+    }
   }
   HostConfig::builder()
     .omp(omp)
@@ -81,7 +100,10 @@ impl test_context::AsyncTestContext for RealGateway {
         .success()
     );
     let repo = repo.canonicalize().unwrap();
-    let seed = include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
+    let seed = include_str!("../../alvin-app/fixtures/seed-session.jsonl").replace(
+      &serde_json::to_string("/tmp/alvin-probe.hnBA/proj").unwrap(),
+      &serde_json::to_string(&repo).unwrap(),
+    );
     std::fs::write(session_dir.join("2026-01-01T00-00-00-000Z_seed.jsonl"), seed).unwrap();
     let omp = omp_config(directory.path(), vec!["--session-dir".into(), session_dir.into_os_string()]);
     let gateway = Gateway::new(

@@ -30,7 +30,7 @@ Success:
 
 ## Interactive terminals
 
-The gateway resolves the requested checkout on its own host and starts an independent shell in a PTY. A terminal has a UUIDv7 identity, an ordered output log and serialized input and resize operations. Output is retained before it is read by subscribers; accepted-event acknowledgements release retained bytes and stop the PTY reader when the bounded log is full. Output precedes the exit event. Explicit close and gateway shutdown terminate the process and await cleanup. Windows teardown is deferred and unverified: the shell is assigned to a Job Object after it starts, so descendants created before assignment may escape the job.
+The gateway resolves the requested checkout on its own host and starts an independent shell in a PTY. A terminal has a UUIDv7 identity, an ordered output log and serialized input and resize operations. Output is retained before it is read by subscribers; accepted-event acknowledgements release retained bytes and stop the PTY reader when the bounded log is full. Output precedes the exit event. On Windows, the gateway releases the pseudoconsole after the shell exits and drains its output before publishing the exit event. Explicit close and gateway shutdown terminate the process and await cleanup. Windows assigns the shell to a Job Object after it starts, so descendants created before assignment may escape the job.
 
 ## Event Log
 

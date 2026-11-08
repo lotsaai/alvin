@@ -27,7 +27,9 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 use tokio::process::{Child, Command as Process};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tokio::time::{Instant, sleep, timeout, timeout_at};
+#[cfg(unix)]
+use tokio::time::sleep;
+use tokio::time::{Instant, timeout, timeout_at};
 
 use super::frame::{FrameDecoder, MAX_FRAME_BYTES, MAX_REASSEMBLED_BYTES};
 use super::host_tool::{HostTool, HostToolContext, text_payload};
@@ -871,6 +873,7 @@ impl Client {
         supported_protocol_versions: None,
         max_frame_bytes: None,
         max_reassembled_frame_bytes: None,
+        supports_bash_exclude_from_context: None,
       },
       shared,
       running: Some(Running { process, reader }),

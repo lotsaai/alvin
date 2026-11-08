@@ -116,7 +116,12 @@ impl Gateway {
       return Ok(existing.summary());
     }
     let model = request.model.or_else(|| self.config.default_model.clone());
-    let start = StartRequest::builder().cwd(cwd.clone()).model(model).resume(resume.clone()).build();
+    let start_cwd = if resume.is_none() { dunce::simplified(&cwd) } else { &cwd };
+    let start = StartRequest::builder()
+      .cwd(start_cwd.to_path_buf())
+      .model(model)
+      .resume(resume.clone())
+      .build();
     let (session, events) = self.timed("open", self.host.start(start)).await?;
     let state = self.timed("get_state", session.state()).await?;
     let file = state

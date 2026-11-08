@@ -60,6 +60,12 @@ checksum_source = "mise-versions"
 url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.151/cargo-nextest-0.9.151-universal-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/703616437"
 
+[tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.windows-arm64"]
+checksum = "sha256:e51bdb4b5883df48f335381b287378edb244318fac65ae0adaf6b9e69298246b"
+checksum_source = "mise-versions"
+url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.151/cargo-nextest-0.9.151-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/703606897"
+
 [tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.windows-x64"]
 checksum = "sha256:e51bdb4b5883df48f335381b287378edb244318fac65ae0adaf6b9e69298246b"
 checksum_source = "mise-versions"
@@ -131,6 +137,12 @@ url = "https://github.com/betterleaks/betterleaks/releases/download/v1.10.0/bett
 url_api = "https://api.github.com/repos/betterleaks/betterleaks/releases/assets/710841277"
 provenance = "cosign"
 
+[tools.betterleaks."platforms.windows-arm64"]
+checksum = "sha256:0799fdc4588a934fd5d727920117a5e0d5d24d2cdead55445e84c5619d201d9c"
+url = "https://github.com/betterleaks/betterleaks/releases/download/v1.10.0/betterleaks_1.10.0_windows_arm64.zip"
+url_api = "https://api.github.com/repos/betterleaks/betterleaks/releases/assets/710841394"
+provenance = "cosign"
+
 [tools.betterleaks."platforms.windows-x64"]
 checksum = "sha256:bafd52abcb440c2a06ea36d5e1fff217315db0aac517e60d74e64b2bb9f18468"
 url = "https://github.com/betterleaks/betterleaks/releases/download/v1.10.0/betterleaks_1.10.0_windows_x64.zip"
@@ -183,6 +195,10 @@ url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-darwin-x6
 [tools.bun."platforms.macos-x64-baseline"]
 checksum = "sha256:d4a155adfbfd09155eb3ba05c9e3a544f39297d7a68616d3c7759f67ab5c47dc"
 url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-darwin-x64-baseline.zip"
+
+[tools.bun."platforms.windows-arm64"]
+checksum = "sha256:2d57a0eec0cb44d95c918c3f9734f60455a1306ae5085d76fc68f44e3ee30d09"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-windows-aarch64.zip"
 
 [tools.bun."platforms.windows-x64"]
 checksum = "sha256:cd2c0fccc78f3ede1f50ca827a15f063eda13d4d150a3d0674f4f6e323d864a5"
@@ -249,6 +265,12 @@ provenance = "github-attestations"
 checksum = "sha256:a114e207a9cd116f97708f175ba5e4f0a37836ff9c4d1ea63c8364436decf70f"
 url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.26.2/cargo-binstall-x86_64-apple-darwin.zip"
 url_api = "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/assets/695464551"
+provenance = "github-attestations"
+
+[tools.cargo-binstall."platforms.windows-arm64"]
+checksum = "sha256:3736cca189d958ae80bd5770e77cce9bbc5653bb2e9561e5002e766f2a185804"
+url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.26.2/cargo-binstall-aarch64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/assets/695465743"
 provenance = "github-attestations"
 
 [tools.cargo-binstall."platforms.windows-x64"]
@@ -337,6 +359,12 @@ url = "https://github.com/jdx/fnox/releases/download/v1.46.0/fnox-x86_64-apple-d
 signer = "sigstore-oidc:https://github.com/jdx/fnox/.github/workflows/release.yml"
 repository_ids = { repository = "1078762196" }
 
+[tools.fnox."platforms.windows-arm64"]
+checksum = "sha256:3ea2577b3744713bf59373aecfa82e8e85202b21ef67cc74ad0cbe18a2f40e99"
+url = "https://github.com/jdx/fnox/releases/download/v1.46.0/fnox-aarch64-pc-windows-msvc.zip"
+signer = "sigstore-oidc:https://github.com/jdx/fnox/.github/workflows/release.yml"
+repository_ids = { repository = "1078762196" }
+
 [tools.fnox."platforms.windows-x64"]
 checksum = "sha256:1cdeb238348e1ceded8522296950ad4b5dba04221b462d64bf80662fae341960"
 url = "https://github.com/jdx/fnox/releases/download/v1.46.0/fnox-x86_64-pc-windows-msvc.zip"
@@ -348,59 +376,6 @@ checksum = "sha256:1cdeb238348e1ceded8522296950ad4b5dba04221b462d64bf80662fae341
 url = "https://github.com/jdx/fnox/releases/download/v1.46.0/fnox-x86_64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/jdx/fnox/.github/workflows/release.yml"
 repository_ids = { repository = "1078762196" }
-
-[[tools."github:casualjim/remark"]]
-version = "0.6.2"
-backend = "github:casualjim/remark"
-specifiers = ["latest"]
-
-[tools."github:casualjim/remark"."platforms.linux-arm64"]
-checksum = "sha256:ddca05e340028c83956335b5d1f231dc94d5321d9f48c468a7ecc64c0122376d"
-url = "https://github.com/casualjim/remark/releases/download/v0.6.2/remark-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/casualjim/remark/releases/assets/536124365"
-
-[tools."github:casualjim/remark"."platforms.linux-arm64-musl"]
-checksum = "sha256:ddca05e340028c83956335b5d1f231dc94d5321d9f48c468a7ecc64c0122376d"
-url = "https://github.com/casualjim/remark/releases/download/v0.6.2/remark-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/casualjim/remark/releases/assets/536124365"
-
-[tools."github:casualjim/remark"."platforms.linux-x64"]
-checksum = "sha256:7e4ff4fd1f83f4d1964195567c2c9a22d7523a3f46ae35a14b0cc71ec2f3b498"
-url = "https://github.com/casualjim/remark/releases/download/v0.6.2/remark-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/casualjim/remark/releases/assets/536124391"
-
-[tools."github:casualjim/remark"."platforms.linux-x64-baseline"]
-checksum = "sha256:7e4ff4fd1f83f4d1964195567c2c9a22d7523a3f46ae35a14b0cc71ec2f3b498"
-checksum_source = "mise-versions"
-url = "https://github.com/casualjim/remark/releases/download/v0.6.2/remark-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/casualjim/remark/releases/assets/536124391"
-
-[tools."github:casualjim/remark"."platforms.linux-x64-musl"]
-checksum = "sha256:7e4ff4fd1f83f4d1964195567c2c9a22d7523a3f46ae35a14b0cc71ec2f3b498"
-url = "https://github.com/casualjim/remark/releases/download/v0.6.2/remark-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/casualjim/remark/releases/assets/536124391"
-
-[tools."github:casualjim/remark"."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:7e4ff4fd1f83f4d1964195567c2c9a22d7523a3f46ae35a14b0cc71ec2f3b498"
-checksum_source = "mise-versions"
-url = "https://github.com/casualjim/remark/releases/download/v0.6.2/remark-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/casualjim/remark/releases/assets/536124391"
-
-[tools."github:casualjim/remark"."platforms.macos-arm64"]
-checksum = "sha256:12bf1cdbdf1b09c47e089dc66efa78f7662a62169638e1492e8f4f9673dcaa4e"
-url = "https://github.com/casualjim/remark/releases/download/v0.6.2/remark-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/casualjim/remark/releases/assets/536124358"
-
-[tools."github:casualjim/remark"."platforms.windows-x64"]
-checksum = "sha256:052997ae7e1660a60cf0d87e11347b19ca7fca0743173854e1aa1f27738ecc6f"
-url = "https://github.com/casualjim/remark/releases/download/v0.6.2/remark-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/casualjim/remark/releases/assets/536124385"
-
-[tools."github:casualjim/remark"."platforms.windows-x64-baseline"]
-checksum = "sha256:052997ae7e1660a60cf0d87e11347b19ca7fca0743173854e1aa1f27738ecc6f"
-checksum_source = "mise-versions"
-url = "https://github.com/casualjim/remark/releases/download/v0.6.2/remark-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/casualjim/remark/releases/assets/536124385"
 
 [[tools.hk]]
 version = "2.11.0"
@@ -446,6 +421,12 @@ repository_ids = { repository = "922514152" }
 [tools.hk."platforms.macos-arm64"]
 checksum = "sha256:65cc3490e93522b55abe8ae42c2b5ffe452f9fe58282455ad59d10bc0deab272"
 url = "https://github.com/jdx/hk/releases/download/v2.11.0/hk-aarch64-apple-darwin.tar.gz"
+signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
+repository_ids = { repository = "922514152" }
+
+[tools.hk."platforms.windows-arm64"]
+checksum = "sha256:0a4dbdf75984786e9661ffac69c0b75734e6711f3a1b82850ce54dcc86601519"
+url = "https://github.com/jdx/hk/releases/download/v2.11.0/hk-aarch64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
@@ -502,6 +483,10 @@ url = "https://nodejs.org/dist/v24.22.2/node-v24.22.2-darwin-x64.tar.gz"
 checksum = "sha256:d5e336d588c45be0c37dbd52cc29895593009ca4997a77a1fd02815131ed0e52"
 url = "https://nodejs.org/dist/v24.22.2/node-v24.22.2-darwin-x64.tar.gz"
 
+[tools.node."platforms.windows-arm64"]
+checksum = "sha256:f47968c213105077f64c6510f007632c0ca2574802a0b5067c327c49abe1c468"
+url = "https://nodejs.org/dist/v24.22.2/node-v24.22.2-win-arm64.zip"
+
 [tools.node."platforms.windows-x64"]
 checksum = "sha256:ca1bff5d8ead13c9f2ea404a176db46bd430704d5b5113734049fa365e7799e2"
 url = "https://nodejs.org/dist/v24.22.2/node-v24.22.2-win-x64.zip"
@@ -536,6 +521,12 @@ repository_ids = { repository = "899500793" }
 [tools.pitchfork."platforms.macos-arm64"]
 checksum = "sha256:eeb71381cf6e2b87575cc3bc06a98a2f1c5ab741acd1e5522cde7ad3727f9d32"
 url = "https://github.com/jdx/pitchfork/releases/download/v2.33.0/pitchfork-aarch64-apple-darwin.tar.gz"
+signer = "sigstore-oidc:https://github.com/jdx/pitchfork/.github/workflows/release.yml"
+repository_ids = { repository = "899500793" }
+
+[tools.pitchfork."platforms.windows-arm64"]
+checksum = "sha256:4c45ce5b71087563e2326313e50486cc40b656cf917669feaf9966b2c94ec8bb"
+url = "https://github.com/jdx/pitchfork/releases/download/v2.33.0/pitchfork-aarch64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/jdx/pitchfork/.github/workflows/release.yml"
 repository_ids = { repository = "899500793" }
 
@@ -604,6 +595,12 @@ checksum_source = "mise-versions"
 url = "https://github.com/apple/pkl/releases/download/0.32.2/pkl-macos-amd64"
 url_api = "https://api.github.com/repos/apple/pkl/releases/assets/663850987"
 
+[tools.pkl."platforms.windows-arm64"]
+checksum = "sha256:ac3c55c2e43c20964dc5faf51e47bf73a90150dfe1874aa37753651753edf201"
+checksum_source = "mise-versions"
+url = "https://github.com/apple/pkl/releases/download/0.32.2/pkl-windows-amd64.exe"
+url_api = "https://api.github.com/repos/apple/pkl/releases/assets/663854370"
+
 [tools.pkl."platforms.windows-x64"]
 checksum = "sha256:ac3c55c2e43c20964dc5faf51e47bf73a90150dfe1874aa37753651753edf201"
 url = "https://github.com/apple/pkl/releases/download/0.32.2/pkl-windows-amd64.exe"
@@ -663,6 +660,11 @@ provenance = "github-attestations"
 [tools.python."platforms.macos-x64-baseline"]
 checksum = "sha256:2fd8becd48cf0ff5f0a15df3c0db7cae7aa708dcaacf901bd30d6cdd6229370b"
 url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.14.10+20261026-x86_64-apple-darwin-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
+[tools.python."platforms.windows-arm64"]
+checksum = "sha256:2b6cf82a67cb99ef0db0932dd69ee24080077add6f98435cea5de850c144327d"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.14.10+20261026-aarch64-pc-windows-msvc-install_only_stripped.tar.gz"
 provenance = "github-attestations"
 
 [tools.python."platforms.windows-x64"]
@@ -738,6 +740,12 @@ checksum_source = "mise-versions"
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.x86_64.tar.xz"
 url_api = "https://api.github.com/repos/koalaman/shellcheck/releases/assets/279056930"
 
+[tools.shellcheck."platforms.windows-arm64"]
+checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
+checksum_source = "mise-versions"
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
+url_api = "https://api.github.com/repos/koalaman/shellcheck/releases/assets/279056944"
+
 [tools.shellcheck."platforms.windows-x64"]
 checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
@@ -807,6 +815,12 @@ checksum_source = "mise-versions"
 url = "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_darwin_amd64"
 url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/547320946"
 
+[tools.shfmt."platforms.windows-arm64"]
+checksum = "sha256:13629ce28442ca80b6b5a819f7574ab39e1c28c6e26734ca816c9714e04851df"
+checksum_source = "mise-versions"
+url = "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_windows_amd64.exe"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/547320827"
+
 [tools.shfmt."platforms.windows-x64"]
 checksum = "sha256:13629ce28442ca80b6b5a819f7574ab39e1c28c6e26734ca816c9714e04851df"
 checksum_source = "mise-versions"
@@ -868,6 +882,11 @@ url_api = "https://api.github.com/repos/tamasfe/taplo/releases/assets/257323116"
 checksum = "sha256:898122cde3a0b1cd1cbc2d52d3624f23338218c91b5ddb71518236a4c2c10ef2"
 url = "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-darwin-x86_64.gz"
 url_api = "https://api.github.com/repos/tamasfe/taplo/releases/assets/257323116"
+
+[tools.taplo."platforms.windows-arm64"]
+checksum = "sha256:65a50c5d3b78f6014e6bc6d64eb6dc1d4992bc236589c9bb29e5609fc3454674"
+url = "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-windows-aarch64.zip"
+url_api = "https://api.github.com/repos/tamasfe/taplo/releases/assets/257322977"
 
 [tools.taplo."platforms.windows-x64"]
 checksum = "sha256:1615eed140039bd58e7089109883b1c434de5d6de8f64a993e6e8c80ca57bdf9"
@@ -936,6 +955,12 @@ provenance = "github-attestations"
 checksum = "sha256:20c47e4c1f630b8abaff8c291fa9b9aa300fef92c4fbff95adf198b55287cda7"
 url = "https://github.com/astral-sh/uv/releases/download/0.13.7/uv-x86_64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/704009775"
+provenance = "github-attestations"
+
+[tools.uv."platforms.windows-arm64"]
+checksum = "sha256:0cdc5b38fe5a8168ed6a25814f5ba43c21d313dd3187314fccb37b7cec46e021"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.7/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/704009796"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64"]
@@ -1009,6 +1034,12 @@ checksum_source = "mise-versions"
 url = "https://github.com/watchexec/watchexec/releases/download/v2.8.0/watchexec-2.8.0-x86_64-apple-darwin.tar.xz"
 url_api = "https://api.github.com/repos/watchexec/watchexec/releases/assets/616138831"
 
+[tools.watchexec."platforms.windows-arm64"]
+checksum = "sha256:0c872fc18c8e801f21614c6daf2504a5826d5c705bb67f7a583d879f5410d9ea"
+checksum_source = "mise-versions"
+url = "https://github.com/watchexec/watchexec/releases/download/v2.8.0/watchexec-2.8.0-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/watchexec/watchexec/releases/assets/616138784"
+
 [tools.watchexec."platforms.windows-x64"]
 checksum = "sha256:0c872fc18c8e801f21614c6daf2504a5826d5c705bb67f7a583d879f5410d9ea"
 checksum_source = "mise-versions"
@@ -1067,6 +1098,11 @@ url = "https://ziglang.org/download/0.17.1/zig-x86_64-macos-0.17.1.tar.xz"
 [tools.zig."platforms.macos-x64-baseline"]
 checksum = "sha256:9af07b20319fbd0c92ee46ad23e81d6a782b1aaea2cfb8dcbff35f1d2c7ddbb7"
 url = "https://ziglang.org/download/0.17.1/zig-x86_64-macos-0.17.1.tar.xz"
+
+[tools.zig."platforms.windows-arm64"]
+checksum = "sha256:4789895bdb1e312a2ea73b2a7c0a0cc8d2ab62ba6976e834a7c54cf443377c15"
+url = "https://ziglang.org/download/0.17.1/zig-aarch64-windows-0.17.1.zip"
+provenance = "minisign"
 
 [tools.zig."platforms.windows-x64"]
 checksum = "sha256:b03f477a1943673e02aca0f570e8030dffd536ce1f45cbc4d3326ec31159562e"

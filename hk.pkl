@@ -64,7 +64,7 @@ local linters = new Mapping<String, Step> {
   ["pkl"] {
     glob = "*.pkl"
     // pkl default cache (~/.pkl) is read-only in this env; use project-local cache
-    check = "pkl eval --cache-dir .cache/native/pkl {{files}} >/dev/null"
+    check = "pkl eval --cache-dir .cache/native/pkl {{files}}"
   }
 }
 

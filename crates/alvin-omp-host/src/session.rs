@@ -282,10 +282,14 @@ impl Session {
     self.call(AbortCommand::default()).await
   }
 
-  /// Runs a shell command in the session and returns its output. Waits until the command ends, up to `omp-rpc`'s
-  /// default command deadline.
+  /// Runs a shell command in the session and waits for its output.
   pub async fn bash(&self, command: String) -> Result<BashResult> {
-    let result = self.call(BashCommand { command }).await?;
+    let result = self
+      .call(BashCommand {
+        command,
+        exclude_from_context: None,
+      })
+      .await?;
     convert("bash result", &result)
   }
 
@@ -374,7 +378,7 @@ mod tests {
   use alvin_protocol::{AssistantMessageEvent, EventBody, PromptStatus, RpcAgentEvent};
 
   use crate::Error;
-  use crate::test_support::{Child, Fixture, alive, make_fifo, next, prompt_status, sleeper, streamed_text, until_prompt_result};
+  use crate::test_support::{Child, Fixture, alive, kill, next, prompt_status, sleeper, streamed_text, until_prompt_result};
 
   #[test]
   fn thinking_cycle_decodes_configured_levels_and_rejects_unknown_levels() {
@@ -453,12 +457,17 @@ mod tests {
 
   /// Starts `sleeper` as a foreground command and returns it once it has reported in. The call's future is dropped
   /// when the child reports, as a cancelled request would be, while the command keeps running in omp.
-  async fn running_child(session: &super::Session, fixture: &Fixture) -> Child {
-    let fifo = make_fifo(fixture.cwd.path());
-    tokio::select! {
-      result = session.bash(sleeper(&fifo)) => panic!("the sleeper ended on its own: {result:?}"),
-      child = Child::report(&fifo) => child,
-    }
+  async fn running_child(session: super::Session) -> (super::Session, Child) {
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let command = sleeper(&listener);
+    let child = tokio::select! {
+      result = session.bash(command) => {
+        session.close().await.unwrap();
+        panic!("the sleeper ended on its own: {result:?}");
+      }
+      child = Child::report(listener) => child,
+    };
+    (session, child)
   }
 
   #[tokio::test]
@@ -466,7 +475,7 @@ mod tests {
     let fixture = Fixture::new();
     let (session, _events) = fixture.start().await;
     let omp = session.pid();
-    let child = running_child(&session, &fixture).await;
+    let (session, child) = running_child(session).await;
     let child_pid = child.pid;
     assert!(alive(omp) && alive(child_pid));
 
@@ -481,13 +490,15 @@ mod tests {
   async fn dropping_the_handle_leaves_no_running_command_and_ends_the_event_stream() {
     let fixture = Fixture::new();
     let (session, mut events) = fixture.start().await;
-    let child = running_child(&session, &fixture).await;
+    let (session, child) = running_child(session).await;
+    let child_pid = child.pid;
 
     drop(session);
 
     // The stream ends when omp's stdout closes, which happens when teardown has killed it.
     while events.recv().await.is_some() {}
     child.died().await;
+    assert!(!alive(child_pid), "child {child_pid} survived drop");
   }
 
   #[tokio::test]
@@ -495,11 +506,7 @@ mod tests {
     let fixture = Fixture::new();
     let (session, mut events) = fixture.start().await;
 
-    let status = std::process::Command::new("kill")
-      .args(["-9", &session.pid().to_string()])
-      .status()
-      .unwrap();
-    assert!(status.success());
+    kill(session.pid());
 
     loop {
       match next(&mut events).await {
@@ -509,6 +516,7 @@ mod tests {
     }
     let error = session.abort().await.unwrap_err();
     assert!(matches!(error, Error::ProcessExited { .. }), "{error:?}");
+    session.close().await.unwrap();
   }
 
   #[tokio::test]

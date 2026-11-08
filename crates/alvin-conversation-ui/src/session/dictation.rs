@@ -600,21 +600,35 @@ mod tests {
           dictation.update(cx, |dictation, cx| dictation.toggle(cx));
           (dictation, probe, failed)
         });
-        let first = failed.recv().await.unwrap().unwrap_err();
-        assert!(first.contains("speech"));
+        assert!(failed.recv().await.unwrap().is_err());
+        let model_dir = cx.update(|cx| match &dictation.read(cx).shared.read(cx).state {
+          ModelState::Failed(Error::Speech {
+            source: alvin_stt::Error::CacheIo { path, .. },
+          }) => path.clone(),
+          _ => panic!("expected a cache IO preparation failure"),
+        });
 
         std::fs::remove_file(&cache).unwrap();
-        std::fs::create_dir(&cache).unwrap();
-        let model_dir = cache.join("nemotron-3.5-asr-streaming-0.6b-onnx");
-        std::fs::create_dir(&model_dir).unwrap();
-        std::fs::write(model_dir.join("664cc742197053fa11afd12f5100749fb8000181"), b"not a directory").unwrap();
+        std::fs::create_dir_all(model_dir.parent().unwrap()).unwrap();
+        std::fs::write(&model_dir, b"not a directory").unwrap();
         let (_retry_probe, retried) = cx.update(|cx| {
-          dictation.update(cx, |dictation, cx| dictation.toggle(cx));
+          dictation.update(cx, |dictation, cx| {
+            assert!(matches!(dictation.phase(), Phase::Failed(_)));
+            dictation.toggle(cx);
+            assert!(matches!(dictation.phase(), Phase::Preparing(_)));
+          });
           test_support::watch_preparation(cx)
         });
-        let second = retried.recv().await.unwrap().unwrap_err();
-        assert!(second.contains("nemotron-3.5-asr-streaming-0.6b-onnx"));
-        assert_ne!(first, second);
+        assert!(retried.recv().await.unwrap().is_err());
+        cx.update(|cx| {
+          assert!(matches!(dictation.read(cx).phase(), Phase::Failed(_)));
+          assert!(matches!(
+            &dictation.read(cx).shared.read(cx).state,
+            ModelState::Failed(Error::Speech {
+              source: alvin_stt::Error::CacheIo { .. }
+            })
+          ));
+        });
       });
     })
     .await;

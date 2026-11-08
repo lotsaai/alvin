@@ -45,7 +45,7 @@ fn resolve(cwd: &Path) -> Result<Option<Resolved>> {
     Err(Discovery::NoWorkspaceMarker { .. } | Discovery::PathResolution { .. } | Discovery::InvalidVcsPointer { .. }) => Ok(None),
     Err(source) => Err(Error::ResolveWorkspace {
       cwd: cwd.to_path_buf(),
-      source,
+      source: Box::new(source),
     }),
   }
 }
@@ -120,7 +120,7 @@ mod tests {
 
   use super::{group, select};
   use crate::scan;
-  use crate::test_support::{TempDir, run, run_omp};
+  use crate::test_support::{TempDir, link_dir, run, run_omp};
 
   fn blake3_hex(root: &Path) -> String {
     blake3::hash(root.as_os_str().as_encoded_bytes()).to_hex().to_string()
@@ -263,7 +263,7 @@ mod tests {
     let nested = repo.join("nested");
     std::fs::create_dir(&nested).unwrap();
     let link = tmp.path().join("link");
-    std::os::unix::fs::symlink(&repo, &link).unwrap();
+    link_dir(&repo, &link);
     let other = tmp.path().join("other");
     std::fs::create_dir(&other).unwrap();
     run(&other, "git", &["init", "--quiet"]);
@@ -296,7 +296,7 @@ mod tests {
     std::fs::create_dir(&plain).unwrap();
     std::fs::write(plain.join("Cargo.toml"), "[package]\nname = \"plain\"\nversion = \"0.1.0\"\n").unwrap();
     let link = tmp.path().join("link");
-    std::os::unix::fs::symlink(&plain, &link).unwrap();
+    link_dir(&plain, &link);
 
     let projects = group(cwds(&[&link])).unwrap();
 

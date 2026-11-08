@@ -8,7 +8,7 @@ description = "Supervises one omp --mode rpc-ui process per live session"
 [dependencies]
 alvin-protocol = { version = "0.1.0", path = "../alvin-protocol" }
 alvin-workspace-hack = { version = "0.1", path = "../alvin-workspace-hack" }
-omp-rpc = { git = "https://github.com/can1357/oh-my-pi", tag = "v18.18.0", version = "0.1.0" }
+omp-rpc = { git = "https://github.com/can1357/oh-my-pi", tag = "v18.18.1", version = "0.1.0" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 thiserror = "2.0.21"
@@ -23,4 +23,4 @@ rustix = { version = "1.1.6", features = ["process"] }
 win32job = "2.0.3"
 
 [dev-dependencies]
-tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.54.1", features = ["macros", "net", "rt-multi-thread"] }

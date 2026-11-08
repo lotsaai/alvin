@@ -2,6 +2,7 @@
 
 #MISE description="Record conversation fixtures from real omp through the gateway (needs a working omp config; slow)"
 #MISE depends=["build:debug"]
+#MISE secrets=["OPENROUTER_API_KEY"]
 #MISE sources=["crates/alvin-gateway/examples/record_conversation.rs"]
 
 proj_dir=$(git rev-parse --show-toplevel)

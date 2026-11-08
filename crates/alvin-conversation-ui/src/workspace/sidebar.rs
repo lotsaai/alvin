@@ -1491,8 +1491,10 @@ mod tests {
         .unwrap();
       assert!(status.success());
       let repo = repo.canonicalize().unwrap();
-      let seed =
-        include_str!("../../../alvin-app/fixtures/seed-session.jsonl").replace("/tmp/alvin-probe.hnBA/proj", repo.to_str().unwrap());
+      let seed = include_str!("../../../alvin-app/fixtures/seed-session.jsonl").replace(
+        "\"/tmp/alvin-probe.hnBA/proj\"",
+        &serde_json::to_string(repo.to_str().unwrap()).unwrap(),
+      );
       for _ in 0..55 {
         let id = alvin_protocol::EventId::new().as_uuid().to_string();
         let record = seed.replace("01a18ff1-ab74-73b8-a3a2-79905565c49b", &id);
