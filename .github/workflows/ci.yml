@@ -49,6 +49,17 @@ jobs:
             clang-23 libclang-23-dev
           echo 'LIBCLANG_PATH=/usr/lib/llvm-23/lib' >> "$GITHUB_ENV"
 
+      - name: Install Windows native dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install pkgconfiglite --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pkg-config --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pkg-config --list-all
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - uses: jdx/mise-action@v5
         with:
           experimental: true
