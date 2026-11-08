@@ -27,8 +27,20 @@ jobs:
             artifact: alvin-aarch64-apple-darwin.zip
           - os: ubuntu-24.04
             artifact: alvin-x86_64-unknown-linux-gnu.tar.gz
+          - os: windows-latest
+            artifact: alvin-x86_64-pc-windows-msvc.zip
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Configure Windows environment
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "HOME=$env:USERPROFILE" >> $env:GITHUB_ENV
+          git config --global core.autocrlf false
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -45,11 +57,39 @@ jobs:
           curl -sSL https://apt.llvm.org/llvm.sh | sudo bash -s -- 23
           sudo apt-get install -y --no-install-recommends \
             clang-23 libclang-23-dev
+      - name: Install Windows native dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install pkgconfiglite --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pkg-config --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pkg-config --list-all
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - uses: jdx/mise-action@v5
         with:
           experimental: true
           install: true
           cache: true
+      - name: Configure Windows native tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $hostTriple = rustc -vV | Select-String '^host:'
+          if ($hostTriple -notmatch 'x86_64-pc-windows-msvc') {
+            throw "Expected Windows x64 Rust toolchain, got $hostTriple"
+          }
+          $llvmBin = Join-Path $env:ProgramFiles 'LLVM\bin'
+          if (!(Test-Path "$llvmBin\clang.exe") -or
+              !(Test-Path "$llvmBin\libclang.dll")) {
+            throw "Windows runner is missing LLVM in $llvmBin"
+          }
+          $llvmBin >> $env:GITHUB_PATH
+          "LIBCLANG_PATH=$llvmBin" >> $env:GITHUB_ENV
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: release-${{ matrix.os }}

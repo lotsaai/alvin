@@ -124,3 +124,29 @@ jobs:
         run: >-
           cargo check --locked --target wasm32-unknown-unknown
           -p alvin-client -p alvin-protocol
+
+      - name: Build Windows release archive
+        if: runner.os == 'Windows'
+        run: mise run package-release
+
+      - name: Smoke packaged Windows executables
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = 'target/distrib/alvin-x86_64-pc-windows-msvc.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'alvin-release-smoke'
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination
+          $originalPath = $env:PATH
+          try {
+            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+            foreach ($name in @('alvin-app.exe', 'alvind.exe')) {
+              & (Join-Path $destination $name) --help
+              if ($LASTEXITCODE -ne 0) {
+                throw "$name failed from the extracted release: $LASTEXITCODE"
+              }
+            }
+          } finally {
+            $env:PATH = $originalPath
+            Remove-Item -LiteralPath $destination -Recurse -Force
+          }
