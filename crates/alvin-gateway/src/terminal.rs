@@ -108,7 +108,7 @@ impl Drop for PendingOpen {
 }
 
 struct Control {
-  master: Box<dyn MasterPty + Send>,
+  master: Option<Box<dyn MasterPty + Send>>,
   writer: Box<dyn Write + Send>,
 }
 
@@ -177,7 +177,10 @@ impl Terminal {
     let (sender, _) = broadcast::channel(BROADCAST_CAPACITY);
     let terminal = Arc::new(Self {
       id,
-      control: Mutex::new(Control { master, writer }),
+      control: Mutex::new(Control {
+        master: Some(master),
+        writer,
+      }),
       tree: Mutex::new(tree),
       events: Mutex::new(EventLog::default()),
       space: Condvar::new(),
@@ -189,15 +192,44 @@ impl Terminal {
     terminal.publish(TerminalEventBody::Started);
     let running = Arc::clone(&terminal);
     let worker = tokio::task::spawn_blocking(move || {
+      #[cfg(windows)]
+      let child_waiter = {
+        let terminal = Arc::clone(&running);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        match std::thread::Builder::new().spawn(move || {
+          let status = child.wait();
+          let master = terminal.control.lock().unwrap_or_else(PoisonError::into_inner).master.take();
+          drop(master);
+          if let Err(error) = sender.send(status) {
+            tracing::debug!(%error, "terminal wait receiver closed");
+          }
+        }) {
+          Ok(_) => receiver,
+          Err(source) => {
+            running.failed(Error::TerminalWait { terminal: id, source }, ErrorCode::TerminalWaitFailed);
+            if let Err(source) = running.tree.lock().unwrap_or_else(PoisonError::into_inner).terminate() {
+              running.failed(Error::TerminalClose { terminal: id, source }, ErrorCode::TerminalCloseFailed);
+            }
+            return;
+          }
+        }
+      };
       let mut buffer = [0_u8; OUTPUT_CHUNK];
+      let mut draining = false;
       loop {
         match reader.read(&mut buffer) {
           Ok(0) => break,
           Ok(count) => {
-            if let Some(bytes) = buffer.get(..count)
+            if !draining
+              && let Some(bytes) = buffer.get(..count)
               && !running.publish(TerminalEventBody::Output { bytes: bytes.to_vec() })
             {
-              break;
+              // Closing ConPTY can wait for its output pipe to be drained.
+              if cfg!(windows) {
+                draining = true;
+              } else {
+                break;
+              }
             }
           }
           Err(source) if source.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -210,7 +242,17 @@ impl Terminal {
           }
         }
       }
-      match child.wait() {
+      #[cfg(windows)]
+      let status = match child_waiter.recv() {
+        Ok(status) => status,
+        Err(source) => {
+          running.failed(Error::TerminalWaitWorker { terminal: id, source }, ErrorCode::TerminalWaitFailed);
+          return;
+        }
+      };
+      #[cfg(not(windows))]
+      let status = child.wait();
+      match status {
         Ok(status) => {
           running.publish(TerminalEventBody::Exited {
             code: status.signal().is_none().then_some(status.exit_code()),
@@ -324,6 +366,8 @@ impl Terminal {
     let control = self.control.lock().unwrap_or_else(PoisonError::into_inner);
     control
       .master
+      .as_ref()
+      .ok_or(Error::TerminalNotReady { terminal: self.id })?
       .resize(pty_size(request.size))
       .map_err(|source| Error::TerminalResize {
         terminal: self.id,
@@ -427,7 +471,8 @@ mod tests {
       std::fs::create_dir_all(&project).unwrap();
       std::fs::create_dir_all(sessions.join("-project")).unwrap();
       let project = project.canonicalize().unwrap();
-      let records = include_str!("../fixtures/session-records.jsonl").replace("/tmp/alvin-probe.hnBA/proj", project.to_str().unwrap());
+      let records = include_str!("../fixtures/session-records.jsonl")
+        .replace("\"/tmp/alvin-probe.hnBA/proj\"", &serde_json::to_string(&project).unwrap());
       std::fs::write(sessions.join("-project/terminal.jsonl"), records).unwrap();
       let omp = HostConfig::builder().omp(PathBuf::from("omp")).build();
       let gateway = Gateway::new(GatewayConfig::builder().sessions_dir(sessions).omp(omp).build());
@@ -504,13 +549,13 @@ mod tests {
     drop(clients);
     server.shutdown().await.unwrap();
   }
-  #[cfg(target_os = "macos")]
   #[test_context(ShellFixture)]
   #[tokio::test]
   async fn closing_terminal_terminates_background_process_over_both_transports(fixture: &mut ShellFixture) {
     use alvin_protocol::TerminalAccepted;
     use portable_pty::CommandBuilder;
-    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::io::{BufRead, BufReader, Read};
+    use std::net::TcpListener;
 
     let channel = Client::connect(Endpoint::Channel(ChannelPair::from(fixture.gateway.connect_channel(16).unwrap())))
       .await
@@ -528,11 +573,22 @@ mod tests {
       pixel_width: 800,
       pixel_height: 480,
     };
+    let bun = std::process::Command::new("mise").args(["which", "bun"]).output().unwrap();
+    assert!(bun.status.success(), "{}", String::from_utf8_lossy(&bun.stderr));
+    let bun = String::from_utf8(bun.stdout).unwrap();
     let clients = [channel, websocket];
     for client in &clients {
-      let mut command = CommandBuilder::new("/bin/sh");
-      command.arg("-c");
-      command.arg("tail -f /dev/null >/dev/null 2>&1 & printf '\\001%s\\002' \"$!\"; wait");
+      let child_listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+      let port = child_listener.local_addr().unwrap().port();
+      let child_script =
+        format!("const s = require('net').connect({port}, '127.0.0.1'); s.on('connect', () => s.write(process.pid + '\\n'));");
+      let parent_script = format!(
+        "require('child_process').spawn(process.execPath, ['-e', {}], {{stdio:'ignore'}}); require('net').createServer().listen(0, '127.0.0.1');",
+        serde_json::to_string(&child_script).unwrap()
+      );
+      let mut command = CommandBuilder::new(bun.trim());
+      command.arg("-e");
+      command.arg(parent_script);
       let terminal = super::Terminal::start_command(command, size).unwrap();
       fixture.gateway.terminals.insert(terminal.clone());
       let mut stream = TerminalApiClient::terminal_events(
@@ -544,61 +600,33 @@ mod tests {
       )
       .await
       .unwrap();
-      let mut output = Vec::new();
-      let pid = loop {
-        let event = stream.next().await.unwrap().unwrap();
-        TerminalApiClient::accepted(
-          client,
-          TerminalAccepted {
-            terminal: terminal.id,
-            through: event.id,
-          },
-        )
-        .await
-        .unwrap();
-        match event.body {
-          TerminalEventBody::Started => {}
-          TerminalEventBody::Output { bytes } => output.extend(bytes),
-          other => panic!("unexpected terminal event: {other:?}"),
-        }
-        if let (Some(start), Some(end)) = (output.iter().position(|byte| *byte == 1), output.iter().position(|byte| *byte == 2)) {
-          break std::str::from_utf8(output.get(start + 1..end).unwrap())
-            .unwrap()
-            .parse::<usize>()
-            .unwrap();
-        }
-      };
-      // SAFETY: kqueue returns a new owned descriptor on success.
-      let descriptor = unsafe { libc::kqueue() };
-      assert!(descriptor >= 0, "{}", std::io::Error::last_os_error());
-      // SAFETY: descriptor is a newly created, open kqueue.
-      let queue = unsafe { OwnedFd::from_raw_fd(descriptor) };
-      let change = libc::kevent {
-        ident: pid,
-        filter: libc::EVFILT_PROC,
-        flags: libc::EV_ADD | libc::EV_ENABLE | libc::EV_ONESHOT,
-        fflags: libc::NOTE_EXIT,
-        data: 0,
-        udata: std::ptr::null_mut(),
-      };
-      // SAFETY: change is valid for one entry and no event buffer is requested.
-      let registered = unsafe { libc::kevent(queue.as_raw_fd(), &change, 1, std::ptr::null_mut(), 0, std::ptr::null()) };
-      assert_eq!(registered, 0, "{}", std::io::Error::last_os_error());
+      let event = stream.next().await.unwrap().unwrap();
+      assert!(matches!(event.body, TerminalEventBody::Started));
+      TerminalApiClient::accepted(
+        client,
+        TerminalAccepted {
+          terminal: terminal.id,
+          through: event.id,
+        },
+      )
+      .await
+      .unwrap();
+      let mut reader = tokio::task::spawn_blocking(move || {
+        let (socket, _) = child_listener.accept().unwrap();
+        let mut reader = BufReader::new(socket);
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        assert!(line.trim().parse::<u32>().unwrap() > 0);
+        reader
+      })
+      .await
+      .unwrap();
       TerminalApiClient::close(client, terminal.id).await.unwrap();
       tokio::task::spawn_blocking(move || {
-        let mut event = libc::kevent {
-          ident: 0,
-          filter: 0,
-          flags: 0,
-          fflags: 0,
-          data: 0,
-          udata: std::ptr::null_mut(),
-        };
-        // SAFETY: event is writable for one result, and the queue remains owned here.
-        let count = unsafe { libc::kevent(queue.as_raw_fd(), std::ptr::null(), 0, &mut event, 1, std::ptr::null()) };
-        assert_eq!(count, 1, "{}", std::io::Error::last_os_error());
-        let flags = event.fflags;
-        assert_ne!(flags & libc::NOTE_EXIT, 0);
+        let mut rest = Vec::new();
+        if let Err(error) = reader.read_to_end(&mut rest) {
+          assert_eq!(error.kind(), std::io::ErrorKind::ConnectionReset);
+        }
       })
       .await
       .unwrap();

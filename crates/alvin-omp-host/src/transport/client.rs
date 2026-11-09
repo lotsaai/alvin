@@ -27,7 +27,8 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 use tokio::process::{Child, Command as Process};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tokio::time::{Instant, sleep, timeout, timeout_at};
+use tokio::time::sleep;
+use tokio::time::{Instant, timeout, timeout_at};
 
 use super::frame::{FrameDecoder, MAX_FRAME_BYTES, MAX_REASSEMBLED_BYTES};
 use super::host_tool::{HostTool, HostToolContext, text_payload};
@@ -39,19 +40,17 @@ const PAGE_BUSY_ERROR: &str = "Cannot page messages while the session is changin
 const PAGE_STALE_ERROR: &str = "RPC message cursor is stale";
 /// How long teardown waits for the process group leader after each signal.
 const LEADER_EXIT_TIMEOUT: Duration = Duration::from_secs(1);
-/// After SIGKILL, killed members linger until reaped by their (new) parent.
-#[cfg(unix)]
+/// How long teardown waits for killed process group or job members to disappear.
 const KILL_SETTLE_TIMEOUT: Duration = Duration::from_secs(1);
 /// How long teardown waits for the reader task once the process is gone.
 const READER_JOIN_TIMEOUT: Duration = Duration::from_secs(1);
-/// How often teardown re-checks an emptying process group: the kernel sends no notification when one empties.
-#[cfg(unix)]
+/// How often teardown re-checks an emptying process group or job.
 const GROUP_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 /// Client failure.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-  /// Spawning or talking to the process failed, or teardown could not confirm that the process group is gone.
+  /// Spawning or talking to the process failed, or teardown could not confirm that the process tree is gone.
   #[error("io: {0}")]
   Io(#[from] io::Error),
   /// Encoding a frame or decoding a response failed.
@@ -788,9 +787,12 @@ impl Client {
   ///
   /// The server leads its own process group on Unix and runs in a job object on Windows, so teardown ([`Client::close`]
   /// or drop) also reaches the processes it spawned.
+  /// On Windows this replaces the command's creation flags to start it suspended until it joins the job.
   pub async fn spawn(mut process: Process, options: ClientOptions) -> Result<(Self, mpsc::UnboundedReceiver<Event>), Error> {
     #[cfg(unix)]
     process.process_group(0);
+    #[cfg(windows)]
+    process.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
     process.stdin(Stdio::piped()).stdout(Stdio::piped()).kill_on_drop(true);
     let mut child = process.spawn()?;
     let pid = child.id().ok_or(Error::Closed)?;
@@ -801,6 +803,8 @@ impl Client {
       .ok_or_else(|| io::Error::other("the server's pid is not a valid process group id"))?;
     #[cfg(windows)]
     let job = contain(&child)?;
+    #[cfg(windows)]
+    resume_initial_thread(pid)?;
     let stdin = child.stdin.take();
     let stdout = child.stdout.take();
     let spawned = Spawned {
@@ -871,6 +875,7 @@ impl Client {
         supported_protocol_versions: None,
         max_frame_bytes: None,
         max_reassembled_frame_bytes: None,
+        supports_bash_exclude_from_context: None,
       },
       shared,
       running: Some(Running { process, reader }),
@@ -915,7 +920,8 @@ impl Client {
     Ok((client, receiver))
   }
 
-  /// Process id of the spawned server (on Unix also its process group id); `None` for [`Client::from_io`].
+  /// Process id of the spawned executable, which may be a launcher. On Unix it is also the process group id.
+  /// Returns `None` for [`Client::from_io`].
   pub fn pid(&self) -> Option<u32> {
     self
       .running
@@ -1073,10 +1079,9 @@ impl Client {
     Ok(messages)
   }
 
-  /// Closes the client and tears the server down: cancels host work, closes stdin, then signals the server's process
-  /// group SIGTERM and, if the leader is still alive after a second, SIGKILL. Returns an error when teardown cannot
-  /// confirm the leader is reaped and the group empty. Dropping the client runs the same teardown and ignores the
-  /// outcome.
+  /// Closes the client and tears the server down. On Unix, signals its process group with SIGTERM and escalates to
+  /// SIGKILL. On Windows, terminates its job and waits for the members retained from a snapshot. Processes already
+  /// exiting before that snapshot may be absent. Dropping the client runs teardown and ignores the outcome.
   pub async fn close(mut self) -> Result<(), Error> {
     self.shared.close(Closure::Closed);
     match self.running.take() {
@@ -1172,17 +1177,243 @@ fn contain(child: &Child) -> Result<win32job::Job, Error> {
   Ok(job)
 }
 
-/// Terminates the server, then closes the job, which kills every process it started.
+/// Resumes the sole thread of a newly created suspended process after it joins the job.
+#[cfg(windows)]
+fn resume_initial_thread(pid: u32) -> Result<(), Error> {
+  use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+  use windows_sys::Win32::Foundation::{ERROR_NO_MORE_FILES, INVALID_HANDLE_VALUE};
+  use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
+  };
+  use windows_sys::Win32::System::Threading::{
+    GetProcessIdOfThread, OpenThread, ResumeThread, THREAD_QUERY_LIMITED_INFORMATION, THREAD_SUSPEND_RESUME,
+  };
+
+  // SAFETY: the snapshot is a new owned handle, or INVALID_HANDLE_VALUE on failure.
+  let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+  if snapshot == INVALID_HANDLE_VALUE {
+    return Err(io::Error::last_os_error().into());
+  }
+  // SAFETY: snapshot is a valid owned handle.
+  let snapshot = unsafe { OwnedHandle::from_raw_handle(snapshot.cast()) };
+  let mut entry = THREADENTRY32 {
+    dwSize: std::mem::size_of::<THREADENTRY32>() as u32,
+    ..Default::default()
+  };
+  // SAFETY: snapshot is valid and entry is writable with the required size.
+  if unsafe { Thread32First(snapshot.as_raw_handle().cast(), &mut entry) } == 0 {
+    return Err(io::Error::last_os_error().into());
+  }
+  let mut thread_id = None;
+  loop {
+    if entry.th32OwnerProcessID == pid && thread_id.replace(entry.th32ThreadID).is_some() {
+      return Err(io::Error::other("suspended RPC server has multiple threads").into());
+    }
+    // SAFETY: snapshot is valid and entry remains writable.
+    if unsafe { Thread32Next(snapshot.as_raw_handle().cast(), &mut entry) } == 0 {
+      let error = io::Error::last_os_error();
+      if error.raw_os_error() != Some(ERROR_NO_MORE_FILES as i32) {
+        return Err(error.into());
+      }
+      break;
+    }
+  }
+  let thread_id = thread_id.ok_or_else(|| io::Error::other("suspended RPC server has no thread"))?;
+  // SAFETY: OpenThread returns a new owned handle, or null on failure.
+  let thread = unsafe { OpenThread(THREAD_SUSPEND_RESUME | THREAD_QUERY_LIMITED_INFORMATION, 0, thread_id) };
+  if thread.is_null() {
+    return Err(io::Error::last_os_error().into());
+  }
+  // SAFETY: thread is a valid owned handle.
+  let thread = unsafe { OwnedHandle::from_raw_handle(thread.cast()) };
+  // SAFETY: thread remains open throughout the query.
+  let owner = unsafe { GetProcessIdOfThread(thread.as_raw_handle().cast()) };
+  if owner == 0 {
+    return Err(io::Error::last_os_error().into());
+  }
+  if owner != pid {
+    return Err(io::Error::other("suspended RPC server thread changed owner").into());
+  }
+  // SAFETY: thread remains open throughout the resume.
+  let previous = unsafe { ResumeThread(thread.as_raw_handle().cast()) };
+  if previous == u32::MAX {
+    return Err(io::Error::last_os_error().into());
+  }
+  if previous != 1 {
+    return Err(io::Error::other("RPC server thread had an unexpected suspend count").into());
+  }
+  Ok(())
+}
+
+#[cfg(windows)]
+fn stop_spawns_and_retain_members(job: &win32job::Job) -> Result<Vec<std::os::windows::io::OwnedHandle>, Error> {
+  use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+  use windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER;
+  use windows_sys::Win32::System::JobObjects::{
+    IsProcessInJob, JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JOBOBJECT_BASIC_PROCESS_ID_LIST,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectBasicAccountingInformation, JobObjectBasicProcessIdList,
+    JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
+  };
+  use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE};
+
+  let handle = job.handle() as windows_sys::Win32::Foundation::HANDLE;
+  let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+  // SAFETY: handle is a live job and limits is writable for its declared size.
+  if unsafe {
+    QueryInformationJobObject(
+      handle,
+      JobObjectExtendedLimitInformation,
+      std::ptr::from_mut(&mut limits).cast(),
+      std::mem::size_of_val(&limits) as u32,
+      std::ptr::null_mut(),
+    )
+  } == 0
+  {
+    return Err(io::Error::last_os_error().into());
+  }
+  limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
+  limits.BasicLimitInformation.ActiveProcessLimit = 0;
+  // SAFETY: handle is a live job and limits contains the existing limits plus the admission limit.
+  if unsafe {
+    SetInformationJobObject(
+      handle,
+      JobObjectExtendedLimitInformation,
+      std::ptr::from_ref(&limits).cast(),
+      std::mem::size_of_val(&limits) as u32,
+    )
+  } == 0
+  {
+    return Err(io::Error::last_os_error().into());
+  }
+
+  let mut info = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION::default();
+  // SAFETY: handle is a live job and info is writable for its declared size.
+  if unsafe {
+    QueryInformationJobObject(
+      handle,
+      JobObjectBasicAccountingInformation,
+      std::ptr::from_mut(&mut info).cast(),
+      std::mem::size_of_val(&info) as u32,
+      std::ptr::null_mut(),
+    )
+  } == 0
+  {
+    return Err(io::Error::last_os_error().into());
+  }
+  // ActiveProcesses bounds the list after admission is disabled. The buffer is aligned for ULONG_PTR.
+  let offset = std::mem::offset_of!(JOBOBJECT_BASIC_PROCESS_ID_LIST, ProcessIdList);
+  let bytes = (info.ActiveProcesses as usize)
+    .checked_mul(std::mem::size_of::<usize>())
+    .and_then(|bytes| bytes.checked_add(offset))
+    .ok_or_else(|| io::Error::other("RPC server job process list is too large"))?;
+  let entries = bytes
+    .max(std::mem::size_of::<JOBOBJECT_BASIC_PROCESS_ID_LIST>())
+    .div_ceil(std::mem::size_of::<usize>());
+  let size = entries
+    .checked_mul(std::mem::size_of::<usize>())
+    .ok_or_else(|| io::Error::other("RPC server job process list is too large"))?;
+  let size = u32::try_from(size).map_err(|_| io::Error::other("RPC server job process list is too large"))?;
+  let mut buffer = vec![0usize; entries];
+  // SAFETY: buffer is aligned and writable for size bytes.
+  if unsafe {
+    QueryInformationJobObject(
+      handle,
+      JobObjectBasicProcessIdList,
+      buffer.as_mut_ptr().cast(),
+      size,
+      std::ptr::null_mut(),
+    )
+  } == 0
+  {
+    return Err(io::Error::last_os_error().into());
+  }
+  // SAFETY: the successful query initialized the header and the reported number of process IDs.
+  let list = unsafe { &*buffer.as_ptr().cast::<JOBOBJECT_BASIC_PROCESS_ID_LIST>() };
+  if list.NumberOfProcessIdsInList != list.NumberOfAssignedProcesses {
+    return Err(io::Error::other("RPC server job process list was incomplete").into());
+  }
+  let count = list.NumberOfProcessIdsInList as usize;
+  // SAFETY: count is the number of IDs written into the buffer by QueryInformationJobObject.
+  let ids = unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>().add(offset).cast::<usize>(), count) };
+  let mut members = Vec::with_capacity(count);
+  for &pid in ids {
+    let pid = u32::try_from(pid).map_err(|_| io::Error::other("RPC server job returned an invalid process id"))?;
+    // SAFETY: OpenProcess returns a new owned handle, or null on failure.
+    let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process.is_null() {
+      let error = io::Error::last_os_error();
+      if error.raw_os_error() == Some(ERROR_INVALID_PARAMETER as i32) {
+        continue;
+      }
+      return Err(error.into());
+    }
+    // SAFETY: process is a valid owned handle.
+    let process = unsafe { OwnedHandle::from_raw_handle(process.cast()) };
+    let mut in_job = 0;
+    // SAFETY: both handles remain open and in_job is writable.
+    if unsafe { IsProcessInJob(process.as_raw_handle().cast(), handle, &mut in_job) } == 0 {
+      return Err(io::Error::last_os_error().into());
+    }
+    if in_job != 0 {
+      members.push(process);
+    }
+  }
+  Ok(members)
+}
+
+/// Terminates the job and waits for the server and the retained job members.
 #[cfg(windows)]
 async fn terminate(child: &mut Child, job: win32job::Job) -> Result<(), Error> {
-  if let Err(error) = child.start_kill() {
-    tracing::debug!(%error, "the omp server was already gone");
+  use std::os::windows::io::AsRawHandle;
+  use windows_sys::Win32::Foundation::{WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+  use windows_sys::Win32::System::JobObjects::{
+    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JobObjectBasicAccountingInformation, QueryInformationJobObject, TerminateJobObject,
+  };
+  use windows_sys::Win32::System::Threading::WaitForSingleObject;
+
+  let members = stop_spawns_and_retain_members(&job)?;
+  // SAFETY: job owns a live job handle for the duration of this call.
+  if unsafe { TerminateJobObject(job.handle() as windows_sys::Win32::Foundation::HANDLE, 1) } == 0 {
+    return Err(io::Error::last_os_error().into());
   }
-  let exited = leader_exited(child, LEADER_EXIT_TIMEOUT).await?;
-  drop(job);
-  if exited {
-    Ok(())
-  } else {
-    Err(io::Error::other("RPC server survived kill").into())
+  if !leader_exited(child, LEADER_EXIT_TIMEOUT).await? {
+    return Err(io::Error::other("RPC server survived kill").into());
+  }
+  let settled = timeout(KILL_SETTLE_TIMEOUT, async {
+    loop {
+      let mut info = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION::default();
+      // SAFETY: handle is a live job and info is writable for its declared size.
+      if unsafe {
+        QueryInformationJobObject(
+          job.handle() as windows_sys::Win32::Foundation::HANDLE,
+          JobObjectBasicAccountingInformation,
+          std::ptr::from_mut(&mut info).cast(),
+          std::mem::size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
+          std::ptr::null_mut(),
+        )
+      } == 0
+      {
+        return Err(io::Error::last_os_error());
+      }
+      let mut members_exited = true;
+      for process in &members {
+        // SAFETY: each retained process handle stays open through the wait.
+        match unsafe { WaitForSingleObject(process.as_raw_handle().cast(), 0) } {
+          WAIT_OBJECT_0 => {}
+          WAIT_TIMEOUT => members_exited = false,
+          WAIT_FAILED => return Err(io::Error::last_os_error()),
+          _ => return Err(io::Error::other("unexpected process wait result")),
+        }
+      }
+      if info.ActiveProcesses == 0 && members_exited {
+        return Ok(());
+      }
+      sleep(GROUP_POLL_INTERVAL).await;
+    }
+  })
+  .await;
+  match settled {
+    Ok(result) => result.map_err(Error::from),
+    Err(_elapsed) => Err(io::Error::other("RPC server job survived kill").into()),
   }
 }

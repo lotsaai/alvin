@@ -74,7 +74,8 @@ impl Session {
     &self.cwd
   }
 
-  /// The omp process id. On Unix it is also the process group id.
+  /// The spawned executable's process id. A launcher may start omp in a child process.
+  /// On Unix the id is also the process group id.
   pub fn pid(&self) -> u32 {
     self.pid
   }
@@ -282,10 +283,14 @@ impl Session {
     self.call(AbortCommand::default()).await
   }
 
-  /// Runs a shell command in the session and returns its output. Waits until the command ends, up to `omp-rpc`'s
-  /// default command deadline.
+  /// Runs a shell command in the session and waits for its output.
   pub async fn bash(&self, command: String) -> Result<BashResult> {
-    let result = self.call(BashCommand { command }).await?;
+    let result = self
+      .call(BashCommand {
+        command,
+        exclude_from_context: None,
+      })
+      .await?;
     convert("bash result", &result)
   }
 
@@ -306,8 +311,8 @@ impl Session {
     self.call(AbortBashCommand::default()).await
   }
 
-  /// Closes the session and confirms that omp and its children are gone: running work is aborted first, then the client
-  /// closes and takes the process tree down.
+  /// Closes the session: running work is aborted first, then the client takes the process tree down. On Windows,
+  /// processes already exiting before the client's job snapshot may not be covered by its retained-handle waits.
   pub async fn close(mut self) -> Result<()> {
     self.closing.store(true, Ordering::SeqCst);
     let client = self
@@ -374,7 +379,7 @@ mod tests {
   use alvin_protocol::{AssistantMessageEvent, EventBody, PromptStatus, RpcAgentEvent};
 
   use crate::Error;
-  use crate::test_support::{Child, Fixture, alive, make_fifo, next, prompt_status, sleeper, streamed_text, until_prompt_result};
+  use crate::test_support::{Child, Fixture, alive, kill, next, prompt_status, sleeper, streamed_text, until_prompt_result};
 
   #[test]
   fn thinking_cycle_decodes_configured_levels_and_rejects_unknown_levels() {
@@ -453,12 +458,17 @@ mod tests {
 
   /// Starts `sleeper` as a foreground command and returns it once it has reported in. The call's future is dropped
   /// when the child reports, as a cancelled request would be, while the command keeps running in omp.
-  async fn running_child(session: &super::Session, fixture: &Fixture) -> Child {
-    let fifo = make_fifo(fixture.cwd.path());
-    tokio::select! {
-      result = session.bash(sleeper(&fifo)) => panic!("the sleeper ended on its own: {result:?}"),
-      child = Child::report(&fifo) => child,
-    }
+  async fn running_child(session: super::Session) -> (super::Session, Child) {
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let command = sleeper(&listener);
+    let child = tokio::select! {
+      result = session.bash(command) => {
+        session.close().await.unwrap();
+        panic!("the sleeper ended on its own: {result:?}");
+      }
+      child = Child::report(listener) => child,
+    };
+    (session, child)
   }
 
   #[tokio::test]
@@ -466,7 +476,7 @@ mod tests {
     let fixture = Fixture::new();
     let (session, _events) = fixture.start().await;
     let omp = session.pid();
-    let child = running_child(&session, &fixture).await;
+    let (session, child) = running_child(session).await;
     let child_pid = child.pid;
     assert!(alive(omp) && alive(child_pid));
 
@@ -481,25 +491,25 @@ mod tests {
   async fn dropping_the_handle_leaves_no_running_command_and_ends_the_event_stream() {
     let fixture = Fixture::new();
     let (session, mut events) = fixture.start().await;
-    let child = running_child(&session, &fixture).await;
+    let (session, child) = running_child(session).await;
+    let child_pid = child.pid;
 
     drop(session);
 
     // The stream ends when omp's stdout closes, which happens when teardown has killed it.
     while events.recv().await.is_some() {}
     child.died().await;
+    assert!(!alive(child_pid), "child {child_pid} survived drop");
   }
 
   #[tokio::test]
   async fn a_killed_omp_yields_a_process_exited_event_and_a_typed_error() {
     let fixture = Fixture::new();
     let (session, mut events) = fixture.start().await;
+    let output = session.bash("echo pid=$$".to_owned()).await.unwrap().output;
+    let pid = output.trim().strip_prefix("pid=").unwrap().parse().unwrap();
 
-    let status = std::process::Command::new("kill")
-      .args(["-9", &session.pid().to_string()])
-      .status()
-      .unwrap();
-    assert!(status.success());
+    kill(pid);
 
     loop {
       match next(&mut events).await {
@@ -509,6 +519,34 @@ mod tests {
     }
     let error = session.abort().await.unwrap_err();
     assert!(matches!(error, Error::ProcessExited { .. }), "{error:?}");
+    session.close().await.unwrap();
+  }
+
+  #[cfg(windows)]
+  #[tokio::test]
+  async fn close_waits_for_a_command_left_by_a_killed_omp() {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+    use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
+
+    let fixture = Fixture::new();
+    let (session, mut events) = fixture.start().await;
+    let output = session.bash("echo pid=$$".to_owned()).await.unwrap().output;
+    let omp = output.trim().strip_prefix("pid=").unwrap().parse().unwrap();
+    let (session, child) = running_child(session).await;
+    // SAFETY: OpenProcess returns a new handle to the reported child.
+    let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, child.pid) };
+    assert!(!handle.is_null(), "opening child process: {}", std::io::Error::last_os_error());
+    // SAFETY: handle is a valid owned process handle.
+    let handle = unsafe { OwnedHandle::from_raw_handle(handle.cast()) };
+
+    kill(omp);
+    while !matches!(next(&mut events).await, EventBody::ProcessExited) {}
+    session.close().await.unwrap();
+
+    // SAFETY: handle remains open until after the wait.
+    assert_eq!(unsafe { WaitForSingleObject(handle.as_raw_handle().cast(), 0) }, WAIT_OBJECT_0);
+    child.died().await;
   }
 
   #[tokio::test]

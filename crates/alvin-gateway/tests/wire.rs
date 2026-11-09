@@ -85,7 +85,7 @@ impl Project {
     let dir = self.sessions.join("-repo");
     for n in 0..count {
       let records = SESSION_RECORDS
-        .replace(RECORDED_CWD, self.root.to_str().unwrap())
+        .replace(&format!("\"{RECORDED_CWD}\""), &serde_json::to_string(&self.root).unwrap())
         .replace("01a18ff1-ab74-73b8-a3a2-79905565c49b", &format!("session-{n}"));
       let file = dir.join(format!("2026-01-01T00-00-0{n}-000Z_session-{n}.jsonl"));
       std::fs::write(&file, records).unwrap();
@@ -96,11 +96,28 @@ impl Project {
 
   fn omp_environment(&self) -> (PathBuf, Vec<(OsString, OsString)>) {
     let paths: Vec<_> = std::env::split_paths(&std::env::var_os("PATH").expect("PATH is required")).collect();
-    let find = |name: &str| paths.iter().map(|dir| dir.join(name)).find(|path| path.is_file()).unwrap();
+    let find = |name: &str| {
+      let names = if cfg!(windows) {
+        vec![format!("{name}.exe"), format!("{name}.cmd"), name.to_owned()]
+      } else {
+        vec![name.to_owned()]
+      };
+      paths
+        .iter()
+        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
+        .find(|path| path.is_file())
+        .unwrap()
+    };
     let omp = find("omp");
     let bun = find("bun");
-    let path = std::env::join_paths([bun.parent().unwrap(), Path::new("/usr/bin"), Path::new("/bin")]).unwrap();
-    let env = vec![
+    let mut dirs = vec![bun.parent().unwrap().to_path_buf()];
+    if cfg!(windows) {
+      dirs.push(PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot is required")).join("System32"));
+    } else {
+      dirs.extend([PathBuf::from("/usr/bin"), PathBuf::from("/bin")]);
+    }
+    let path = std::env::join_paths(dirs).unwrap();
+    let mut env = vec![
       (OsString::from("HOME"), self.home.clone().into_os_string()),
       (OsString::from("PI_CODING_AGENT_DIR"), self.home.join("agent").into_os_string()),
       (OsString::from("PATH"), path),
@@ -109,6 +126,13 @@ impl Project {
         std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is required"),
       ),
     ];
+    if cfg!(windows) {
+      for name in ["SystemRoot", "TEMP", "TMP"] {
+        if let Some(value) = std::env::var_os(name) {
+          env.push((OsString::from(name), value));
+        }
+      }
+    }
     (omp, env)
   }
 
@@ -465,12 +489,16 @@ async fn omp_pid(client: &Client, live: LiveSessionId) -> u32 {
 }
 
 fn alive(pid: u32) -> bool {
-  Command::new("kill")
-    .args(["-0", &pid.to_string()])
-    .output()
-    .unwrap()
-    .status
-    .success()
+  if cfg!(windows) {
+    let output = Command::new("tasklist")
+      .args(["/FO", "CSV", "/NH", "/FI", &format!("PID eq {pid}")])
+      .output()
+      .unwrap();
+    assert!(output.status.success());
+    String::from_utf8_lossy(&output.stdout).contains(&format!("\",\"{pid}\","))
+  } else {
+    Command::new("kill").args(["-0", &pid.to_string()]).status().unwrap().success()
+  }
 }
 
 async fn prompt(client: &Client, live: LiveSessionId, message: &str) {
@@ -687,7 +715,12 @@ async fn a_killed_omp_is_reported_and_its_session_stays_until_closed(project: &m
   let mut stream = subscribe(&client, opened.live, None).await.unwrap();
   let pid = omp_pid(&client, opened.live).await;
 
-  assert!(Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap().success());
+  let status = if cfg!(windows) {
+    Command::new("taskkill").args(["/F", "/PID", &pid.to_string()]).status().unwrap()
+  } else {
+    Command::new("kill").args(["-9", &pid.to_string()]).status().unwrap()
+  };
+  assert!(status.success());
   loop {
     if matches!(next_event(&mut stream).await.body, EventBody::ProcessExited) {
       break;
@@ -1041,7 +1074,7 @@ async fn a_call_in_flight_during_a_drop_fails_with_a_disconnect(project: &mut Pr
         &ws,
         BashRequest {
           live: opened.live,
-          command: "tail -f /dev/null".to_owned(),
+          command: "bun -e 'require(\"net\").createServer().listen(0)'".to_owned(),
         },
       )
       .await
@@ -1826,7 +1859,6 @@ async fn terminal_shell_output_and_resume_work_over_both_transports(project: &mu
   gateway.shutdown().await.unwrap();
 }
 
-#[cfg(unix)]
 #[test_context(Project)]
 #[tokio::test]
 async fn terminal_backpressure_preserves_large_output_over_both_transports(project: &mut Project) {
@@ -1871,13 +1903,18 @@ async fn terminal_backpressure_preserves_large_output_over_both_transports(proje
       client,
       TerminalInput {
         terminal,
-        bytes: b"stty -echo; printf '\\001READY\\002'\n".to_vec(),
+        bytes: if cfg!(windows) {
+          b"@echo off\r\necho ALVIN_READY\r\n".to_vec()
+        } else {
+          b"stty -echo; printf '\\001READY\\002'\n".to_vec()
+        },
       },
     )
     .await
     .unwrap();
+    let ready_marker: &[u8] = if cfg!(windows) { b"ALVIN_READY" } else { b"\x01READY\x02" };
     let mut ready = Vec::new();
-    while !ready.windows(7).any(|part| part == b"\x01READY\x02") {
+    while !ready.windows(ready_marker.len()).any(|part| part == ready_marker) {
       let event = stream.next().await.unwrap().unwrap();
       TerminalApiClient::accepted(
         client,
@@ -1897,7 +1934,19 @@ async fn terminal_backpressure_preserves_large_output_over_both_transports(proje
       client,
       TerminalInput {
         terminal,
-        bytes: b"printf '\\001START\\002'; head -c 2097152 /dev/zero | tr '\\000' X; printf '\\001END\\002'; exit\n".to_vec(),
+        bytes: if cfg!(windows) {
+          // Keep payload lines narrower than the console so soft-wrap redraws do not change the glyph count.
+          let bun = Command::new("mise").args(["which", "bun"]).output().unwrap();
+          assert!(bun.status.success(), "{}", String::from_utf8_lossy(&bun.stderr));
+          let bun = String::from_utf8(bun.stdout).unwrap();
+          format!(
+            "\"{}\" -e \"process.stdout.write('ALVIN'+'START\\n'+('X'.repeat(64)+'\\n').repeat(32768)+'\\n'+'ALVIN'+'END\\n')\"\r\nexit\r\n",
+            bun.trim()
+          )
+          .into_bytes()
+        } else {
+          b"printf '\\001START\\002'; head -c 2097152 /dev/zero | tr '\\000' X; printf '\\001END\\002'; exit\n".to_vec()
+        },
       },
     )
     .await
@@ -1923,11 +1972,37 @@ async fn terminal_backpressure_preserves_large_output_over_both_transports(proje
         other => panic!("unexpected terminal event: {other:?}"),
       }
     }
-    let start = output.windows(7).position(|part| part == b"\x01START\x02").unwrap() + 7;
-    let end = output.windows(5).position(|part| part == b"\x01END\x02").unwrap();
+    let (start_marker, end_marker): (&[u8], &[u8]) = if cfg!(windows) {
+      (b"ALVINSTART", b"ALVINEND")
+    } else {
+      (b"\x01START\x02", b"\x01END\x02")
+    };
+    let start = output.windows(start_marker.len()).position(|part| part == start_marker).unwrap() + start_marker.len();
+    let end = output.windows(end_marker.len()).position(|part| part == end_marker).unwrap();
     let bytes = output.get(start..end).unwrap();
-    assert_eq!(bytes.len(), 2_097_152);
-    assert!(bytes.iter().all(|byte| *byte == b'X'));
+    if cfg!(windows) {
+      // ConPTY renders console output as VT, including cursor and line-wrap sequences.
+      let mut text = Vec::new();
+      let mut iter = bytes.iter().copied();
+      while let Some(byte) = iter.next() {
+        if byte == 0x1b {
+          assert_eq!(iter.next(), Some(b'['));
+          assert!(iter.by_ref().any(|part| (0x40..=0x7e).contains(&part)));
+        } else if byte != b'\r' && byte != b'\n' {
+          text.push(byte);
+        }
+      }
+      assert_eq!(
+        text.len(),
+        2_097_152,
+        "non-X bytes: {}",
+        text.iter().filter(|byte| **byte != b'X').count()
+      );
+      assert!(text.iter().all(|byte| *byte == b'X'));
+    } else {
+      assert_eq!(bytes.len(), 2_097_152);
+      assert!(bytes.iter().all(|byte| *byte == b'X'));
+    }
     TerminalApiClient::close(client, terminal).await.unwrap();
   }
   drop(clients);

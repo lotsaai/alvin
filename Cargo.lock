@@ -278,6 +278,7 @@ dependencies = [
  "clap",
  "confique",
  "dirs 7.0.0",
+ "dunce",
  "eyre",
  "jiff",
  "jsonrpsee",
@@ -308,6 +309,7 @@ dependencies = [
  "tracing",
  "typed-builder",
  "win32job",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2916,8 +2918,6 @@ dependencies = [
 [[package]]
 name = "ghostty-vt"
 version = "0.8.0+ghostty.1.4.0-main.83fb956"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a293a2cc510ce39728e04c35e0dd7797bacb60944fa26c2d3d5f7297529c50a4"
 dependencies = [
  "bitflags 2.13.2",
  "dirs 6.0.0",
@@ -2928,8 +2928,6 @@ dependencies = [
 [[package]]
 name = "ghostty-vt-sys"
 version = "0.8.0+ghostty.1.4.0-main.83fb956"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9faa3284f0f76ff399f3728ea253f3b9bb2f9ebb6d512fe87955fe2dfaa0207d"
 dependencies = [
  "flate2",
  "sha2 0.10.9",
@@ -6428,7 +6426,7 @@ dependencies = [
 [[package]]
 name = "omp-rpc"
 version = "0.1.0"
-source = "git+https://github.com/can1357/oh-my-pi?tag=v18.18.0#b5a6b2f7e5b6606b6562e678ead83f21738f34a0"
+source = "git+https://github.com/can1357/oh-my-pi?tag=v18.18.1#24439066040e006eb08da7b204f0ac41c79d2de9"
 dependencies = [
  "libc",
  "serde",
@@ -7238,8 +7236,6 @@ dependencies = [
 [[package]]
 name = "portable-pty"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4a596a2b3d2752d94f51fac2d4a96737b8705dddd311a32b9af47211f08671e"
 dependencies = [
  "anyhow",
  "bitflags 1.3.2",

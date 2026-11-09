@@ -36,13 +36,13 @@ Read from omp-rpc source and README:
 - A dedicated thread per session drains the omp event receiver into a bounded `tokio::sync::mpsc` channel after translating frames to event bodies. When the channel is full the thread blocks and frames are never dropped. omp-rpc's own channel is unbounded and its reader never blocks, so a stalled consumer costs memory, not events, and does not slow omp's stdout.
 - Dropping a `Session` closes the client and joins its threads. The drop path must not panic and must not block the runtime; it hands the blocking close to a blocking pool. Close first sends `abort_bash` and `abort` so omp kills the commands it is running, waits up to five seconds for calls in flight to return (a cancelled request's blocking task still holds the client), then closes through omp-rpc, which needs sole ownership. If a call is still in flight after that, close returns `CloseInFlight` and teardown finishes when the call returns. A process a command left running in the background after it returned is not reachable on Unix; Windows gets it from the Job Object.
 
-## Windows Teardown (deferred)
+## Windows teardown
 
-Built after the app exists (plan Task 10); nothing in the Unix path depends on it.
+The transport starts the executable suspended, assigns it to a Job Object, and resumes its initial thread. This order contains children that a launcher or omp starts immediately. `Client::spawn` owns the Windows creation flags.
 
-On Windows the host places omp in a Job Object configured to kill all members when the last handle closes, so omp's children die with it. The Job Object code lives in one small module with an unsafe boundary documented by `# Safety` and `// SAFETY:` comments, behind a safe wrapper. Unix keeps omp-rpc's process-group teardown.
+Before termination, the transport prevents new job members and retains handles for processes still associated with the job. Closing a session terminates the job, waits for the executable and retained processes to exit, and confirms no active job members remain. A process already exiting can be absent from the snapshot. Dropping the client schedules the same cleanup on the runtime. Without a runtime, closing the job handle requests process-tree termination without waiting.
 
-`Client::spawn` starts the child and waits for `ready` before returning (`client.rs:750-765`), so a job assigned after it returns would miss children omp starts during extension startup. On Windows the host therefore spawns omp itself, suspended, assigns it to the job, resumes it, and hands its pipes to `Client::from_io` (`client.rs:778-788`), which takes existing pipes and owns no child. The job handle owns teardown: closing it kills omp and every child. `from_io`'s reader thread exits once omp's stdout closes, which the job kill causes. No omp-rpc change is needed.
+`Session::pid` identifies the spawned executable. A launcher can start the actual omp agent in a child process.
 
 ## Event Translation
 

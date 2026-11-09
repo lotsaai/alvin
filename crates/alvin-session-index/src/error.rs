@@ -12,7 +12,7 @@ pub enum Error {
     cwd: PathBuf,
     /// The discovery error.
     #[source]
-    source: code_workspace::Error,
+    source: Box<code_workspace::Error>,
   },
 
   /// A checkout root that workspace discovery just found could not be canonicalized.

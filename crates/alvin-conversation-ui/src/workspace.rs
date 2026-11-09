@@ -1400,7 +1400,7 @@ mod tests {
         });
         ready_rx.recv().await.unwrap().unwrap();
         cx.update_window(handle, |_, window, cx| {
-          window.input("printf ALVIN_%s OK", cx);
+          window.input(if cfg!(windows) { "echo ALVIN_^O^K" } else { "printf ALVIN_%s OK" }, cx);
           window.press("enter", cx);
         })
         .unwrap();

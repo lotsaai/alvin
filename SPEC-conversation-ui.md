@@ -13,6 +13,8 @@ Success:
 - A reconnect, a `Resync`, an omp exit, and a wire error each have a defined, visible state; none leaves stale content on screen.
 - `cargo build --target wasm32-unknown-unknown -p alvin-conversation-ui` succeeds. **Not met today:** gpui-kit's browser backend (`wasm_thread`) needs a nightly compiler and the project builds on stable. The crate has no wasm-specific code, and `mise check` guards its dependencies instead.
 
+The terminal uses the locally maintained `vendor/ghostty-vt` and `vendor/ghostty-vt-sys` crates, derived from version `0.8.0+ghostty.1.4.0-main.83fb956`. Both dependencies resolve by local path. The sys crate downloads the official Ghostty source pinned in `GHOSTTY.lock`, verifies its SHA-256, and builds it with Zig. Its Windows downloader uses the platform certificate verifier. Upstream licenses remain in each vendored directory.
+
 ## Out of Scope
 
 Gupi features that do not go through omp-rpc: file browser, git changes panel, workspace diff review, camera, quote capture, tray, temporary windows. They need filesystem or git access the UI does not have (the UI sees only the gateway). Adding them means new gateway methods; ask first. A right-side tabbed editor and generative UI are deferred, not implemented.

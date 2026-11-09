@@ -17,10 +17,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Configure Windows environment
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "HOME=$env:USERPROFILE" >> $env:GITHUB_ENV
+          git config --global core.autocrlf false
+
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -37,6 +49,17 @@ jobs:
             clang-23 libclang-23-dev
           echo 'LIBCLANG_PATH=/usr/lib/llvm-23/lib' >> "$GITHUB_ENV"
 
+      - name: Install Windows native dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install pkgconfiglite --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pkg-config --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pkg-config --list-all
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - uses: jdx/mise-action@v5
         with:
           experimental: true
@@ -52,6 +75,23 @@ jobs:
             echo "rustc LLVM $llvm_major does not match clang-23" >&2
             exit 1
           fi
+
+      - name: Configure Windows native tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $hostTriple = rustc -vV | Select-String '^host:'
+          if ($hostTriple -notmatch 'x86_64-pc-windows-msvc') {
+            throw "Expected Windows x64 Rust toolchain, got $hostTriple"
+          }
+          $llvmBin = Join-Path $env:ProgramFiles 'LLVM\bin'
+          if (!(Test-Path "$llvmBin\clang.exe") -or
+              !(Test-Path "$llvmBin\libclang.dll")) {
+            throw "Windows runner is missing LLVM in $llvmBin"
+          }
+          $llvmBin >> $env:GITHUB_PATH
+          "LIBCLANG_PATH=$llvmBin" >> $env:GITHUB_ENV
 
       - uses: Swatinem/rust-cache@v2
 
@@ -78,9 +118,35 @@ jobs:
             echo 'OPENROUTER_API_KEY is required for omp tests' >&2
             exit 1
           fi
-          mise run verify
+          mise run --force verify
 
       - name: Check wasm client and protocol
         run: >-
           cargo check --locked --target wasm32-unknown-unknown
           -p alvin-client -p alvin-protocol
+
+      - name: Build Windows release archive
+        if: runner.os == 'Windows'
+        run: mise run package-release
+
+      - name: Smoke packaged Windows executables
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = 'target/distrib/alvin-x86_64-pc-windows-msvc.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'alvin-release-smoke'
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination
+          $originalPath = $env:PATH
+          try {
+            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+            foreach ($name in @('alvin-app.exe', 'alvind.exe')) {
+              & (Join-Path $destination $name) --help
+              if ($LASTEXITCODE -ne 0) {
+                throw "$name failed from the extracted release: $LASTEXITCODE"
+              }
+            }
+          } finally {
+            $env:PATH = $originalPath
+            Remove-Item -LiteralPath $destination -Recurse -Force
+          }

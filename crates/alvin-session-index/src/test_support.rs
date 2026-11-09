@@ -10,7 +10,7 @@ pub struct TempDir(PathBuf);
 
 impl TempDir {
   pub fn new() -> Self {
-    let path = std::env::temp_dir().join(format!("alvin-session-index-{}", EventId::new().as_uuid()));
+    let path = std::env::temp_dir().join(format!("ai-{}", EventId::new().as_uuid().simple()));
     std::fs::create_dir_all(&path).unwrap();
     Self(path.canonicalize().unwrap())
   }
@@ -32,12 +32,25 @@ impl Drop for TempDir {
   }
 }
 
+/// Creates a directory link without requiring Windows symlink privileges.
+pub fn link_dir(target: &Path, link: &Path) {
+  #[cfg(unix)]
+  std::os::unix::fs::symlink(target, link).unwrap();
+  #[cfg(windows)]
+  {
+    let target = target.to_str().unwrap().strip_prefix(r"\\?\").unwrap_or(target.to_str().unwrap());
+    let link = link.to_str().unwrap().strip_prefix(r"\\?\").unwrap_or(link.to_str().unwrap());
+    let status = Command::new("cmd").args(["/C", "mklink", "/J", link, target]).status().unwrap();
+    assert!(status.success());
+  }
+}
+
 /// Runs a real binary in `dir` with an isolated identity, panicking with its stderr on failure.
 pub fn run(dir: &Path, program: &str, args: &[&str]) {
   let output = Command::new(program)
     .args(args)
     .current_dir(dir)
-    .env("GIT_CONFIG_GLOBAL", "/dev/null")
+    .env("GIT_CONFIG_GLOBAL", if cfg!(windows) { "NUL" } else { "/dev/null" })
     .env("GIT_CONFIG_NOSYSTEM", "1")
     .env("GIT_AUTHOR_NAME", "alvin")
     .env("GIT_AUTHOR_EMAIL", "alvin@example.invalid")
@@ -63,9 +76,23 @@ pub fn run_omp(cwd: &Path, session_dir: &Path, prompt: &str) -> PathBuf {
   let paths: Vec<PathBuf> = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
     .filter(|path| path.is_absolute())
     .collect();
-  let executable = |name: &str| paths.iter().map(|path| path.join(name)).find(|path| path.is_file());
+  let executable = |name: &str| {
+    let names = if cfg!(windows) {
+      vec![format!("{name}.exe"), format!("{name}.cmd"), name.to_owned()]
+    } else {
+      vec![name.to_owned()]
+    };
+    paths
+      .iter()
+      .flat_map(|path| names.iter().map(move |name| path.join(name)))
+      .find(|path| path.is_file())
+  };
   let omp = executable("omp").expect("omp not found in PATH");
-  let mut safe_path = vec![PathBuf::from("/usr/bin"), PathBuf::from("/bin")];
+  let mut safe_path = if cfg!(windows) {
+    vec![PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot is required")).join("System32")]
+  } else {
+    vec![PathBuf::from("/usr/bin"), PathBuf::from("/bin")]
+  };
   for name in ["bun", "node"] {
     if let Some(path) = executable(name) {
       safe_path.insert(0, path.parent().unwrap().to_path_buf());
@@ -77,6 +104,13 @@ pub fn run_omp(cwd: &Path, session_dir: &Path, prompt: &str) -> PathBuf {
     .env("HOME", home.path())
     .env("PI_CODING_AGENT_DIR", home.path().join("agent"))
     .env("PATH", std::env::join_paths(safe_path).unwrap());
+  if cfg!(windows) {
+    for name in ["SystemRoot", "TEMP", "TMP"] {
+      if let Some(value) = std::env::var_os(name) {
+        command.env(name, value);
+      }
+    }
+  }
   command.env(
     "OPENROUTER_API_KEY",
     std::env::var_os("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY is required"),

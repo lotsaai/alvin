@@ -152,6 +152,14 @@ pub enum Error {
     source: io::Error,
   },
 
+  /// The shell wait worker ended without reporting a result.
+  #[error("waiting for terminal {terminal:?}")]
+  TerminalWaitWorker {
+    terminal: TerminalId,
+    #[source]
+    source: std::sync::mpsc::RecvError,
+  },
+
   /// Terminating the shell failed.
   #[error("closing terminal {terminal:?}")]
   TerminalClose {
@@ -245,7 +253,9 @@ impl From<Error> for ErrorObjectOwned {
       Error::TerminalRead { .. } => ErrorObject::owned(ErrorCode::TerminalReadFailed.code(), message, None::<()>),
       Error::TerminalWrite { .. } => ErrorObject::owned(ErrorCode::TerminalWriteFailed.code(), message, None::<()>),
       Error::TerminalResize { .. } => ErrorObject::owned(ErrorCode::TerminalResizeFailed.code(), message, None::<()>),
-      Error::TerminalWait { .. } => ErrorObject::owned(ErrorCode::TerminalWaitFailed.code(), message, None::<()>),
+      Error::TerminalWait { .. } | Error::TerminalWaitWorker { .. } => {
+        ErrorObject::owned(ErrorCode::TerminalWaitFailed.code(), message, None::<()>)
+      }
       Error::TerminalClose { .. } | Error::TerminalCloseShared { .. } | Error::TerminalCompletion { .. } => {
         ErrorObject::owned(ErrorCode::TerminalCloseFailed.code(), message, None::<()>)
       }
