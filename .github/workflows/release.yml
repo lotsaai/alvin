@@ -124,6 +124,9 @@ jobs:
           sha256sum alvin-* > SHA256SUMS
           notes="Unsigned prerelease built from CI-verified commit ${SHA}."
           notes="${notes} macOS builds are not notarized."
+          notes="${notes} Windows builds are unsigned and require the current"
+          notes="${notes} Microsoft Visual C++ v14 Redistributable:"
+          notes="${notes} https://aka.ms/vc14/vc_redist.x64.exe."
           gh release create \
             "prerelease-${SHA}-${CI_RUN}-${CI_ATTEMPT}" alvin-* SHA256SUMS \
             --target "$SHA" --prerelease \
